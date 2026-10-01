@@ -52,7 +52,7 @@ The GUI shares overlapping restoration calls without caching success or cancelli
 
 The signed restoration-only helper was replaced through normal unregister/register after verified automatic release, with the old bundle backed up privately. Registration remained enabled. Live ad-hoc and same-Team/wrong-ID status clients were rejected; the genuine app's fixed protocol diagnostic passed authenticated status, malformed JSON, oversized input, unknown role, generation overflow, unqualified lease, forged target, reconnection and exact wrong-helper requirement rejection. The real-monitoring functional check passed five acquisitions, System state, Apple-observed ownership and both mode-0 fans. These results cover the current restoration-only service; they do not prove recovery during physical manual control. Verification completed with 111 Swift tests, 27 tool tests and a signed native build.
 
-## Bounded recovery surface — 2026-10-01
+## Bounded recovery surface — earlier 2026-10-01 checkpoint (superseded by results below)
 
 The current interface adds one fixed `qualifyRecovery` method under separate compiled recoveryQualification authority. It accepts only version/action/session identity; extra keys, arbitrary RPM/fan/duration/authority and malformed UUID/action combinations fail before activation. Generic lease/apply and physical setManual/setTarget remain unavailable. All sensor evidence remains pending, and no test authority grants ordinary profile control.
 
@@ -61,3 +61,11 @@ The helper derives upward targets within each fresh fan range; stopped admission
 144 retained Swift tests and27 tool tests pass, including metadata/transaction-order, malformed fixed messages, authority separation, deadline/heartbeat, partial activation, sensor/thermal faults and first-handback retention. Physical attempts accepted writes but did not retain targets; fan0 mode1 was promptly released. These failures do not pass live recovery. Automatic approval review blocked the next retry while TG Pro's privileged helper remained active; Fandy verified both fans automatic. The same-connection codec awaits exclusive ownership and live acceptance. Dead/suspended/blocked-helper recovery remains a residual limitation requiring actual restart measurement.
 
 The helper now independently checks for the known TG Pro privileged-controller executable through bounded kernel process metadata enumeration before admission and during a trial. Only a fixed blocker string is exposed over status; no PID/path or arbitrary process operation is accepted. This detects the present conflict, not every possible controller. Continuous fan mode/target checks remain required. Enumeration failure blocks trials; restoration is independent of this guard.
+
+## Target acknowledgement and physical recovery — 2026-10-01
+
+The writer error was immediate readback of an asynchronously updated target. The correction adds read-only acknowledgement for up to 500 ms under the original deadline, preserving exact target/mode/bounds checks and rejecting a competing nonzero value. It does not change authentication, input shape, RPM calculation or privilege. 147 Swift tests pass, including delayed/late acknowledgement and fault cases; the 27 tool tests are retained.
+
+After verifying TG Pro stopped and no active known Macs Fan Control/ThermalForge processes, both fans accepted 2517 RPM and automatic handback passed at 5.0283 s. Live heartbeat expiry 10.0293 s, owned disconnect 1.2152 s, fixed deadline 15.0064 s and signed-controller SIGKILL passed with independent mode observations. Helper death/restart remains untested; an automatic-only launchctl signal attempt was denied by macOS privilege checks. No successful-looking idle restart is counted as manual recovery.
+
+Future work follows the shortened delivery plan: preserve narrow authenticated communication, fan bounds, readback, System and watchdog recovery; avoid repeated general audits. Split profile eligibility by required sensors instead of silently qualifying all twelve. Ordinary production authority remains disabled at this checkpoint.

@@ -93,3 +93,30 @@ public enum RecoveryWriteError: Error, LocalizedError {
         }
     }
 }
+
+/// Bounded observation only: do not reissue a command or accept a different target.
+public enum RecoveryTargetReadback {
+    public static func awaitTarget(_ target: FanTarget, baseline: Fan, deadline: Double,
+                                   clock: () -> Double, read: () throws -> Fan, pause: () -> Void) throws {
+        let start = clock(), limit = min(deadline, start + 0.5)
+        guard start.isFinite, deadline.isFinite, start < limit else { throw ControlError.staleSession }
+        var previous = start
+        while true {
+            let before = clock()
+            guard before.isFinite, before >= previous, before < deadline else { throw ControlError.staleSession }
+            let fan = try read(), now = clock()
+            try fan.validate()
+            guard now.isFinite, now >= before, now >= previous, now < deadline, now <= limit else { throw ControlError.staleSession }
+            previous = now
+            guard fan.id == target.fanID, fan.mode == .manual,
+                  fan.minimumRPM == baseline.minimumRPM, fan.maximumRPM == baseline.maximumRPM,
+                  target.rpm.isFinite, target.rpm >= fan.minimumRPM, target.rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
+            guard let observed = fan.targetRPM, observed.isFinite else { throw ControlError.invalidFan }
+            if abs(observed - target.rpm) <= 0.5 { return }
+            guard observed == 0, now < limit else {
+                throw RecoveryTrialError.targetMismatch(fanID: fan.id, expected: target.rpm, observed: observed)
+            }
+            pause()
+        }
+    }
+}

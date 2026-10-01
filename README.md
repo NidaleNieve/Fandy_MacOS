@@ -2,7 +2,7 @@
 
 A small native Apple Silicon macOS menu-bar fan controller with named profiles and editable temperature curves.
 
-**Current build: real monitoring, editable profiles, shadow previews, verified automatic restoration and bounded mechanical-test preparation. Ordinary real profiles remain disabled.** Failed activation attempts returned both fans to macOS; no fan spin-up has yet been verified. The next target-write correction is awaiting exclusive ownership after a competing utility's helper remained running. See [the checkpoint](docs/DEVELOPMENT_STATUS.md).
+**Current build: real monitoring, editable profiles, shadow previews and physically verified bounded fan control/recovery.** Both fans accepted a modest request and returned to macOS; heartbeat, disconnect, deadline and controller SIGKILL tests passed. Ordinary menu profiles are still disabled while helper restart and production activation are completed. See [the checkpoint](docs/DEVELOPMENT_STATUS.md).
 
 A separate authenticated mechanical-test endpoint has fixed helper-derived targets and deadlines; it cannot grant production qualification. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
 
