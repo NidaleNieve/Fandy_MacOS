@@ -40,6 +40,12 @@
 			"path" = "Sources/FandyApp/ProfileEditor.swift";
 			"sourceTree" = "<group>";
 		};
+		"08B98D48D2BD80C8DFEDFFCD" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/RecoveryDiagnostics.swift";
+			"sourceTree" = "<group>";
+		};
 		"83A58823F659CAEA7AE2A932" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -100,6 +106,12 @@
 			"path" = "Sources/FandyCore/ManualQualification.swift";
 			"sourceTree" = "<group>";
 		};
+		"C4062210B76AE05A3D3A2E50" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/ManualQualificationActivation.swift";
+			"sourceTree" = "<group>";
+		};
 		"3B9DD1294571767A6BDCBE9D" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -130,6 +142,12 @@
 			"path" = "Sources/FandyCore/Profiles.swift";
 			"sourceTree" = "<group>";
 		};
+		"956DB01B711EA0BA10B42D77" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/RecoveryTrial.swift";
+			"sourceTree" = "<group>";
+		};
 		"1A1154160BA13DE6385FA574" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -154,6 +172,12 @@
 			"path" = "Sources/FandyHardware/HIDTemperatureReader.swift";
 			"sourceTree" = "<group>";
 		};
+		"4FDBCF91491CF8F6194073A8" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/RecoveryObservationReader.swift";
+			"sourceTree" = "<group>";
+		};
 		"031749FCE3DFED0C14D7F2D5" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -164,6 +188,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyHardware/SMCReader.swift";
+			"sourceTree" = "<group>";
+		};
+		"36CDDBD597C201712771CAE8" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/SMCRecoveryWriter.swift";
 			"sourceTree" = "<group>";
 		};
 		"41F3ACA045E77688F708EE66" = {
@@ -250,6 +280,7 @@
 				51D0B8FD680608BAF5020BFE,
 				C86459ECAEFA78BC4D8D517C,
 				B3934EDA49FBAD13B2EB4FB3,
+				08B98D48D2BD80C8DFEDFFCD,
 				83A58823F659CAEA7AE2A932,
 				D2CEB122BCF9ECDC6BB42176,
 				FE86A99A33849697E1E79465,
@@ -260,17 +291,21 @@
 				D5171724E8DC95710602ADE6,
 				BFAB6D8C689DF42DBD689F6F,
 				380AABF370EB0AB44A1CCF6F,
+				C4062210B76AE05A3D3A2E50,
 				3B9DD1294571767A6BDCBE9D,
 				6004F86E59C8744938F1A36A,
 				B097A9D6879D03AD75F9CCA0,
 				B477D544D3F52A227229E6B8,
 				6A4855631F163370C30D97C9,
+				956DB01B711EA0BA10B42D77,
 				1A1154160BA13DE6385FA574,
 				74A6605E5BC8A76E53AD7E30,
 				7D4FCEE70A0EA2D08A3E0A93,
 				8E20A7F12E2E8568005EC514,
+				4FDBCF91491CF8F6194073A8,
 				031749FCE3DFED0C14D7F2D5,
 				9BB8432D0B42288D0ECD032D,
+				36CDDBD597C201712771CAE8,
 				41F3ACA045E77688F708EE66,
 				57FCB5DCEC16155E559464C3,
 				80A626670EC6CC202A4A8911,
@@ -377,6 +412,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = B3934EDA49FBAD13B2EB4FB3;
 		};
+		"F27392CE31ED39B2CCC72F65" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 08B98D48D2BD80C8DFEDFFCD;
+		};
 		"9C01BA543BDAA76EEFA4A02A" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = 83A58823F659CAEA7AE2A932;
@@ -391,6 +430,7 @@
 				B542E6D429544F89E6775EC5,
 				D03C65C5E28591996732114F,
 				84C4FB7FE594032EF8AE8A80,
+				F27392CE31ED39B2CCC72F65,
 				9C01BA543BDAA76EEFA4A02A,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;

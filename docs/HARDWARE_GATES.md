@@ -1,32 +1,32 @@
 # Hardware qualification gates
 
-Current implementation supports reviewed Mac17,9 Apple Silicon hardware for read-only monitoring and automatic restoration. Physical manual-mode and target-RPM implementations reject all requests. Qualification is compiled into signed code, model-specific, and never granted by preferences or XPC payloads.
+Current signed authority is model-specific `recoveryQualification`: real monitoring, independently qualified automatic restoration and a separate bounded mechanical trial. Ordinary profile leases, arbitrary RPM/manual operations, automatic target clearing and unknown modes remain unavailable. Preferences and XPC payloads cannot grant authority.
 
-| Gate | State |
+| Gate | Actual state |
 | --- | --- |
-| Research and licensing | Sources inspected; provenance and license notices retained. Source behavior is distinct from firmware proof. |
-| Pure models and native UI | Curve, aggregation, persistence, authentication, lifecycle, mock and qualification tests implemented. Real monitoring is the default. |
-| All requested sensor identities and chip coverage | Pending. Every requested role is mandatory before manual testing. See [sensor requirements](SENSOR_EVIDENCE.md). |
-| Automatic restoration | A local manual-to-automatic transition was verified on both fans, followed by three idempotent requests and sixty seconds of independent mode observation. Raw evidence stays private. Already-automatic observations prove idempotence only. |
-| Modest manual request | Not attempted. Requires sensor/restoration gates and reviewed transaction order, then fixed +200 RPM for five seconds and verified release. |
-| Live watchdog recovery | Pending. Actual GUI SIGKILL, disconnect and heartbeat expiry while owning manual fans are mandatory. Model tests do not prove physical recovery. |
-| Failure matrix | Pending. Helper restart, malformed inputs, sensor faults, quit, rapid switching and sleep/wake require independent observations. |
-| Profiles and calibration | Disabled until all manual/recovery gates pass. Comfort and gaming tuning follow separately. |
+| Research / licensing / pure models / UI | Implemented; real monitoring is default and simulation is explicit. |
+| All requested sensor roles and coverage | All twelve pending. Required before ordinary real profiles; separately approved finite mechanical trials do not qualify mappings. |
+| Automatic restoration | Both mode1→0 transitions, three idempotent requests and60 seconds of independent mode observations previously passed. |
+| First modest manual trial | Not passed. Accepted target writes read back zero; partial mode1 activation aborted and both fans returned to0. No observed spin-up. |
+| Exact write sequence | Injected same-connection metadata/write tests passed; physical retry pending exclusive controller ownership. |
+| Live watchdog / disconnect / SIGKILL | Pending actual accepted manual targets. Virtual tests are insufficient. |
+| Helper restart / malformed inputs / sensor faults / quit / switching / sleep | Live manual recovery matrix pending. Dead/blocked-helper limitation remains explicit. |
+| Real profiles / calibration | Disabled until all sensor and recovery gates pass. |
 
-## Restoration requirements
+## Release requirements
 
-Release authority is temperature-independent, restricted to reviewed model/topology and canonical per-fan metadata. Record pre-write mode, command outcome, immediate/final readback. Attempt the other fan after partial failure; overall success requires every fan's confirmed automatic mode. Never clear targets, guess alternate keys, accept unknown modes, or infer ownership from RPM alone.
+Restoration is temperature-independent and restricted to reviewed model IDs0/1 and canonical lowercase mode metadata. It records initial mode, command result, immediate and later readbacks, attempts the other fan on partial failure, and fails overall if either is unverified. Never infer ownership from RPM or clear targets as an undocumented side effect. Mode3 or changed metadata is rejected.
 
-Competing controllers must not reassert manual ownership. Idle external manual mode reports a conflict rather than starting an automatic-write fight. Failed Fandy releases still retry. Preserve the registered service bundle separately from build output.
+Competing controllers must be stopped before qualification; no automatic-write fight is allowed. TG Pro's closed GUI left its root helper running. The next physical trial was blocked by automatic approval review until exclusive ownership is established. Fandy verified both fans automatic afterwards. Do not bypass that block with an indirect trial.
 
-The current restoration-only service additionally passed bounded-ingress model tests, updated live authentication/protocol checks and a programmatic real-monitoring startup/quit check. Both modes remained automatic. This adds security and lifecycle evidence; already-automatic observations do not repeat the earlier manual-handback proof or qualify live manual watchdog recovery. Sensor identities remain the activation blocker.
+## Bounded trial requirements
 
-## Manual qualification requirements
+See [the exact qualification protocol](MANUAL_QUALIFICATION.md). Helper-derived targets stay upward and within separately read fan bounds. Stopped/zero-target/cool admission permits a distinct minimum+200 mode-first sequence; spinning admission requires successful automatic preloading. No sequence fallback, Max-first, downward cooling test, Ftst, thermal-daemon manipulation or caller-selected target is permitted.
 
-The [bounded qualification model](MANUAL_QUALIFICATION.md) has no physical writer or XPC endpoint. Admission requires every qualified sensor role, fresh automatic ownership, valid fan limits and conservative thermal pressure. The helper calculates exactly 200 RPM above each fresh actual speed; skip the whole trial if either fan is stopped or lacks the margin. No Max-first or downward-speed experiment.
+Initial expiry is five seconds; recovery expiry is fifteen seconds regardless of heartbeat, or ten seconds without heartbeat. Restore and independently verify both fans after every attempt. Status retains the first handback evidence separately from later releases. A timer cannot run while the helper is dead or blocked; actual restart behavior must be measured honestly.
 
-The first trial expires after five seconds. Recovery trials expire after fifteen seconds regardless of heartbeat, or earlier after ten seconds without heartbeat. Restore and independently verify both fans after every trial. Never mark production control qualified to unlock test authority.
+After first activation works, prove each recovery case with independent mode/RPM logs. Any unreliable release blocks general control. Startup/wake remain System-first. Sensor qualification must record provenance, type, timing, alternatives and uncertainty; temperature resemblance alone cannot pass a role.
 
-A dead, suspended or blocked helper cannot execute its watchdog. Launchd restart recovery requires live testing and honest documentation. Unreliable restoration blocks custom control. Startup/wake remain System-first; no manual state is restored from disk.
+No screenshots, Computer Use or GUI automation. Raw reference CSV, recordings, operator details and signing configuration stay outside public Git. Preserve the registered bundle and unregister through verified release before replacement.
 
-Use logs, programmatic readings, compilation and model tests. No screenshots, Computer Use, GUI automation, thermal-service manipulation or claimed Apple fan-floor behavior. Raw recordings, diagnostics, signing identities and detailed local verification reports stay outside the public Git tree.
+The current mechanical path enforces a helper-side check for TG Pro's known privileged executable before admission and during ownership. Status exposes only a fixed blocker message, never process identifiers or paths. Bounded kernel process metadata enumeration provides no generic process/filesystem API to a caller. This detects a known conflict, not universal exclusive-ownership proof; modes/targets still require continuous checking. Safe restoration remains available despite that blocker.

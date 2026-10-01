@@ -2,9 +2,9 @@
 
 A small native Apple Silicon macOS menu-bar fan controller with named profiles and editable temperature curves.
 
-**Current build: real monitoring, editable profiles, live previews, and a verified automatic-restoration helper. Custom fan control remains gated by sensor qualification.** On Mac17,9 / M5 Pro, Fandy restored both fans from mode 1 to mode 0, passed three repeated requests, and independently observed automatic ownership for 60 seconds. No manual mode, RPM target, or target-clearing command has been issued. The physical manual-mode/target methods still reject requests. This is restoration-qualified, not a completed custom controller.
+**Current build: real monitoring, editable profiles, shadow previews, verified automatic restoration and bounded mechanical-test preparation. Ordinary real profiles remain disabled.** Failed activation attempts returned both fans to macOS; no fan spin-up has yet been verified. The next target-write correction is awaiting exclusive ownership after a competing utility's helper remained running. See [the checkpoint](docs/DEVELOPMENT_STATUS.md).
 
-The next manual-test admission/deadline model is implemented and tested without a physical writer or new XPC operation. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
+A separate authenticated mechanical-test endpoint has fixed helper-derived targets and deadlines; it cannot grant production qualification. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
 
 See [the development checkpoint and remaining work](docs/DEVELOPMENT_STATUS.md) for the current milestone and resumption order.
 
@@ -48,7 +48,7 @@ The discovery executable has no SMC write API. It logs temperature keys, metadat
 
 ## Restoration helper and diagnostics
 
-The current helper permits automatic mode 0 only on the observed Mac17,9 fan topology and exact lowercase mode-key metadata. Manual leases and target writes remain rejected. It restores at startup, sleep/wake, and explicit System requests, independently of temperature qualification.
+The current helper permits automatic mode0 on the observed Mac17,9 topology and a separate bounded qualification sequence. Ordinary manual leases and arbitrary target writes remain rejected. It restores at startup, sleep/wake, and explicit System requests, independently of temperature qualification.
 
 ```sh
 build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restoration-status
@@ -57,7 +57,9 @@ build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restore
 
 The fixed restoration flags also include `--helper-restoration-register`, `--helper-restoration-unregister`, and `--helper-restoration-check`. They accept no hardware or payload arguments. Check performs three automatic-only requests and a 60-second independent observation; it distinguishes real manual handback from idempotence. Unregister restores first. Background registration uses SMAppService and native macOS approval; no custom root installer is used.
 
-The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed restoration-only helper it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately.
+The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed non-production helper with no active trial it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately.
+
+Finite fan tests use the signed app's fixed `--helper-recovery-initial`, `--helper-recovery-deadline`, `--helper-recovery-heartbeat`, `--helper-recovery-disconnect` and `--helper-recovery-hold` diagnostics. They accept no hardware/duration parameters and must wait for exclusive ownership. Initial deadline is5 seconds; subsequent mechanical trials are15 seconds with a10-second heartbeat timeout. [Exact admission and current failures](docs/MANUAL_QUALIFICATION.md).
 
 The registered bundle is preserved separately from Xcode build output. Do not remove or overwrite it while registered. The original observation service was unregistered before replacement; its old diagnostic flags are retained only for observation builds.
 

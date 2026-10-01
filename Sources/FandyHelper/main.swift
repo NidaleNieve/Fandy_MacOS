@@ -9,12 +9,19 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     let queue = DispatchQueue(label: "is.dsr.fandy.helper.safety", qos: .userInitiated)
     let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "helper")
     let coordinator: HelperCoordinator
+    let recovery: RecoveryTrialCoordinator
     let requests = HelperRequestGate()
     var timer: DispatchSourceTimer?
     var power: PowerNotifications?
     init(hardware: AppleFanHardware, sampler: HardwareSnapshotReader) {
         let events = Logger(subsystem: FandyIdentity.logSubsystem, category: "safety")
-        coordinator = HelperCoordinator(io: hardware, capabilities: SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()), read: { try sampler.snapshot() }, clock: { ProcessInfo.processInfo.systemUptime }, event: { message in events.notice("\(message, privacy: .public)") })
+        let capabilities = SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel())
+        let control = HelperCoordinator(io: hardware, capabilities: capabilities, read: { try sampler.snapshot() }, clock: { ProcessInfo.processInfo.systemUptime }, event: { message in events.notice("\(message, privacy: .public)") })
+        coordinator = control
+        let source = RecoverySampleSource(sampler: sampler)
+        recovery = RecoveryTrialCoordinator(io: hardware, capabilities: capabilities, read: { try source.read() },
+            clock: { ProcessInfo.processInfo.systemUptime }, restore: { _ = control.restore(); return control.lastRestoration },
+            requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() })
         super.init(); listener.delegate = self
     }
     func run() throws {
@@ -23,11 +30,14 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         // Startup never resurrects a target or a lease from disk.
         queue.sync { _ = coordinator.startup() }
         let source = DispatchSource.makeTimerSource(queue: queue)
-        source.schedule(deadline: .now(), repeating: .milliseconds(500))
-        source.setEventHandler { [weak self] in self?.coordinator.watchdog() }
+        source.schedule(deadline: .now(), repeating: .milliseconds(100))
+        source.setEventHandler { [weak self] in self?.recovery.watchdog(); self?.coordinator.watchdog() }
         source.resume(); timer = source
         // Root launch daemons use IOPM notifications; the helper does not depend on GUI sleep messages.
-        power = try PowerNotifications(queue: queue, coordinator: coordinator)
+        power = try PowerNotifications(queue: queue) { [self] in
+            _ = recovery.release(reason: "sleep/wake")
+            coordinator.powerTransition()
+        }
         logger.notice("Helper ready; restoration qualification: \(SensorRegistry.capabilities.canRestore), manual qualification: \(SensorRegistry.capabilities.canControl)")
         listener.activate(); RunLoop.current.run()
     }
@@ -41,6 +51,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
             guard requests.close(owner: object.owner) else { return }
             queue.async { [self] in
                 coordinator.disconnected(owner: object.owner)
+                recovery.disconnected(owner: object.owner)
                 requests.disconnected(owner: object.owner)
             }
         }
@@ -64,7 +75,7 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
         guard let ticket = service.requests.rejection(owner: owner) else { return }
         service.queue.async { [self] in
             defer { service.requests.finish(ticket) }
-            if service.requests.isOpen(ticket) { service.coordinator.reject(owner: owner) }
+            if service.requests.isOpen(ticket) { service.coordinator.reject(owner: owner); service.recovery.reject(owner: owner) }
         }
     }
     private func request(bytes: Int? = nil, reply: DataReply,
@@ -76,11 +87,23 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
             defer { service.requests.finish(ticket) }
             guard service.requests.isOpen(ticket) else { reply.call(nil, ControlError.staleSession.localizedDescription); return }
             do { reply.call(try work(service.coordinator), nil) }
-            catch { service.coordinator.reject(owner: owner); reply.call(nil, error.localizedDescription) }
+            catch { service.coordinator.reject(owner: owner); service.recovery.reject(owner: owner); reply.call(nil, error.localizedDescription) }
         }
     }
     func status(withReply reply: @escaping (Data?, String?) -> Void) {
-        request(reply: DataReply(reply)) { try Wire.encode($0.status()) }
+        request(reply: DataReply(reply)) { [service] coordinator in
+            var status = coordinator.status(); status.recovery = service.recovery.status
+            if status.capabilities?.canQualifyRecovery == true {
+                do { try RecoveryOwnershipProbe.requireNoKnownController() }
+                catch { status.recoveryBlocker = error.localizedDescription }
+            }
+            return try Wire.encode(status)
+        }
+    }
+    func qualifyRecovery(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
+        request(bytes: data.count, reply: DataReply(reply)) { [service, owner] _ in
+            try Wire.encode(service.recovery.request(RecoveryTrialRequest.decode(data), owner: owner))
+        }
     }
     func beginLease(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
         request(bytes: data.count, reply: DataReply(reply)) { [owner] coordinator in
@@ -102,9 +125,20 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
         service.queue.async { [self] in
             defer { service.requests.finish(ticket) }
             guard service.requests.isOpen(ticket) else { callback.call(false, ControlError.staleSession.localizedDescription); return }
-            let verified = service.coordinator.restore()
+            let verified = service.recovery.release(reason: "System requested")
             callback.call(verified, verified ? nil : ControlError.restorationUnverified.localizedDescription)
         }
+    }
+}
+private final class RecoverySampleSource {
+    let sampler: HardwareSnapshotReader
+    var reader: RecoveryObservationReader?
+    init(sampler: HardwareSnapshotReader) { self.sampler = sampler }
+    func read() throws -> RecoveryObservation {
+        // No temperature enumeration precedes helper startup restoration.
+        if reader == nil { reader = try RecoveryObservationReader(sampler: sampler) }
+        guard let reader else { throw ControlError.invalidSnapshot }
+        return try reader.observation()
     }
 }
 // Foundation XPC callbacks cross into our serial queue; the framework owns their thread safety.

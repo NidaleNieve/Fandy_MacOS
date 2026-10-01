@@ -1,7 +1,7 @@
 import Foundation
 
 public enum HardwareStage: String, Codable, Sendable {
-    case observation, restorationQualification, manualQualification, qualifiedControl
+    case observation, restorationQualification, recoveryQualification, manualQualification, qualifiedControl
 }
 public enum QualificationState: String, Codable, Sendable { case pending, verified }
 public struct SensorEvidence: Codable, Sendable, Equatable {
@@ -48,6 +48,11 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     /// The current restoration build cannot obtain it through preferences or XPC data.
     public var canQualifyManual: Bool {
         stage == .manualQualification && canRestore && allSensorsVerified && automaticRestoration == .verified
+    }
+    /// User-authorized mechanical recovery trials before sensor identity qualification.
+    /// No ordinary leases, curve control or caller-selected fan commands are admitted.
+    public var canQualifyRecovery: Bool {
+        stage == .recoveryQualification && canRestore && automaticRestoration == .verified
     }
     public func forMachine(_ actual: String) -> Self {
         actual == model ? self : Self(model: actual)

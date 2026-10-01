@@ -15,6 +15,11 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case checkRestoration = "--helper-restoration-check"
     case checkRestorationProtocol = "--helper-restoration-protocol-check"
     case unregisterRestoration = "--helper-restoration-unregister"
+    case recoveryInitial = "--helper-recovery-initial"
+    case recoveryDeadline = "--helper-recovery-deadline"
+    case recoveryHeartbeat = "--helper-recovery-heartbeat"
+    case recoveryDisconnect = "--helper-recovery-disconnect"
+    case recoveryHold = "--helper-recovery-hold"
 
     static func parse(_ arguments: [String]) throws -> Self? {
         let actions = allCases.filter { arguments.contains($0.rawValue) }
@@ -39,7 +44,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .unregister: try await HelperManager.uninstallObservation(client: client)
             case .status, .check: break
             case .registerRestoration:
-                guard SensorRegistry.capabilities.stage == .restorationQualification,
+                guard [.restorationQualification, .recoveryQualification].contains(SensorRegistry.capabilities.stage),
                       SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl else { throw ControlError.unauthorized }
                 try HelperManager.install()
             case .unregisterRestoration: try await HelperManager.uninstall(client: client)
@@ -50,11 +55,14 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .checkRestoration: return try await checkRestoration(client)
             case .checkRestorationProtocol:
                 try await requireRestorationHelper(client)
+            case .recoveryInitial, .recoveryDeadline, .recoveryHeartbeat, .recoveryDisconnect, .recoveryHold:
+                return await RecoveryDiagnostics.run(action, client: client)
             }
             let state = HelperManager.service.status
             var report: [String: Any] = ["action": action.rawValue, "registration": name(state),
                 "physicalWritesEnabled": SensorRegistry.capabilities.canRestore,
                 "manualWritesEnabled": SensorRegistry.capabilities.canControl]
+            report["recoveryTrialsEnabled"] = SensorRegistry.capabilities.canQualifyRecovery
             if state == .enabled {
                 if action == .check { report["checks"] = try await client.checkObservationProtocol() }
                 if action == .checkRestorationProtocol { report["checks"] = try await client.checkRestorationProtocol() }
@@ -85,9 +93,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
     }
     private static func requireRestorationHelper(_ client: FanXPCClient) async throws {
         let status = try await client.status()
-        guard SensorRegistry.capabilities.stage == .restorationQualification,
+        guard [.restorationQualification, .recoveryQualification].contains(SensorRegistry.capabilities.stage),
               !status.observationOnly, !status.manualQualified,
-              status.capabilities?.stage == .restorationQualification,
+              [.restorationQualification, .recoveryQualification].contains(status.capabilities?.stage ?? .observation),
               status.capabilities?.forMachine(HardwareSnapshotReader.machineModel()).canRestore == true else { throw ControlError.unauthorized }
     }
     private static func checkRestoration(_ client: FanXPCClient) async throws -> Int32 {

@@ -2,7 +2,7 @@
 
 ## Current qualification
 
-**Automatic restoration is qualified; custom control remains disabled.** The compiled stage is restorationQualification with the observed Mac17,9 fan topology. The user approved restoration before sensor qualification. Both physical fans passed manual mode 1 to automatic mode 0 handback, three repeated release requests and 60 seconds of independent readback on 2026-10-01. Sensor identities/peak coverage and physical manual transactions remain pending. The signed restoration-only helper is registered through SMAppService. Real curve demand is still an inactive preview; simulation is explicit.
+**Automatic restoration is qualified; custom control remains disabled.** The compiled stage is recoveryQualification with the observed Mac17,9 fan topology. The user approved restoration before sensor qualification. Both physical fans passed manual mode 1 to automatic mode 0 handback, three repeated release requests and 60 seconds of independent readback on 2026-10-01. Sensor identities/peak coverage and successful physical manual targets remain pending. A separate, explicitly approved finite mechanical-test path does not qualify sensors or profiles. The signed helper is registered through SMAppService. Real curve demand is still an inactive preview; simulation is explicit.
 
 ## System and custom ownership
 
@@ -19,7 +19,7 @@ Custom mode uses manual ownership and temporarily replaces Apple's ordinary dema
 | Event | Required behavior / current verification |
 | --- | --- |
 | Normal Quit | Request immediate automatic restoration, then terminate. Mock lifecycle/model tested. |
-| GUI crash, SIGKILL, frozen controller | Ten-second lease expires; helper restores, checked every 500 ms. Coordinator tests use a virtual clock; live GUI SIGKILL is still a mandatory gate. |
+| GUI crash, SIGKILL, frozen controller | Ten-second lease expires; helper restores, checked every100ms. Coordinator tests use a virtual clock; live GUI SIGKILL is still a mandatory gate. |
 | XPC disconnect | Revoke that connection's lease and restore; no other connection can renew it. Coordinator tested. |
 | Helper crash/restart | launchd KeepAlive restarts it; startup revokes all state and restores. No stale target/lease is read from disk. Restart model tested; live launchd restart pending. |
 | Helper hung/SIGSTOP or blocked kernel I/O | No userspace timer can guarantee restoration while the helper cannot execute. This residual failure is explicit and is not covered by the GUI heartbeat. |
@@ -39,7 +39,7 @@ The OS/firmware's precise behavior under custom manual mode, sleep, reboot and h
 
 ## Hardware gates
 
-The next manual trial has a tested, separate [bounded qualification model](docs/MANUAL_QUALIFICATION.md), currently disconnected from physical writes and XPC. It admits only fully qualified readings, computes exactly +200 RPM per fan, skips stopped/ceiling-limited fans, and has an absolute five-second first-trial deadline. Recovery trials expire after fifteen seconds regardless of heartbeats, or earlier on the ten-second heartbeat timeout. Revocation still needs an executing helper and verified physical restoration; model tests cannot prove that recovery.
+A separate [bounded recovery qualification path](docs/MANUAL_QUALIFICATION.md) is connected to authenticated XPC and helper-only writes. Targets are freshly computed per fan and never supplied by the caller. Initial deadline5 seconds; recovery deadline15 seconds; heartbeat10 seconds. Stopped/zero-target/cool admission permits a reviewed mode-first spinning-minimum+200 request. Spinning admission requires verified target-first preloading. Failure never switches order or clears targets; it restores all fans and retains first/later per-fan outcomes. The broader raw diagnostic guard is not sensor identity or complete chip coverage proof. All requested sensor qualification remains required before ordinary profiles.
 
 Follow [docs/HARDWARE_GATES.md](docs/HARDWARE_GATES.md) in order. Do not grant compiled capabilities merely to make the UI usable. Repeated automatic restoration, all requested sensor qualification, modest manual testing, live watchdog proof and failure tests must precede custom profiles. Competing controllers must not issue fan writes; TG Pro can remain in monitoring/System for the temperature reference while independent mode readings remain automatic. No maximum-RPM first test, no zero target while manual, no Ftst experiment and no die-target/system-service changes.
 
@@ -48,3 +48,9 @@ Defaults still require logged light-workload comparisons in System, System+ and 
 ## Class-time development boundary
 
 Production monitoring is the normal startup path, with automatic release on helper startup, explicit System requests, lifecycle cleanup and failed Fandy restoration. It never issues manual RPM. Simulation is explicit. Every requested sensor role, including the three proximity roles, remains required before manual tests or profiles. Sensor failure cannot block the qualified mode-release path. The user ended the class-time restriction and authorized the physical restoration and bounded measurements documented above.
+
+## Latest physical result
+
+No successful fan spin-up yet. Automatic preload was accepted but read back0. A stopped mode-first trial briefly read mode1 on fan0 with target0, then aborted and restored both fans; adding a type field also failed. The same-connection metadata/write correction is tested but awaits exclusive controller ownership. Automatic approval review blocked retry while the competing TG Pro helper remained running. Both fans were independently verified automatic after the attempts. No initial Max, downward-speed experiment, target clearing or Apple thermal-service changes were used.
+
+The current mechanical path enforces a helper-side check for TG Pro's known privileged executable before admission and during ownership. Status exposes only a fixed blocker message, never process identifiers or paths. Bounded kernel process metadata enumeration provides no generic process/filesystem API to a caller. This detects a known conflict, not universal exclusive-ownership proof; modes/targets still require continuous checking. Safe restoration remains available despite that blocker.

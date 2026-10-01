@@ -97,6 +97,8 @@ public struct HelperStatus: Codable, Sendable {
     public var capabilities: HardwareCapabilities?
     public var restoration: RestorationReport?
     public var startupRestoration: RestorationReport?
+    public var recovery: RecoveryTrialStatus?
+    public var recoveryBlocker: String?
     public init(automaticVerified: Bool, manualQualified: Bool = false, observationOnly: Bool = false, snapshot: HardwareSnapshot? = nil, fault: String? = nil, capabilities: HardwareCapabilities? = nil, restoration: RestorationReport? = nil, startupRestoration: RestorationReport? = nil) { self.startupRestoration = startupRestoration; self.capabilities = capabilities; self.restoration = restoration; self.automaticVerified = automaticVerified; self.manualQualified = manualQualified; self.observationOnly = observationOnly; self.snapshot = snapshot; self.fault = fault }
 }
 @objc public protocol FanHelperXPC {
@@ -104,6 +106,7 @@ public struct HelperStatus: Codable, Sendable {
     func beginLease(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void)
     func applyTargets(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void)
     func restoreAutomatic(withReply reply: @escaping (Bool, String?) -> Void)
+    func qualifyRecovery(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void)
 }
 public protocol PrivilegedFanClient: FanController {
     func status() async throws -> HelperStatus
