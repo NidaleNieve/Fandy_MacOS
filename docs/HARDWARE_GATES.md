@@ -19,6 +19,8 @@ Release authority is temperature-independent, restricted to reviewed model/topol
 
 Competing controllers must not reassert manual ownership. Idle external manual mode reports a conflict rather than starting an automatic-write fight. Failed Fandy releases still retry. Preserve the registered service bundle separately from build output.
 
+The current restoration-only service additionally passed bounded-ingress model tests, updated live authentication/protocol checks and a programmatic real-monitoring startup/quit check. Both modes remained automatic. This adds security and lifecycle evidence; already-automatic observations do not repeat the earlier manual-handback proof or qualify live manual watchdog recovery. Sensor identities remain the activation blocker.
+
 ## Manual qualification requirements
 
 The [bounded qualification model](MANUAL_QUALIFICATION.md) has no physical writer or XPC endpoint. Admission requires every qualified sensor role, fresh automatic ownership, valid fan limits and conservative thermal pressure. The helper calculates exactly 200 RPM above each fresh actual speed; skip the whole trial if either fan is stopped or lacks the margin. No Max-first or downward-speed experiment.

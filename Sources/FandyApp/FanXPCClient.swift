@@ -11,6 +11,7 @@ import FandyHardware
     private var latest: HelperStatus?
     private var generation: UInt64?
     private var operationToken = UUID()
+    private let restorationFlight = RestorationFlight()
     private func signingTeam() throws -> String {
         var own: SecCode?, code: SecStaticCode?, information: CFDictionary?
         guard SecCodeCopySelf([], &own) == errSecSuccess, let own,
@@ -58,8 +59,18 @@ import FandyHardware
     /// No caller chooses payloads, methods, fan targets or trust requirements.
     func checkObservationProtocol() async throws -> [String] {
         guard !SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl else { throw ControlError.unauthorized }
+        return try await checkRestrictedProtocol(observationOnly: true)
+    }
+    func checkRestorationProtocol() async throws -> [String] {
+        guard SensorRegistry.capabilities.stage == .restorationQualification,
+              SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl,
+              !SensorRegistry.capabilities.canQualifyManual else { throw ControlError.unauthorized }
+        return try await checkRestrictedProtocol(observationOnly: false)
+    }
+    private func checkRestrictedProtocol(observationOnly: Bool) async throws -> [String] {
         let initial = try await status()
-        guard initial.observationOnly, !initial.manualQualified else { throw ControlError.unauthorized }
+        guard initial.observationOnly == observationOnly, !initial.manualQualified,
+              initial.capabilities?.stage == SensorRegistry.capabilities.stage else { throw ControlError.unauthorized }
         var checks = ["authenticatedStatus"]
         let leases: [(String, Data)] = [
             ("malformedJSON", Data("not JSON".utf8)),
@@ -83,12 +94,14 @@ import FandyHardware
             _ = try await dataCall { proxy, reply in proxy.applyTargets(forgedTarget, withReply: reply) }
             throw ControlError.unauthorized
         } catch ControlError.invalidProfile { checks.append("forgedTargetRejected") }
-        do { try await restoreAutomatic(); throw ControlError.unauthorized }
-        catch ControlError.restorationUnverified { checks.append("observationRestoreRejected") }
+        if observationOnly {
+            do { try await restoreAutomatic(); throw ControlError.unauthorized }
+            catch ControlError.restorationUnverified { checks.append("observationRestoreRejected") }
+        }
         // Test recovery using a fresh XPC connection, never a stale cached response.
         connectionToken = UUID(); connection?.invalidate(); connection = nil; latest = nil; lease = nil
         let reconnected = try await status()
-        guard reconnected.observationOnly, !reconnected.manualQualified, reconnected.snapshot != nil else { throw ControlError.helperUnavailable }
+        guard reconnected.observationOnly == observationOnly, !reconnected.manualQualified, reconnected.snapshot != nil else { throw ControlError.helperUnavailable }
         checks.append("reconnectedStatus")
         try await checkWrongHelperIdentity()
         checks.append("wrongHelperIdentityRejected")
@@ -154,6 +167,10 @@ import FandyHardware
         try await requestRestore(token: token)
     }
     private func requestRestore(token: UUID) async throws {
+        try await restorationFlight.run { [self] in try await sendRestore() }
+        try requireCurrent(token)
+    }
+    private func sendRestore() async throws {
         let connection = try connect()
         let verified: Bool = try await withCheckedThrowingContinuation { continuation in
             let gate = ReplyGate<Bool>(continuation)
@@ -163,7 +180,6 @@ import FandyHardware
                 if verified && error == nil { gate.finish(.success(true)) } else { gate.finish(.failure(ControlError.restorationUnverified)) }
             }
         }
-        try requireCurrent(token)
         guard verified else { throw ControlError.restorationUnverified }
     }
 

@@ -36,6 +36,8 @@ XPC uses bounded versioned JSON inside Data (16 KiB maximum), fixed value types 
 
 Application diagnostics rotate at 1 MiB with three archives. The root helper uses unified logging only; no client-supplied file path exists. Startup, wake and faults do not restore saved profiles. See SAFETY for the difference between software tests and physical qualification.
 
+HelperRequestGate checks size, connection state, rate and outstanding-work limits before serial-queue dispatch. Ordinary traffic is capped at four queued/in-flight requests globally and two per connection. Restoration and rejection notifications each have a separate bounded allowance; disconnect invalidates tickets before queued work can execute. RestorationFlight shares overlapping app lifecycle releases through one RPC, propagates failures to every waiter and retries with a fresh RPC after completion. These controls cannot recover a dead or blocked helper by themselves.
+
 ## Production monitoring and qualification
 
 Normal startup uses real read-only monitoring and selects System; simulation is an explicit option. AppModel injects the sensor provider, privileged client, clock and helper availability for deterministic testing. It separately exposes observed fan ownership, helper health, local signed capabilities and profile eligibility. A custom profile checkmark requires genuine acknowledged control; Apple ownership is determined from fresh fan readings, not the selected profile name.

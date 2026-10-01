@@ -13,6 +13,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case statusRestoration = "--helper-restoration-status"
     case restore = "--helper-restore"
     case checkRestoration = "--helper-restoration-check"
+    case checkRestorationProtocol = "--helper-restoration-protocol-check"
     case unregisterRestoration = "--helper-restoration-unregister"
 
     static func parse(_ arguments: [String]) throws -> Self? {
@@ -47,6 +48,8 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 try await requireRestorationHelper(client)
                 try await client.restoreAutomatic()
             case .checkRestoration: return try await checkRestoration(client)
+            case .checkRestorationProtocol:
+                try await requireRestorationHelper(client)
             }
             let state = HelperManager.service.status
             var report: [String: Any] = ["action": action.rawValue, "registration": name(state),
@@ -54,6 +57,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 "manualWritesEnabled": SensorRegistry.capabilities.canControl]
             if state == .enabled {
                 if action == .check { report["checks"] = try await client.checkObservationProtocol() }
+                if action == .checkRestorationProtocol { report["checks"] = try await client.checkRestorationProtocol() }
                 let status = try await client.status()
                 guard !status.manualQualified else { throw ControlError.unauthorized }
                 report["observationOnly"] = status.observationOnly
@@ -67,7 +71,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 report["helperStatus"] = try encoded(status)
             }
             emit(report)
-            if action == .check && state != .enabled { return 2 }
+            if (action == .check || action == .checkRestorationProtocol) && state != .enabled { return 2 }
             return state == .requiresApproval ? 2 : state == .notFound ? 1 : 0
         } catch {
             if (action == .register || action == .registerRestoration) && HelperManager.service.status == .requiresApproval {

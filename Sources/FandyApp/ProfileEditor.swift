@@ -134,7 +134,7 @@ struct SettingsView: View {
         Form {
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: model.setSimulation))
-                Text("Real hardware monitoring is read-only until sensor mappings and safety gates are verified.").font(.caption).foregroundStyle(.secondary)
+                Text("Monitoring uses real readings. Curve previews do not command the fans.").font(.caption).foregroundStyle(.secondary)
                 if model.simulation {
                     Picker("Scenario", selection: $model.scenario) { ForEach(MockScenario.allCases) { Text($0.rawValue).tag($0) } }
                     Button("Simulate Helper Restart") { model.simulateRestart() }
@@ -146,7 +146,12 @@ struct SettingsView: View {
                 if HelperManager.service.status == .requiresApproval {
                     Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                 }
-                Text("Physical fan control is disabled pending hardware qualification.").font(.caption).foregroundStyle(.secondary)
+                Text(model.capabilities.canRestore ? "System can restore Apple automatic control. Custom profiles await verification." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("Hardware verification") {
+                    LabeledContent("Sensor roles", value: "\(model.capabilities.verifiedRoles.intersection(HardwareCapabilities.requiredRoles).count) / \(HardwareCapabilities.requiredRoles.count) verified")
+                    LabeledContent("Automatic handback", value: model.capabilities.automaticRestoration == .verified ? "Verified" : "Pending")
+                    LabeledContent("Manual control and recovery", value: model.capabilities.manualTransaction == .verified ? "Verified" : "Pending")
+                }.accessibilityIdentifier("settings.hardwareVerification")
                 Text("Startup and wake begin in System. No telemetry or networking.").font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).padding().frame(width: 440)
