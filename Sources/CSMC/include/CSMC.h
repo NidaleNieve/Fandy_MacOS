@@ -11,3 +11,7 @@ int32_t fandy_smc_key_at(FandySMC *connection, uint32_t index, char key[5]);
 // Caller owns the returned array. Missing APIs return an empty array or NULL.
 #include <CoreFoundation/CoreFoundation.h>
 CFArrayRef fandy_hid_temperatures(void) CF_RETURNS_RETAINED;
+
+// Fixed known-controller check; no caller-supplied PID/path or process data is returned.
+// 1 = TG Pro helper detected; 0 = not observed; -1 = enumeration unavailable.
+int32_t fandy_tg_controller_present(void);

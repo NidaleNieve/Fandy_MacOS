@@ -1,39 +1,40 @@
 # Development checkpoint — 2026-10-01
 
-## Actual working state
+## Current stage
 
-Fandy has a native menu-bar UI, profile CRUD, editable graphical curves, versioned persistence, deterministic simulation, real read-only monitoring, and shadow demand calculations. The signed restoration-only helper is installed and enabled on the qualified Mac17,9 topology. System can request automatic mode independently of temperature qualification. Custom profiles remain previews: physical manual-mode and target methods still reject requests.
+Fandy has its native menu-bar/editor UI, profile CRUD, graphical curves, persistence, real monitoring and shadow calculations. The signed root helper is enabled through SMAppService with model-specific automatic restoration and a new, separate bounded mechanical qualification endpoint. App identity remains `is.dsr.fandy`; local signing is preserved. Ordinary real profiles remain disabled: all twelve sensor roles/coverage and live recovery proof are pending.
 
-Automatic handback has been physically demonstrated on both fans: an observed mode 1 → mode 0 transition, three successful idempotent requests and 60 seconds of independent automatic-mode observations. This is not proof of recovery from a future Fandy manual transaction. Final checkpoint observations show both fans in mode 0; the registered app/helper binaries match the final build.
+Earlier both-fan manual-to-automatic handback, three idempotent releases and60 seconds without mode reversion passed. Current attempts have not spun fans: automatic-mode target preload read back zero; mode-first fan0 activation briefly read1 with target0, so Fandy aborted and restored both to0. Filling the type field did not fix the target. These are failed trials, not qualified manual control.
 
-**Verification:** 120 passing Swift tests (8 hardware, 94 core, 18 app), 27 passing Python tool tests, successful single-job signed native build and strict deep signature verification. No screenshots, GUI automation, manual RPM writes, target clearing or Max experiments were used.
+The installed correction queries and verifies metadata on the writing connection immediately before each write, following reviewed reference writers. It has passed injected tests and a signed build. **Physical retry is pending exclusive ownership:** TG Pro's privileged helper survived GUI exit. Automatic approval review rejected the next trial until that competing service is stopped; stopping it requires local administrator authentication. Both fans remain verified automatic.
 
-## Security work completed at this checkpoint
+## Implemented recovery path
 
-- Authentication requires the expected signed app identity and signing team; wrong-identity and ad-hoc callers were rejected in live tests.
-- Helper admission is bounded before serial dispatch: eight connections, four ordinary requests globally/two per peer, size and rate checks, separately reserved restoration capacity, and coalesced rejection handling. Closing connections cannot revive queued commands.
-- Overlapping GUI restoration calls share one flight; cancellation does not cancel the shared release and later requests retry freshly. Generation checks prevent stale replies from changing current state.
-- Fixed signed protocol diagnostics passed malformed, oversized, unknown-role, overflow, unqualified-lease and forged-target rejection, reconnection and wrong-helper-identity checks. They do not issue fan commands.
-- The inert manual qualification model rejects stopped fans, including hardware reporting a zero minimum.
+`RecoveryTrialCoordinator` owns fresh readings, fixed targets, connection/session identity, absolute deadlines, heartbeat and per-fan release. Callers supply no RPM, keys, fan IDs, duration or qualification authority. Initial trial5 seconds; recovery trials15 seconds; heartbeat10 seconds; helper timer100ms. First and later restoration evidence are separate.
 
-This is a reviewed restoration-only surface, not final security acceptance of a manual writer that does not yet exist. A dead, suspended or blocked helper cannot execute its watchdog; bounded admission does not solve blocked hardware I/O.
+An explicitly approved stopped baseline requires both speeds/targets0 and a raw diagnostic peak below60°C. Targets are each reported spinning minimum+200, not an invented200 RPM command. Spinning admission keeps target-first verification and never falls back after failed preloading. All command construction is injected-transport tested. Generic physical setManual/setTarget still reject and profile leases cannot be admitted.
 
-## Latest continuation
+The wider Tp/Tm/Tg diagnostic domain and required candidate readings are checked for availability/freshness/finite values during finite trials. They do not prove sensor identity or chip coverage and cannot unlock ordinary control. A dead, suspended or blocked helper cannot execute its watchdog.
 
-The inert qualification activation model now checks fresh per-fan state before and after each operation, verifies partial ownership and target readback, and preserves the original deadline across activation. Active sessions detect conflicting target changes. These additions prepare live testing but are not connected to a physical writer or XPC operation. Fresh read-only status still showed enabled restoration service and both fans automatic. Additional TG Pro logging and filtered IORegistry descriptions did not provide the missing sensor identities. No mapping was promoted based on conflicting broad-platform labels.
+## Validation
 
-## Remaining work, in order
+Latest retained source verification: **144 passing Swift tests** (15 hardware,110 core,19 app), **27 passing Python tool tests**, successful single-job signed native compilation and strict deep signature verification. Final client stale-reply/protocol-stage and runtime conflict guard changes are included in this checkpoint. No screenshots, GUI automation, Max experiment, target clearing, power changes or thermal-service manipulation.
 
-1. **Qualify all twelve sensor roles.** CPU/GPU average and peak coverage plus Trackpad, Actuator, three Airflow and three proximity roles remain pending. Published keys are candidates; rounded reference agreement and historical names are insufficient. Resolve CPU cluster/coverage and GPU-region ambiguity, and the Airflow Top/Power Supply provenance conflicts. Obtain supported identifier diagnostics or a targeted discriminating read-only measurement. Do not repeat idle recordings without a new hypothesis. Production readings must remain independent of the reference application.
-2. **Review and implement a narrowly bounded manual qualification operation.** Only after every sensor role passes, review exact hardware target metadata, encoding, stale-target behavior and transaction order. Test construction through injected transport first. The helper must calculate fresh per-fan actual RPM + 200, skip the whole trial if either fan is stopped or lacks margin, enforce five seconds initially and at most fifteen seconds for recovery trials, and restore both fans. Callers must not supply arbitrary keys, RPM, durations or qualification authority. The existing pure model grants no physical authority.
-3. **Prove real recovery while owning manual control.** Establish exclusive ownership first. Verify GUI SIGKILL, disconnect, heartbeat expiry, helper restart, invalid/stale sensors, malformed requests, quit, rapid switching and sleep/wake through independent mode/RPM observations and timings. Model tests and automatic-only diagnostics do not replace these physical tests. Any unreliable handback blocks general control. Document blocked/dead-helper limitations honestly.
-4. **Enable production profiles only after the full recovery matrix passes.** Keep startup/wake System-first, acknowledge activation before checkmarks, validate actual per-fan bounds, and re-review the new helper surface. Do not claim an Apple-preserving fan floor; manual mode is assumed to replace normal demand until independently proved otherwise.
-5. **Calibrate comfort, then gaming.** Compare System/System+/Cool Chassis under similar light workloads and human comfort/noise feedback. Comfortable references are Trackpad about 27°C, Actuator 25°C, Airflow 33°C; warmer references are about 31°C/29°C/43–44°C. Separate sensor scales and use maximum demand; do not force exact temperatures. The initial 20% floor is normalized between spinning min/max and is not an acoustic result. Gaming calibration follows separately.
-6. **Finish acceptance and distribution.** Human native-UI review, real lifecycle acceptance, install/uninstall verification, final permissions/signing/security review, accurate documentation and any requested release packaging remain. Additional models require their own evidence. No telemetry, updater, power-setting changes or broad helper APIs are planned.
+Existing authentication, bounded ingress, restoration coalescing, interpolation, aggregation, persistence and failure tests remain. New tests cover mechanical authority separation, strict fixed messages, stopped baseline, command order/metadata, partial activation, deadlines, heartbeat ownership/expiry, sensor/thermal faults and first-handback retention.
 
-## Resume and verify
+## Next work in order
 
-Read this checkpoint, `docs/HARDWARE_GATES.md`, `docs/SENSOR_EVIDENCE.md`, `docs/MANUAL_QUALIFICATION.md` and `docs/SECURITY_REVIEW.md` first. The development machine also has an ignored, more detailed `docs/local/DEVELOPMENT_HANDOFF.md` with private artifact locations and exact runtime state. Never publish that private handoff, reference CSV, raw logs or local signing configuration.
+1. Stop the competing TG Pro helper while both fans are automatic; verify absence and fresh mode0 on both. Keep its GUI closed during Fandy trials.
+2. Run one fixed five-second initial request using the same-connection correction. If target readback still fails, preserve exact evidence and diagnose without bypassing it. Restore both fans after any failure.
+3. After actual modest target/spin-up works, prove hard deadline, heartbeat expiry, disconnect and signed GUI-process SIGKILL using independent fan readings and restoration timings.
+4. Finish live helper restart, malformed owned request, invalid/stale sensor, normal quit, rapid switching and practical sleep/wake tests. Document what was measured versus model-tested; helper death/blocking has a residual recovery window.
+5. Qualify every sensor role with reviewed exact-model provenance/coverage and discriminating readings. Resolve CPU Tp/Tm cluster and GPU-region coverage, Trackpad/Actuator, three Airflow and three proximity roles. Existing reference correlation alone is insufficient; normal Fandy must read independently.
+6. Enable ordinary physical writer/profiles only after complete recovery and sensor evidence. Then compare System/System+/Cool Chassis with human comfort feedback, using27°C Trackpad /25°C Actuator /33°C Airflow as calibration, not forced targets. Gaming tuning follows separately.
+7. Complete native human UI review and release/distribution acceptance. No telemetry, network runtime, broad root APIs, updater or power manipulation is planned.
+
+## Resume
+
+Read this file, [hardware gates](HARDWARE_GATES.md), [qualification protocol](MANUAL_QUALIFICATION.md), [sensor evidence](SENSOR_EVIDENCE.md) and [security review](SECURITY_REVIEW.md). Ignored `docs/local/DEVELOPMENT_HANDOFF.md` contains private artifact paths/runtime detail; never publish it or raw CSV/logs/signing files.
 
 ```sh
 Scripts/test.sh -j 1 --no-parallel
@@ -41,6 +42,8 @@ python3 -m unittest discover -s Tests/ToolTests -v
 Scripts/build.sh -jobs 1
 ```
 
-Regenerate the native project after adding app/helper source files using `Scripts/generate-project.py`; it preserves local signing choices in ignored configuration files. Do not overwrite or delete the registered `build/MonitoringDSR/Fandy.app` while the service is registered. Use the authenticated restoration/unregister path before replacement.
+Regenerate the native project after new app/helper files with `Scripts/generate-project.py`. Do not overwrite `build/MonitoringDSR/Fandy.app` while registered: authenticated restore/unregister, confirm helper absent, replace the signed bundle, then register normally. CLI `--helper-restoration-status` / `--helper-restore` are safe read/release diagnostics. Fixed `--helper-recovery-initial`, `--helper-recovery-deadline`, `--helper-recovery-heartbeat`, `--helper-recovery-disconnect` and `--helper-recovery-hold` perform physical bounded trials only after exclusive ownership is established. Ordinary menu profiles still cannot activate.
 
-Start the next session with fresh read-only helper status and fan modes, then sensor-evidence work. Do not restart broad testing or attempt manual activation merely because the UI is complete.
+The helper now independently checks for the known TG Pro privileged-controller executable through bounded kernel process metadata enumeration before admission and during a trial. Only a fixed blocker string is exposed over status; no PID/path or arbitrary process operation is accepted. This detects the present conflict, not every possible controller. Continuous fan mode/target checks remain required. Enumeration failure blocks trials; restoration is independent of this guard.
+
+The installed root guard reported the TG Pro conflict correctly. The updated fixed non-activating protocol diagnostic passed all nine checks, with both fans automatic. Production monitoring launch/quit and three independent reads are recorded locally; no further physical trial was attempted while ownership remained blocked.

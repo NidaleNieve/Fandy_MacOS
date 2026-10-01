@@ -49,3 +49,23 @@ int32_t fandy_smc_key_at(FandySMC *c, uint32_t index, char key[5]) {
     int32_t r=call(c,&in,&out); if(r) return r;
     for(int i=0;i<4;i++) key[i]=(char)(out.key >> (24-i*8)); key[4]=0; return 0;
 }
+
+#include <libproc.h>
+int32_t fandy_tg_controller_present(void) {
+    int count = proc_listpids(PROC_ALL_PIDS, 0, NULL, 0);
+    if (count <= 0 || count > 65536 * (int)sizeof(pid_t)) return -1;
+    int capacity = count + 128 * (int)sizeof(pid_t);
+    pid_t *pids = calloc(1, (size_t)capacity);
+    if (!pids) return -1;
+    int bytes = proc_listpids(PROC_ALL_PIDS, 0, pids, capacity);
+    if (bytes <= 0 || bytes >= capacity) { free(pids); return -1; }
+    int32_t result = 0;
+    for (int i = 0; i < bytes / (int)sizeof(pid_t); i++) {
+        if (pids[i] <= 0) continue;
+        char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
+        if (proc_pidpath(pids[i], path, sizeof(path)) <= 0) continue;
+        const char *name = strrchr(path, '/'); name = name ? name + 1 : path;
+        if (strcmp(name, "com.tunabellysoftware.TGFanHelper") == 0) { result = 1; break; }
+    }
+    free(pids); return result;
+}

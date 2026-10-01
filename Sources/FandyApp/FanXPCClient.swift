@@ -55,6 +55,22 @@ import FandyHardware
         guard status.version == Wire.version else { throw ControlError.malformedMessage }
         latest=status;return status
     }
+    func recovery(_ request: RecoveryTrialRequest) async throws -> RecoveryTrialStatus {
+        guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canQualifyRecovery else {
+            throw ControlError.hardwareUnqualified
+        }
+        _ = try connect(); let connectionID = connectionToken
+        let token = UUID(); operationToken = token
+        let data = try Wire.encode(request)
+        let reply = try await dataCall { proxy, callback in proxy.qualifyRecovery(data, withReply: callback) }
+        try requireCurrent(token)
+        guard connectionID == connectionToken else { throw ControlError.staleSession }
+        return try Wire.decode(RecoveryTrialStatus.self, from: reply)
+    }
+    func disconnectForRecoveryTest() {
+        connectionToken = UUID(); connection?.invalidate(); connection = nil
+        lease = nil; latest = nil; generation = nil; operationToken = UUID()
+    }
     /// Fixed adversarial messages are sent only to a confirmed observation-only helper.
     /// No caller chooses payloads, methods, fan targets or trust requirements.
     func checkObservationProtocol() async throws -> [String] {
@@ -62,7 +78,7 @@ import FandyHardware
         return try await checkRestrictedProtocol(observationOnly: true)
     }
     func checkRestorationProtocol() async throws -> [String] {
-        guard SensorRegistry.capabilities.stage == .restorationQualification,
+        guard [.restorationQualification, .recoveryQualification].contains(SensorRegistry.capabilities.stage),
               SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl,
               !SensorRegistry.capabilities.canQualifyManual else { throw ControlError.unauthorized }
         return try await checkRestrictedProtocol(observationOnly: false)
@@ -70,7 +86,7 @@ import FandyHardware
     private func checkRestrictedProtocol(observationOnly: Bool) async throws -> [String] {
         let initial = try await status()
         guard initial.observationOnly == observationOnly, !initial.manualQualified,
-              initial.capabilities?.stage == SensorRegistry.capabilities.stage else { throw ControlError.unauthorized }
+              initial.capabilities?.stage == SensorRegistry.capabilities.stage, initial.recovery?.active != true else { throw ControlError.unauthorized }
         var checks = ["authenticatedStatus"]
         let leases: [(String, Data)] = [
             ("malformedJSON", Data("not JSON".utf8)),

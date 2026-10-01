@@ -18,6 +18,7 @@ public final class HelperCoordinator {
     private var fault: String?
     private var restoration: RestorationReport?
     private var startupRestoration: RestorationReport?
+    public var lastRestoration: RestorationReport? { restoration }
     private let capabilities: HardwareCapabilities
     public init(io: any FanHardwareIO, capabilities: HardwareCapabilities, read: @escaping () throws -> HardwareSnapshot,
                 clock: @escaping () -> Double, event: @escaping (String) -> Void = { _ in }) {

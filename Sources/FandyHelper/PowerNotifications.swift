@@ -7,16 +7,16 @@ import FandyCore
 // Swift cannot import these nested C macros.
 // Retained for the launch daemon's lifetime. No dependence on AppKit/user-session notifications.
 final class PowerNotifications: @unchecked Sendable {
-    let coordinator: HelperCoordinator
+    let transition: () -> Void
     var port: IONotificationPortRef?
     var notifier: io_object_t = 0
     var connection: io_connect_t = 0
-    init(queue: DispatchQueue, coordinator: HelperCoordinator) throws {
-        self.coordinator = coordinator
+    init(queue: DispatchQueue, transition: @escaping () -> Void) throws {
+        self.transition = transition
         connection = IORegisterForSystemPower(Unmanaged.passUnretained(self).toOpaque(), &port, { context, _, message, argument in
             guard let context else { return }
             let power = Unmanaged<PowerNotifications>.fromOpaque(context).takeUnretainedValue()
-            if message == 0xe0000280 || message == 0xe0000300 { power.coordinator.powerTransition() }
+            if message == 0xe0000280 || message == 0xe0000300 { power.transition() }
             if message == 0xe0000280 || message == 0xe0000270 {
                 IOAllowPowerChange(power.connection, Int(bitPattern: argument))
             }

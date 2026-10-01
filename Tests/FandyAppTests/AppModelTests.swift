@@ -258,3 +258,13 @@ private actor DeferredControlClient: PrivilegedFanClient {
     #expect(model.machine.state == .fault); #expect(!model.isSelected("system"))
     #expect(model.helperHealth == .fault); #expect(await client.counts().0 == 0)
 }
+
+@Test func fixedRecoveryDiagnosticsRejectHardwareParametersAndDuplicateActions() throws {
+    let actions: [HelperDiagnosticAction] = [.recoveryInitial, .recoveryDeadline, .recoveryHeartbeat, .recoveryDisconnect, .recoveryHold]
+    for action in actions {
+        #expect(try HelperDiagnosticAction.parse(["Fandy", action.rawValue]) == action)
+        for parameter in ["--rpm=7000", "--duration=60", "--fan=0", "--qualified", "--key=F0Tg", action.rawValue] {
+            #expect(throws: ControlError.malformedMessage) { try HelperDiagnosticAction.parse(["Fandy", action.rawValue, parameter]) }
+        }
+    }
+}
