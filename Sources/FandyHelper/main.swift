@@ -16,7 +16,8 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     init(hardware: AppleFanHardware, sampler: HardwareSnapshotReader) {
         let events = Logger(subsystem: FandyIdentity.logSubsystem, category: "safety")
         let capabilities = SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel())
-        let control = HelperCoordinator(io: hardware, capabilities: capabilities, read: { try sampler.snapshot() }, clock: { ProcessInfo.processInfo.systemUptime }, event: { message in events.notice("\(message, privacy: .public)") })
+        let control = HelperCoordinator(io: hardware, capabilities: capabilities, read: { try sampler.snapshot() }, clock: { ProcessInfo.processInfo.systemUptime }, event: { message in events.notice("\(message, privacy: .public)") },
+            requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() })
         coordinator = control
         let source = RecoverySampleSource(sampler: sampler)
         recovery = RecoveryTrialCoordinator(io: hardware, capabilities: capabilities, read: { try source.read() },
@@ -93,7 +94,7 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
     func status(withReply reply: @escaping (Data?, String?) -> Void) {
         request(reply: DataReply(reply)) { [service] coordinator in
             var status = coordinator.status(); status.recovery = service.recovery.status
-            if status.capabilities?.canQualifyRecovery == true {
+            if status.capabilities?.canQualifyRecovery == true || status.capabilities?.canControl == true {
                 do { try RecoveryOwnershipProbe.requireNoKnownController() }
                 catch { status.recoveryBlocker = error.localizedDescription }
             }

@@ -69,3 +69,9 @@ The writer error was immediate readback of an asynchronously updated target. The
 After verifying TG Pro stopped and no active known Macs Fan Control/ThermalForge processes, both fans accepted 2517 RPM and automatic handback passed at 5.0283 s. Live heartbeat expiry 10.0293 s, owned disconnect 1.2152 s, fixed deadline 15.0064 s and signed-controller SIGKILL passed with independent mode observations. Helper death/restart remains untested; an automatic-only launchctl signal attempt was denied by macOS privilege checks. No successful-looking idle restart is counted as manual recovery.
 
 Future work follows the shortened delivery plan: preserve narrow authenticated communication, fan bounds, readback, System and watchdog recovery; avoid repeated general audits. Split profile eligibility by required sensors instead of silently qualifying all twelve. Ordinary production authority remains disabled at this checkpoint.
+
+## Production System/Max — 2026-10-01
+
+The all-twelve production prerequisite is replaced by policy-specific admission. A sensor-free lease permits only each fresh physical maximum. Nonempty roles require verified signed curve authority and chip safety inputs. The root batch writer revalidates current canonical metadata and bounds and rejects independent mode/target primitives. Target ownership, known-controller conflicts and persistent stopped-fan recovery are enforced.
+
+Helper restart was physically proved during an owned modest session using a temporary fixed own-process SIGKILL action, then that action was removed. Production Max/System, signed controller SIGKILL and heartbeat expiry passed. Actual RPM rise was required for Max acceptance. 157 Swift tests and a signed native build pass. No generic privileged method, new entitlement, personal-data surface or false sensor evidence was added. Physical sleep/wake and temperature-profile qualification remain pending; dead/blocked-helper timers still cannot execute.

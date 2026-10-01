@@ -145,3 +145,38 @@ private func automaticMetadata() -> DiscoveredSensor {
             clock: { now }, read: { now += 0.6; return fan }, pause: {})
     }
 }
+
+@Test func maximumCodecUsesReportedLimitAndRejectsUnqualifiedModeMetadataAndBaseline() throws {
+    let io = RecoveryTransport()
+    var fan = Fan(id: 0, min: 2317, max: 7826, actual: 0, target: 0)
+    try SMCProfileWriter.startStopped(fan: fan, mode: automaticMetadata(), previous: targetMetadata(), transport: io)
+    fan.mode = .manual
+    try SMCProfileWriter.target(FanTarget(0, fan.maximumRPM), fan: fan, metadata: targetMetadata(), transport: io)
+    #expect(io.commands.count == 2); #expect(io.commands[0][48] == 1)
+    #expect(SMCDecoder.decode(type: "flt ", bytes: Array(io.commands[1][48..<52])) == fan.maximumRPM)
+    let other = Fan(id: 0, min: 2200, max: 7400, actual: 2300, target: 2400, mode: .manual)
+    try SMCProfileWriter.target(FanTarget(0, other.maximumRPM), fan: other, metadata: targetMetadata(2400), transport: io)
+    #expect(SMCDecoder.decode(type: "flt ", bytes: Array(io.commands.last![48..<52])) == 7400)
+    let count = io.commands.count
+    var wrong = targetMetadata(); wrong.attributes = 208
+    #expect(throws: (any Error).self) { try SMCProfileWriter.target(FanTarget(0, fan.maximumRPM), fan: fan, metadata: wrong, transport: io) }
+    var spinning = fan; spinning.mode = .automatic; spinning.actualRPM = 1
+    #expect(throws: (any Error).self) { try SMCProfileWriter.startStopped(fan: spinning, mode: automaticMetadata(), previous: targetMetadata(), transport: io) }
+    var unknown = fan; unknown.mode = .system
+    #expect(throws: (any Error).self) { try SMCProfileWriter.target(FanTarget(0, unknown.maximumRPM), fan: unknown, metadata: targetMetadata(), transport: io) }
+    #expect(io.commands.count == count)
+}
+
+@Test func productionCurveCodecValidatesRangePrecisionAndCurrentTargetWithoutHardware() throws {
+    let io = RecoveryTransport()
+    let fan = Fan(id: 0, min: 2317, max: 7826, actual: 4000, target: 4000, mode: .manual)
+    try SMCProfileWriter.target(FanTarget(0, 4200.25), fan: fan, metadata: targetMetadata(4000), transport: io)
+    #expect(SMCDecoder.decode(type: "flt ", bytes: Array(io.commands.last![48..<52])) == 4200.25)
+    try SMCProfileWriter.target(FanTarget(0, 3000), fan: fan, metadata: targetMetadata(4000), transport: io)
+    let count = io.commands.count
+    for target in [FanTarget(1, 3000), FanTarget(0, .nan), FanTarget(0, .infinity), FanTarget(0, 0), FanTarget(0, 2316), FanTarget(0, 7827)] {
+        #expect(throws: (any Error).self) { try SMCProfileWriter.target(target, fan: fan, metadata: targetMetadata(4000), transport: io) }
+    }
+    #expect(throws: (any Error).self) { try SMCProfileWriter.target(FanTarget(0, 3000), fan: fan, metadata: targetMetadata(4100), transport: io) }
+    #expect(io.commands.count == count)
+}

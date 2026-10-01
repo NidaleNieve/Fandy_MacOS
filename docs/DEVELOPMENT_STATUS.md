@@ -1,55 +1,57 @@
 # Development checkpoint — 2026-10-01
 
-## Working state and diagnosed error
+## Working production milestone
 
-The physical writer now works in bounded qualification. Both fans accepted a 2517 RPM target, spun up, and returned from manual1 to automatic0 at the five-second deadline. The target is freshly calculated as each reported spinning minimum + 200; 2517 is a measured result, not a hardcoded policy.
+**System and Max now work on the real Mac17,9.** The signed app starts in System with real monitoring. Max selects each fan's fresh reported maximum through the same app model used by the menu; System immediately releases both fans to Apple. A checkmark requires acknowledged activation, not a preview. Max needs no temperature identities and activates after one fresh fan acquisition. Curve profiles retain five healthy acquisitions and policy-specific sensor eligibility.
 
-The error was premature target readback. Firmware accepted the write but early observations still returned the old zero target. Fandy aborted a valid asynchronous update after roughly 30 ms. `RecoveryTargetReadback` now observes for at most 500 ms without issuing another command or extending the original trial deadline. It requires unchanged bounds, manual ownership, and the exact target within 0.5 RPM. A nonzero competing target, lost ownership, bad reading, clock fault or timeout still aborts and restores both fans.
+The installed production stage is `maximumControl`. Mechanical transaction/recovery evidence is verified; all twelve requested sensor identities/coverage records remain pending. This does not block Max. Temperature-based profiles cannot activate yet. Proximity sensors no longer block unrelated policies: `permits(profile)` and the helper's required-role check replace the former all-twelve production switch. No preference or received capability report can grant writes.
 
-TG Pro's privileged helper was stopped by the user and absence was verified. No running Macs Fan Control or ThermalForge utility/helper was identified in process/service checks. Installing those applications alone does not mean they are controlling fans. No other controller was used to produce the passed tests.
+The pure production codec and root batch writer are connected and tested. The maximum stage independently rejects every target below the relevant fan's reported maximum. Future curve authority requires a reviewed signed stage and its required verified sensors; no unverified input is promoted by mechanical tests. Low-level independent setManual/setTarget primitives remain unavailable.
 
-Fandy still has its native UI, editable profiles, persistence, real monitoring and shadow calculations. Ordinary real profiles remain disabled; the compiled stage is `recoveryQualification`, not production control. No sensor evidence was falsely promoted to make the tests pass.
+## Physical results
 
-## Actual physical verification
-
-Every passed trial verified both fans manual with the requested target, followed by both automatic mode readbacks. RPM alone was not used to claim handback.
-
-| Case | Measured result |
+| Case | Actual acceptance |
 | --- | --- |
-| First modest request | Passed; both target 2517 RPM, observed actual peak 2636/2635 RPM during spin-up, both automatic after 5.0283 s. |
-| Heartbeat expiry | Passed; controller alive but no heartbeat, both restored after 10.0293 s. |
-| Explicit disconnect | Passed; release after 1.2152 s total, about 7 ms after the 1.2082 s disconnect request. |
-| Nonrenewable deadline | Passed; heartbeats continued, both restored after 15.0064 s. |
-| Signed controller SIGKILL | Passed; diagnostic process exit -9, helper recorded owned disconnect, independent recorder saw manual then automatic on both fans. |
-| Helper death/restart under manual control | Not tested. An automatic-only launchctl signal probe was refused by macOS privilege checks; it did not kill the helper. |
+| Automatic restoration | Both manual 1 → automatic 0; three repeated requests and 60 seconds independently observed. |
+| First modest trial | Both accepted 2517 RPM, computed from reported spinning minimum + 200; actual spin-up and automatic handback at 5.0283 s. |
+| Mechanical heartbeat/disconnect/deadline | Both-fan handback at 10.0293 s / 1.2152 s total / 15.0064 s. |
+| Signed mechanical controller SIGKILL | Independent reader saw both manual then automatic; helper recorded owned disconnect. |
+| Helper SIGKILL/restart | Passed during an owned modest recovery trial. New helper's startup report recorded both initial mode 1, automatic command success and readbacks 0. Independent automatic observation approximately 0.31 s after the fixed restart request. |
+| Production Max → System | Both reported limits 7826 RPM; actual manual readings reached approximately 7815 / 7780 RPM before System selection; both automatic afterward. These are observations, not hardcoded limits. |
+| Production controller SIGKILL | Passed on the real app-model Max lease; both manual-to-auto reports and independent observations, approximately 0.49 s through observation/status collection. |
+| Production heartbeat expiry | Passed without renewal; both manual-to-auto outcomes, physical Max RPM rise and independent automatic readbacks. |
+| Production normal termination | Passed directly from active production Max; both mode 1 → 0, with positive RPM near maximum before termination. |
 
-A dead, suspended or blocked helper cannot execute its watchdog. KeepAlive/startup restoration are implemented but do not substitute for a measured helper-death recovery test. Physical sleep/wake and the wider failure matrix remain untested; existing model tests are retained.
+The first three-second Max observation proved target/mode acceptance but ended before tachometer spin-up. It was not counted as physical Max proof. The corrected eight-second diagnostic requires actual RPM reaching at least 90% of reported maximum on both fans. The measured modest trials showed roughly 3.7 seconds before first positive RPM readings.
 
-## Validation and source
+Accepted target writes can initially read back zero. Bounded read-only acknowledgement (up to 500 ms) fixes that error without rewriting or extending a deadline. Changed mode/bounds, unexpected target, persistent zero, bad clock or late I/O fail toward automatic restoration. The production helper also releases if a commanded fan stays stopped/below its spinning minimum after a ten-second startup grace, even while heartbeat continues.
 
-**147 Swift tests pass** (18 hardware, 110 core, 19 app), with retained **27 passing Python tool tests**. Single-job signed native build and strict deep signature verification pass. New tests cover delayed acknowledgement, unchanged original deadline, wrong mode/target/bounds, persistent zero and a read completing after the 500 ms acknowledgement window.
+The temporary authenticated own-helper SIGKILL action was removed. The production helper accepts no signal, PID or process-control command. A dead/blocked helper cannot execute a timer; measured launchd startup recovery does not guarantee recovery from hung kernel I/O. Actual sleep/wake remains untested; its state machine and root power notifications remain implemented and model-tested.
 
-Changed source: `SMCRecoveryWriter.swift` adds bounded observation logic; root `FanHardware.swift` uses it after the admitted stopped-mode target write. The endpoint/authentication/RPM calculation do not change. Initial success still cannot be faked by a failed activation. No Max experiment, target clearing, power changes, thermal-service manipulation, screenshot or GUI automation was used.
+## Verification and installation
 
-Raw readings, test process identifiers, reference CSV, operator paths and signing configuration stay outside public Git. The ignored local handoff contains exact artifact locations and reproducible commands.
+157 Swift tests pass (20 hardware, 115 core, 22 app). All 27 Python tool tests pass. Single-job signed native compilation and strict deep signature verification pass. Focused additions cover per-policy capabilities, sensor-free fixed maximum, lower-target rejection, per-fan limits, target ownership, competing controllers, persistent stalled fans, immediate Max, System/wake cleanup and production command encoding.
 
-## Shortened forward plan
+The preserved signed app is `build/MonitoringDSR/Fandy.app`, registered normally through SMAppService after verified release/unregister and old-service absence. Existing identity `is.dsr.fandy`, helper identity and local signing team remain intact. The final installed build passed a five-tick functional check in real monitoring/System with control-ready helper health and Apple-observed ownership. Authenticated status and three independent fan recordings confirmed automatic mode on both fans. The menu-bar app was then relaunched in System; simulation remains explicit. Raw logs, private signing configuration and the exact local handoff stay ignored by Git.
 
-The user replaced the earlier all-sensors-first roadmap with incremental delivery. Keep signed authentication, narrow helper methods, bounds/readback, System restoration and watchdog/lifecycle recovery. Defer repeated broad audits, exhaustive sensor qualification and calibration until needed.
+## Remaining work, in order
 
-1. Prove helper restart recovery from a modest accepted manual target, with independent readings. The previous external launchctl probe lacked OS privilege; choose a narrow test mechanism without adding a generic root command/PID interface. Preserve the residual dead/blocked-helper limitation honestly.
-2. Complete production activation plumbing and enable System/Max after the minimum recovery gates pass. Max must remain a fixed maximum request from actual per-fan limits, without requiring all twelve sensor identities.
-3. Enable System+ after sufficiently established chip readings. Split eligibility by actual policy requirements rather than the current all-twelve compiled production gate. Do not mark pending identities verified to bypass it.
-4. Add Cool Chassis/School incrementally after the comfort inputs they use are established. Proximity sensors may remain informational and must not block every feature. Broader failure checks continue as focused regressions; no repeated general audit.
-5. Calibrate comfortable typing with human feedback near 27°C Trackpad / 25°C Actuator / 33°C Airflow, without forcing exact temperatures. Gaming tuning and distribution follow separately.
+1. Resolve CPU/GPU peak membership/coverage using independent current-model provenance or a discriminating source/measurement. Do not repeat idle recordings: the published CPU group may omit the independently observed Tm domain, and one published GPU key is absent. Source tables and rounded temperature agreement are insufficient to settle these conflicts.
+2. Review the required chip roles, enable the signed per-policy curve stage, and perform one bounded System+ activation through the already-connected batch writer. Initial activation from a spinning Apple-controlled baseline uses target-first acknowledgement; rejected preload never falls back to an alternative sequence.
+3. Establish only the comfort roles used by Cool Chassis/School, then enable those profiles. The three proximity roles may remain informational. Curve mapping/source evidence stays explicit; no renamed candidate is treated as proof.
+4. Measure actual sleep/wake and rapid production switching. Core lifecycle, race, stale reply, authentication, malformed input and failure tests remain retained; run focused physical regressions when their paths become enabled.
+5. Calibrate System/System+/Cool Chassis with human comfort feedback near 27°C Trackpad, 25°C Actuator, 33°C Airflow. Tune gaming separately; no promised exact temperatures, synthetic stress, clock or power changes.
+6. Human UI review, release configuration/notarization/distribution and any resulting fixes follow functional completion.
 
-## Resume
+Latest source review checked the current [Stats M5 table](https://github.com/exelban/stats/blob/master/Modules/Sensors/values.swift) and [ThermalForge's exact-model compatibility report](https://github.com/ProducerGuy/ThermalForge/issues/26). The report corroborates Max/Auto operation but does not resolve this machine's chip or comfort identities. No source was copied; existing license notices remain. The original fan/security milestone is now passed for System/Max; the remaining curve blocker is sensor evidence, not an all-twelve prerequisite.
 
-Read this checkpoint, [hardware gates](HARDWARE_GATES.md), [qualification protocol](MANUAL_QUALIFICATION.md) and the ignored `docs/local/DEVELOPMENT_HANDOFF.md`. Production source gates have not yet been changed to the incremental profile policy; all evidence flags remain truthful.
+## Resume / reproduce
+
+Read this checkpoint, [hardware gates](HARDWARE_GATES.md), [sensor evidence](SENSOR_EVIDENCE.md) and ignored `docs/local/DEVELOPMENT_HANDOFF.md`.
 
 ```sh
 Scripts/test.sh -j 1 --no-parallel
 Scripts/build.sh -jobs 1
 ```
 
-Do not overwrite the registered `build/MonitoringDSR/Fandy.app`. Release/unregister, verify helper absent, replace the signed bundle and register normally. Fixed recovery diagnostics calculate their own bounded targets. The initial trial is five seconds; recovery trials are fifteen with a ten-second heartbeat timeout and at most eight trials per helper process. Longer trials require successful initial activation and handback. Ordinary menu profiles cannot invoke this test path.
+Never overwrite the registered bundle while its service is enabled. Release/unregister, confirm service absent, replace, verify signature and register. No screenshots, GUI navigation or Computer Use. Fixed production diagnostics require an appropriate noise window; normal operation is local and uses no network.

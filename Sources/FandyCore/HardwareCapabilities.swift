@@ -1,7 +1,7 @@
 import Foundation
 
 public enum HardwareStage: String, Codable, Sendable {
-    case observation, restorationQualification, recoveryQualification, manualQualification, qualifiedControl
+    case observation, restorationQualification, recoveryQualification, manualQualification, maximumControl, qualifiedControl
 }
 public enum QualificationState: String, Codable, Sendable { case pending, verified }
 public struct SensorEvidence: Codable, Sendable, Equatable {
@@ -42,7 +42,15 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     // restoration-first stage cannot enter manual mode, even with fully qualified sensors.
     public var canRestore: Bool { stage != .observation && topology == .verified }
     public var canControl: Bool {
-        stage == .qualifiedControl && canRestore && allSensorsVerified && automaticRestoration == .verified && manualTransaction == .verified
+        [.maximumControl, .qualifiedControl].contains(stage) && canRestore && automaticRestoration == .verified && manualTransaction == .verified
+    }
+    public func permits(_ profile: Profile) -> Bool {
+        guard canControl else { return false }
+        if profile.kind == .maximum { return true }
+        return stage == .qualifiedControl && profile.requiredSensors.isSubset(of: verifiedRoles)
+    }
+    public func permits(required: Set<SensorRole>) -> Bool {
+        canControl && (required.isEmpty || (stage == .qualifiedControl && SensorRole.safety.isSubset(of: required) && required.isSubset(of: verifiedRoles)))
     }
     /// Separate, signed-build authority for bounded qualification; never admits profile leases.
     /// The current restoration build cannot obtain it through preferences or XPC data.
@@ -83,7 +91,7 @@ public struct ProfileEligibility: Sendable {
                                 snapshot: HardwareSnapshot?, now: Double) -> Self {
         do {
             try profile.validate()
-            guard capabilities.canControl else { return Self(allowed: false, reason: capabilities.blockers.first ?? "Control is not qualified.") }
+            guard capabilities.permits(profile) else { return Self(allowed: false, reason: capabilities.blockers.first ?? "This profile is not qualified for this hardware.") }
             guard helper == .controlReady else { throw ControlError.helperUnavailable }
             guard let snapshot else { throw ControlError.invalidSnapshot }
             try snapshot.validate(now: now, required: profile.requiredSensors)

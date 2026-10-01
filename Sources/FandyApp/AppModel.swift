@@ -72,7 +72,12 @@ import ServiceManagement
     func eligibility(_ profile: Profile) -> ProfileEligibility {
         ProfileEligibility.evaluate(profile, capabilities: capabilities, helper: helperHealth, snapshot: snapshot, now: clock())
     }
-    func canActivate(_ profile: Profile) -> Bool { simulation || profile.kind == .system || eligibility(profile).allowed }
+    func canActivate(_ profile: Profile) -> Bool {
+        if simulation || profile.kind == .system { return true }
+        if capabilities.permits(profile), !helperAvailable(), let snapshot,
+           (try? snapshot.validate(now: clock(), required: profile.requiredSensors)) != nil { return true }
+        return eligibility(profile).allowed
+    }
     var statusText: String {
         if !simulation {
             if let hardwareError { return hardwareError }
@@ -119,7 +124,13 @@ import ServiceManagement
         if !canActivate(profile) { hardwareError = eligibility(profile).reason; return }
         lifecycleToken = UUID(); requestedSimulation = simulation
         do {
-            if !simulation && profile.kind != .system && !helperAvailable() { try HelperManager.install() }
+            if !simulation && profile.kind != .system && !helperAvailable() {
+                try HelperManager.install()
+                guard HelperManager.installed else {
+                    hardwareError = "Enable Fandy in Login Items & Extensions, then select the profile."
+                    return
+                }
+            }
             let effect = try machine.select(profile)
             logger.notice("Profile changed to \(profile.name, privacy: .public)")
             Task { await execute(effect) }
@@ -139,6 +150,7 @@ import ServiceManagement
                 }
             } else {
                 let reading: HardwareSnapshot
+                var observedBlocker: String?
                 if helperAvailable() {
                     let status = try await client.status()
                     guard token == lifecycleToken, !quitting else { return }
@@ -150,7 +162,8 @@ import ServiceManagement
                     }
                     guard let received = status.snapshot else { throw ControlError.helperUnavailable }
                     reading = received
-                    helperHealth = status.manualQualified && !status.observationOnly && capabilities.canControl ? .controlReady : .monitoring
+                    observedBlocker = status.recoveryBlocker
+                    helperHealth = status.manualQualified && !status.observationOnly && capabilities.canControl && status.fault == nil && observedBlocker == nil ? .controlReady : .monitoring
                 } else {
                     if hardware == nil { hardware = try AppleSiliconSensorProvider() }
                     guard let provider = hardware else { throw ControlError.invalidSnapshot }
@@ -167,7 +180,7 @@ import ServiceManagement
                     }
                     await execute(machine.step(reading, now: clock()))
                 }
-                hardwareError = nil
+                hardwareError = observedBlocker
             }
             tickCount += 1
             if let snapshot, tickCount % 5 == 0 { try? diagnostics?.record(profile:machine.selected.name,snapshot:snapshot) }

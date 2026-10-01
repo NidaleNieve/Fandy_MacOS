@@ -28,7 +28,7 @@ public enum SensorRegistry {
     // Automatic handback passed on both fans on 2026-10-01: manual->0, three
     // idempotent requests and 60 seconds independently observed. See HARDWARE_GATES.
     // Evidence and authority are compiled into the signed build; no preference/XPC bypass exists.
-    public static let capabilities = HardwareCapabilities(model: model, stage: .recoveryQualification, sensors: mappings.flatMap { mapping in
+    public static let capabilities = HardwareCapabilities(model: model, stage: .maximumControl, sensors: mappings.flatMap { mapping in
         let source: String = switch mapping.role {
         case .cpuAverage, .gpuAverage: "Stats M5 table; contemporaneous TG Pro recordings"
         case .airflowLeft, .airflowRight, .wireless: "Stats names; contemporaneous TG Pro recordings"
@@ -43,7 +43,7 @@ public enum SensorRegistry {
         let roles: [SensorRole] = mapping.role == .cpuAverage ? [.cpuAverage, .cpuPeak]
             : mapping.role == .gpuAverage ? [.gpuAverage, .gpuPeak] : [mapping.role]
         return roles.map { SensorEvidence(role: $0, keys: mapping.keys, source: source, limitation: limitation) }
-    }, topology: .verified, automaticRestoration: .verified)
+    }, topology: .verified, automaticRestoration: .verified, manualTransaction: .verified)
 }
 public final class HardwareSnapshotReader: @unchecked Sendable {
     private let lock = NSLock()

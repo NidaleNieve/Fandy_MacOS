@@ -8,7 +8,7 @@ import Testing
     #expect(!full.forMachine("Other").canRestore)
     let pending = HardwareCapabilities(model: "Test", stage: .qualifiedControl, topology: .verified,
                                       automaticRestoration: .verified, manualTransaction: .verified)
-    #expect(pending.canRestore); #expect(!pending.canControl)
+    #expect(pending.canRestore); #expect(pending.canControl); #expect(!pending.permits(BuiltInProfiles.gaming)); #expect(pending.permits(BuiltInProfiles.maximum))
     let restoration = qualifiedCapabilities(stage: .restorationQualification)
     #expect(restoration.canRestore); #expect(!restoration.canControl)
     #expect(!qualifiedCapabilities(stage: .manualQualification).canControl)
@@ -17,13 +17,13 @@ import Testing
                                           topology: .verified, manualTransaction: .verified)
     #expect(noAutoProof.canRestore); #expect(!noAutoProof.canControl)
 }
-@Test func missingProximityEvidenceBlocksEveryControlProfile() {
+@Test func informationalProximityEvidenceDoesNotBlockUnrelatedPolicies() {
     let full = qualifiedCapabilities()
     let incomplete = HardwareCapabilities(model: full.model, stage: .qualifiedControl, sensors: full.sensors.filter { $0.role != .charger },
                                           topology: .verified, automaticRestoration: .verified, manualTransaction: .verified)
     #expect(!incomplete.allSensorsVerified); #expect(incomplete.canRestore)
     for profile in BuiltInProfiles.all where profile.kind != .system {
-        #expect(!ProfileEligibility.evaluate(profile, capabilities: incomplete, helper: .controlReady, snapshot: fixture(), now: 10).allowed)
+        #expect(ProfileEligibility.evaluate(profile, capabilities: incomplete, helper: .controlReady, snapshot: fixture(), now: 10).allowed)
     }
 }
 @Test func duplicateAndMalformedEvidenceCannotQualify() {
@@ -179,4 +179,83 @@ import Testing
     coordinator.watchdog(); coordinator.watchdog()
     #expect(spy.calls == calls); #expect(spy.fans[0].mode == .manual)
     #expect(coordinator.restore()); #expect(coordinator.status().automaticVerified)
+}
+
+@Test func maximumPolicyNeedsMechanicalProofButNoTemperatureIdentities() throws {
+    let caps = HardwareCapabilities(model: "Test", stage: .maximumControl, topology: .verified,
+        automaticRestoration: .verified, manualTransaction: .verified)
+    #expect(caps.canControl); #expect(caps.permits(BuiltInProfiles.maximum))
+    #expect(!caps.permits(BuiltInProfiles.gaming)); #expect(!caps.permits(required: SensorRole.safety))
+    #expect(caps.permits(required: [])); #expect(!caps.forMachine("Other").canControl)
+    let spy = FanSpy(); spy.invalid = true
+    let coordinator = HelperCoordinator(io: spy, capabilities: caps, read: { spy.snapshot() }, clock: { spy.now })
+    #expect(coordinator.startup())
+    for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: []), owner: owner)
+    let snapshot = coordinator.status().snapshot!
+    let targets = snapshot.fans.map { FanTarget($0.id, $0.maximumRPM) }
+    try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id, targets: targets), owner: owner)
+    #expect(spy.fans.map(\.targetRPM) == [8000, 7400])
+    spy.now += 1; coordinator.watchdog(); #expect(spy.fans.allSatisfy { $0.mode == .manual })
+    spy.now += 10; coordinator.watchdog(); #expect(spy.fans.allSatisfy { $0.mode == .automatic })
+}
+@Test func maximumLeaseCannotBeUsedToRequestLowerSpeedOrUnknownFan() throws {
+    let caps = HardwareCapabilities(model: "Test", stage: .maximumControl, topology: .verified,
+        automaticRestoration: .verified, manualTransaction: .verified)
+    for malformed in [[FanTarget(0, 4000), FanTarget(1, 7400)], [FanTarget(0, 8000), FanTarget(99, 7400)]] {
+        let spy = FanSpy()
+        let coordinator = HelperCoordinator(io: spy, capabilities: caps, read: { spy.snapshot() }, clock: { spy.now })
+        #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+        #expect(throws: ControlError.hardwareUnqualified) { try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: UUID()) }
+        let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: []), owner: owner)
+        let snapshot = coordinator.status().snapshot!
+        #expect(throws: ControlError.invalidFan) {
+            try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id, targets: malformed), owner: owner)
+        }
+        #expect(spy.fans.allSatisfy { $0.mode == .automatic }); #expect(!spy.calls.contains("manual0"))
+    }
+}
+@Test func maximumEngineUsesEachFanLimitAndRefusesStaleHardwareOrThermalPressure() throws {
+    var snapshot = fixture(); snapshot.sensors = []
+    #expect(BuiltInProfiles.maximum.requiredSensors.isEmpty)
+    #expect(try ProfileEngine().evaluate(BuiltInProfiles.maximum, snapshot: snapshot, now: 10).percent == 100)
+    #expect(throws: (any Error).self) { try ProfileEngine().evaluate(BuiltInProfiles.maximum, snapshot: snapshot, now: 14) }
+    snapshot.thermalPressure = .serious
+    #expect(throws: ControlError.thermalPressure) { try ProfileEngine().evaluate(BuiltInProfiles.maximum, snapshot: snapshot, now: 10) }
+}
+
+@Test func changedTargetOrKnownControllerDuringMaximumLeaseRestoresInsteadOfCompeting() throws {
+    let caps = HardwareCapabilities(model: "Test", stage: .maximumControl, topology: .verified,
+        automaticRestoration: .verified, manualTransaction: .verified)
+    for mode in 0..<2 {
+        let spy = FanSpy(); var conflict = false
+        let coordinator = HelperCoordinator(io: spy, capabilities: caps, read: { spy.snapshot() }, clock: { spy.now },
+            requireExclusive: { if conflict { throw ControlError.unauthorized } })
+        #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+        let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: []), owner: owner)
+        let snapshot = coordinator.status().snapshot!
+        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+            targets: snapshot.fans.map { FanTarget($0.id, $0.maximumRPM) }), owner: owner)
+        if mode == 0 { spy.fans[0].targetRPM = 4000 } else { conflict = true }
+        spy.now += 1; coordinator.watchdog()
+        #expect(spy.fans.allSatisfy { $0.mode == .automatic })
+    }
+}
+
+@Test func persistentStoppedFanWhileHeartbeatContinuesReturnsToSystem() throws {
+    let caps = HardwareCapabilities(model: "Test", stage: .maximumControl, topology: .verified,
+        automaticRestoration: .verified, manualTransaction: .verified)
+    let spy = FanSpy()
+    let coordinator = HelperCoordinator(io: spy, capabilities: caps, read: { spy.snapshot() }, clock: { spy.now })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: []), owner: owner)
+    func send() throws {
+        let snapshot = coordinator.status().snapshot!
+        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+            targets: snapshot.fans.map { FanTarget($0.id, $0.maximumRPM) }), owner: owner)
+    }
+    try send(); spy.fans[0].actualRPM = 0
+    spy.now += 5; try send(); coordinator.watchdog(); #expect(spy.fans[0].mode == .manual)
+    spy.now += 5; try send(); coordinator.watchdog()
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic })
 }

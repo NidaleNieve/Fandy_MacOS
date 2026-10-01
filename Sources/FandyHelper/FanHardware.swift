@@ -37,10 +37,60 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         guard mode.type == "ui8 ", mode.size == 1, mode.bytes.count == 1 else { throw HardwareError.invalidMetadata }
         try SMCAutomaticModeWriter.restore(fanID: fanID, metadata: mode, transport: self)
     }
-    // Ordinary profile writes remain unavailable; qualification has separate bounded methods.
-    // Flipping a preference/qualification flag cannot introduce an arbitrary target writer here.
+    // No independent mode/target primitive is exposed; production writes are validated batches.
     func setManual(fanID: Int) throws { throw ControlError.hardwareUnqualified }
     func setTarget(fanID: Int, rpm: Double) throws { throw ControlError.hardwareUnqualified }
+    func applyValidatedTargets(_ targets: [FanTarget]) throws {
+        guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canControl else { throw ControlError.hardwareUnqualified }
+        try RecoveryOwnershipProbe.requireNoKnownController()
+        let baseline = try enumerateFans()
+        guard targets.count == baseline.count, Set(targets.map(\.fanID)) == Set(baseline.map(\.id)),
+              targets.allSatisfy({ target in baseline.contains {
+                  $0.id == target.fanID && target.rpm.isFinite && target.rpm >= $0.minimumRPM && target.rpm <= $0.maximumRPM &&
+                  (SensorRegistry.capabilities.stage == .qualifiedControl || target.rpm == $0.maximumRPM)
+              } }) else { throw ControlError.invalidFan }
+        let deadline = ProcessInfo.processInfo.systemUptime + 2
+        for target in targets {
+            try requireProfileDeadline(deadline)
+            guard var fan = try enumerateFans().first(where: { $0.id == target.fanID }),
+                  let original = baseline.first(where: { $0.id == target.fanID }),
+                  fan.minimumRPM == original.minimumRPM, fan.maximumRPM == original.maximumRPM else { throw ControlError.invalidFan }
+            if fan.mode == .automatic {
+                if fan.actualRPM == 0 && fan.targetRPM == 0 {
+                    try SMCProfileWriter.startStopped(fan: fan, mode: reader.read(qualifiedModeKey(fan.id)),
+                        previous: reader.read("F\(fan.id)Tg"), transport: self)
+                } else {
+                    // Spinning automatic admission is target-first; never fall back after rejection.
+                    try SMCProfileWriter.target(target, fan: fan, metadata: reader.read("F\(fan.id)Tg"), transport: self)
+                    try awaitProfileTarget(target, baseline: fan, deadline: deadline, mode: .automatic)
+                    try SMCRecoveryWriter.activate(target: target, mode: reader.read(qualifiedModeKey(fan.id)),
+                        prepared: reader.read("F\(fan.id)Tg"), transport: self)
+                }
+                guard let fresh = try enumerateFans().first(where: { $0.id == target.fanID }), fresh.mode == .manual else { throw ControlError.restorationUnverified }
+                fan = fresh
+            }
+            guard fan.mode == .manual else { throw ControlError.invalidFan }
+            try requireProfileDeadline(deadline)
+            if fan.targetRPM != target.rpm {
+                try SMCProfileWriter.target(target, fan: fan, metadata: reader.read("F\(fan.id)Tg"), transport: self)
+            }
+            try awaitProfileTarget(target, baseline: fan, deadline: deadline, mode: .manual)
+        }
+    }
+    private func awaitProfileTarget(_ target: FanTarget, baseline: Fan, deadline: Double, mode: FanMode) throws {
+        try RecoveryTargetReadback.awaitTarget(target, baseline: baseline, deadline: deadline,
+            clock: { ProcessInfo.processInfo.systemUptime }, read: { [self] in
+                try requireProfileDeadline(deadline)
+                guard let fan = try enumerateFans().first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
+                return fan
+            }, pause: { Thread.sleep(forTimeInterval: 0.01) }, mode: mode)
+        try requireProfileDeadline(deadline)
+    }
+    private func requireProfileDeadline(_ deadline: Double) throws {
+        guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canControl,
+              ProcessInfo.processInfo.systemUptime < deadline else { throw ControlError.staleSession }
+        try RecoveryOwnershipProbe.requireNoKnownController()
+    }
     func prepareRecoveryTarget(_ target: FanTarget, deadline: Double) throws {
         try requireRecoveryDeadline(deadline)
         guard let fan = try enumerateFans().first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }

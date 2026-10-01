@@ -1,3 +1,5 @@
+> This describes the historical bounded qualification stage. The current production stage is maximumControl: the mechanical endpoint is disabled, and System/Max leases are admitted under separate fixed-maximum validation. Temperature-based authority remains pending.
+
 # Bounded fan qualification
 
 ## Separate authorities
@@ -32,8 +34,12 @@ Early automatic and mode-first writes returned stale zero targets in immediate o
 
 `RecoveryTargetReadback` performs read-only observations for up to 500 ms, checks the original deadline before and after each read, rejects changed ownership/bounds/nonzero competing targets, and never rewrites the command. Persistent zero remains a failure. No guess about universal firmware update timing is required; this bounded acknowledgement behavior was observed on the qualified model.
 
-Live heartbeat expiry 10.0293 s, disconnect 1.2152 s, fixed deadline 15.0064 s and signed controller SIGKILL all returned both fans to automatic mode. Independent observations supported acceptance. Helper death/restart during manual control and actual sleep/wake remain untested. An automatic-only launchctl signal probe was refused by OS privilege checks; no helper was killed by that command.
+Live heartbeat expiry 10.0293 s, disconnect 1.2152 s, fixed deadline 15.0064 s and signed controller SIGKILL all returned both fans to automatic mode. Independent observations supported acceptance. Helper death/restart during an owned modest manual trial passed; actual sleep/wake remains untested. An automatic-only launchctl signal probe was refused by OS privilege checks; no helper was killed by that command.
 
-The next production milestone follows the user's shortened plan: minimum recovery proof, fixed System/Max activation, then chip and comfort profiles by their actual sensor needs. Full twelve-role qualification no longer belongs ahead of every feature, but compiled production authority is still disabled until that policy split and activation plumbing are implemented. No unverified mapping is promoted by these mechanical results.
+The next production milestone follows the user's shortened plan: minimum recovery proof, fixed System/Max activation, then chip and comfort profiles by their actual sensor needs. Full twelve-role qualification no longer belongs ahead of every feature, but policy-specific eligibility and production System/Max activation are now implemented; temperature-profile authority remains disabled until its required evidence is reviewed. No unverified mapping is promoted by these mechanical results.
 
 The current mechanical path enforces a helper-side check for TG Pro's known privileged executable before admission and during ownership. Status exposes only a fixed blocker message, never process identifiers or paths. Bounded kernel process metadata enumeration provides no generic process/filesystem API to a caller. This detects a known conflict, not universal exclusive-ownership proof; modes/targets still require continuous checking. Safe restoration remains available despite that blocker.
+
+## Completed next gate
+
+A temporary fixed authenticated request killed only the owning helper during a fifteen-second modest recovery session, after a successful initial handback. The new helper's startup report and independent reader verified both manual-to-auto transitions, approximately 0.31 seconds after the request. The operation was removed from production. Production Max-to-System, controller SIGKILL and heartbeat expiry then passed on the ordinary lease path. Actual RPM near maximum was required, not only a target acknowledgement.

@@ -2,9 +2,9 @@
 
 A small native Apple Silicon macOS menu-bar fan controller with named profiles and editable temperature curves.
 
-**Current build: real monitoring, editable profiles, shadow previews and physically verified bounded fan control/recovery.** Both fans accepted a modest request and returned to macOS; heartbeat, disconnect, deadline and controller SIGKILL tests passed. Ordinary menu profiles are still disabled while helper restart and production activation are completed. See [the checkpoint](docs/DEVELOPMENT_STATUS.md).
+**Current build: real System/Max control on the qualified Mac17,9, real monitoring, editable profiles and shadow previews.** Both fans reached their reported maximum and returned to Apple automatic control. Modest manual operation, heartbeat expiry, disconnect, signed controller SIGKILL and helper restart recovery passed. Temperature-based profiles remain in preview until their required chip/comfort inputs are qualified. See [the checkpoint](docs/DEVELOPMENT_STATUS.md).
 
-A separate authenticated mechanical-test endpoint has fixed helper-derived targets and deadlines; it cannot grant production qualification. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
+The former bounded mechanical-test endpoint is disabled in the production maximum stage. Its qualification results cannot grant authority to temperature profiles. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
 
 See [the development checkpoint and remaining work](docs/DEVELOPMENT_STATUS.md) for the current milestone and resumption order.
 
@@ -35,7 +35,7 @@ Settings includes deterministic comfortable, warm chassis, gaming, GPU hot, sens
 | Gaming | Progressively stronger chip cooling around 77–85°C. |
 | School | Gentler comfort demand with automatic mode at idle. |
 
-These are initial policies, not acoustically or thermally calibrated defaults. The immutable chip guard remains active for every custom profile. Neither System+ nor the comfort profiles multiply Apple's hidden demand. Manual 0% means a fan's reported spinning minimum; stopped fans are possible in Apple automatic mode.
+System and Max are operational on the qualified model. The four temperature profiles and custom curves are editable previews at this checkpoint. These are initial policies, not acoustically or thermally calibrated defaults. The immutable chip guard remains active for every custom profile. Neither System+ nor the comfort profiles multiply Apple's hidden demand. Manual 0% means a fan's reported spinning minimum; stopped fans are possible in Apple automatic mode.
 
 ## Read-only discovery
 
@@ -48,18 +48,20 @@ The discovery executable has no SMC write API. It logs temperature keys, metadat
 
 ## Restoration helper and diagnostics
 
-The current helper permits automatic mode0 on the observed Mac17,9 topology and a separate bounded qualification sequence. Ordinary manual leases and arbitrary target writes remain rejected. It restores at startup, sleep/wake, and explicit System requests, independently of temperature qualification.
+The current helper permits automatic mode 0 and a production Max lease on the observed Mac17,9 topology. An empty sensor requirement means fixed maximum only: the helper rejects any lower target. Temperature profiles require their own verified inputs and a separately qualified control stage. Restoration remains independent of temperatures. Startup and wake are System-first.
 
 ```sh
 build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restoration-status
 build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restore
 ```
 
-The fixed restoration flags also include `--helper-restoration-register`, `--helper-restoration-unregister`, and `--helper-restoration-check`. They accept no hardware or payload arguments. Check performs three automatic-only requests and a 60-second independent observation; it distinguishes real manual handback from idempotence. Unregister restores first. Background registration uses SMAppService and native macOS approval; no custom root installer is used.
+The fixed `--helper-restoration-register` and `--helper-restoration-unregister` flags accept no hardware or payload arguments. Unregister restores first. Background registration uses SMAppService and native macOS approval; no custom root installer is used. The older `--helper-restoration-check` diagnostic is restricted to qualification builds: it performs three automatic-only requests and a 60-second independent observation, distinguishing real manual handback from idempotence. Use the production Max diagnostics below for the current control-capable build.
 
 The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed non-production helper with no active trial it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately.
 
-Finite fan tests use the signed app's fixed `--helper-recovery-initial`, `--helper-recovery-deadline`, `--helper-recovery-heartbeat`, `--helper-recovery-disconnect` and `--helper-recovery-hold` diagnostics. They accept no hardware/duration parameters and must wait for exclusive ownership. Initial deadline is5 seconds; subsequent mechanical trials are15 seconds with a10-second heartbeat timeout. [Exact admission and current failures](docs/MANUAL_QUALIFICATION.md).
+Older recovery-stage builds used the signed app's fixed `--helper-recovery-initial`, `--helper-recovery-deadline`, `--helper-recovery-heartbeat`, `--helper-recovery-disconnect` and `--helper-recovery-hold` diagnostics. They accept no hardware/duration parameters and must wait for exclusive ownership. Initial deadline is5 seconds; subsequent mechanical trials are15 seconds with a10-second heartbeat timeout. [Exact admission and actual results](docs/MANUAL_QUALIFICATION.md).
+
+The production app has fixed `--profile-max-check`, `--profile-max-quit-check` and `--profile-max-heartbeat-check` diagnostics. These temporarily run Max, verify actual RPM, and verify System/termination/heartbeat handback. They accept no RPM, fan or duration arguments. They are development tests, not needed for normal use. The temporary own-helper SIGKILL diagnostic was removed after the restart test.
 
 The registered bundle is preserved separately from Xcode build output. Do not remove or overwrite it while registered. The original observation service was unregistered before replacement; its old diagnostic flags are retained only for observation builds.
 
