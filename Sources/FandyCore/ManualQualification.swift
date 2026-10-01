@@ -79,7 +79,11 @@ public struct ManualQualificationSession: Sendable {
               snapshot.fans.allSatisfy({ fan in
                   plan.baseline.fans.contains { $0.id == fan.id && $0.minimumRPM == fan.minimumRPM && $0.maximumRPM == fan.maximumRPM }
               }) else { stop(.hardwareChanged); return stopReason }
-        guard snapshot.fans.allSatisfy({ $0.mode == .manual }) else { stop(.ownershipConflict); return stopReason }
+        guard snapshot.fans.allSatisfy({ fan in
+            guard fan.mode == .manual, let actualTarget = fan.targetRPM, actualTarget.isFinite,
+                  let planned = plan.targets.first(where: { $0.fanID == fan.id }) else { return false }
+            return abs(actualTarget - planned.rpm) <= 0.5
+        }) else { stop(.ownershipConflict); return stopReason }
         // The same acquisition may be checked twice while still fresh. A different snapshot
         // must advance each required sensor's acquisition sequence and timestamp.
         if snapshot.id != lastSnapshot.id {

@@ -6,7 +6,7 @@ Fandy has a native menu-bar UI, profile CRUD, editable graphical curves, version
 
 Automatic handback has been physically demonstrated on both fans: an observed mode 1 → mode 0 transition, three successful idempotent requests and 60 seconds of independent automatic-mode observations. This is not proof of recovery from a future Fandy manual transaction. Final checkpoint observations show both fans in mode 0; the registered app/helper binaries match the final build.
 
-**Verification:** 111 passing Swift tests (8 hardware, 85 core, 18 app), 27 passing Python tool tests, successful single-job signed native build and strict deep signature verification. No screenshots, GUI automation, manual RPM writes, target clearing or Max experiments were used.
+**Verification:** 120 passing Swift tests (8 hardware, 94 core, 18 app), 27 passing Python tool tests, successful single-job signed native build and strict deep signature verification. No screenshots, GUI automation, manual RPM writes, target clearing or Max experiments were used.
 
 ## Security work completed at this checkpoint
 
@@ -17,6 +17,10 @@ Automatic handback has been physically demonstrated on both fans: an observed mo
 - The inert manual qualification model rejects stopped fans, including hardware reporting a zero minimum.
 
 This is a reviewed restoration-only surface, not final security acceptance of a manual writer that does not yet exist. A dead, suspended or blocked helper cannot execute its watchdog; bounded admission does not solve blocked hardware I/O.
+
+## Latest continuation
+
+The inert qualification activation model now checks fresh per-fan state before and after each operation, verifies partial ownership and target readback, and preserves the original deadline across activation. Active sessions detect conflicting target changes. These additions prepare live testing but are not connected to a physical writer or XPC operation. Fresh read-only status still showed enabled restoration service and both fans automatic. Additional TG Pro logging and filtered IORegistry descriptions did not provide the missing sensor identities. No mapping was promoted based on conflicting broad-platform labels.
 
 ## Remaining work, in order
 

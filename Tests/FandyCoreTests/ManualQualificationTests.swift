@@ -8,7 +8,7 @@ private func qualificationPlan(_ trial: ManualQualificationPlan.Trial = .initial
 }
 private func manualSnapshot(at time: Double) -> HardwareSnapshot {
     var snapshot = fixture(at: time)
-    snapshot.fans = snapshot.fans.map { var fan = $0; fan.mode = .manual; return fan }
+    snapshot.fans = snapshot.fans.map { var fan = $0; fan.mode = .manual; fan.targetRPM = fan.actualRPM + 200; return fan }
     return snapshot
 }
 
@@ -155,4 +155,17 @@ private func manualSnapshot(at time: Double) -> HardwareSnapshot {
         var clock = ManualQualificationSession(plan: plan)
         #expect(clock.check(snapshot: manualSnapshot(at: 11), now: time) == .invalidClock)
     }
+}
+
+@Test func qualificationRejectsChangedOrMissingManualTarget() throws {
+    let plan = try qualificationPlan()
+    for target: Double? in [nil, 0, 2700] {
+        var snapshot = manualSnapshot(at: 11); snapshot.fans[0].targetRPM = target
+        var session = ManualQualificationSession(plan: plan)
+        #expect(session.check(snapshot: snapshot, now: 11) == .ownershipConflict)
+        #expect(!session.active)
+    }
+    var snapshot = manualSnapshot(at: 11); snapshot.fans[0].targetRPM = plan.targets[0].rpm + 0.25
+    var session = ManualQualificationSession(plan: plan)
+    #expect(session.check(snapshot: snapshot, now: 11) == nil)
 }
