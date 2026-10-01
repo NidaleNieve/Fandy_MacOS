@@ -1,0 +1,4 @@
+// Public defaults. Keep developer/team/profile selections in the ignored include.
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+#include? "Signing.local.xcconfig"
