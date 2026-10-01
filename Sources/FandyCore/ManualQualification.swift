@@ -21,7 +21,7 @@ public struct ManualQualificationPlan: Sendable, Equatable {
         // a downward request, substitute minimum RPM for a stopped fan, or issue a partial trial.
         targets = try snapshot.fans.map { fan in
             let rpm = fan.actualRPM + 200
-            guard rpm.isFinite, rpm > fan.actualRPM, rpm >= fan.minimumRPM, rpm <= fan.maximumRPM else {
+            guard fan.actualRPM > 0, rpm.isFinite, rpm > fan.actualRPM, rpm >= fan.minimumRPM, rpm <= fan.maximumRPM else {
                 throw ControlError.invalidFan
             }
             return FanTarget(fan.id, rpm)

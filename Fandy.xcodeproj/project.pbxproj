@@ -40,6 +40,12 @@
 			"path" = "Sources/FandyApp/ProfileEditor.swift";
 			"sourceTree" = "<group>";
 		};
+		"83A58823F659CAEA7AE2A932" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/RestorationFlight.swift";
+			"sourceTree" = "<group>";
+		};
 		"D2CEB122BCF9ECDC6BB42176" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -74,6 +80,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyCore/HelperCoordinator.swift";
+			"sourceTree" = "<group>";
+		};
+		"D5171724E8DC95710602ADE6" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/HelperRequestGate.swift";
 			"sourceTree" = "<group>";
 		};
 		"BFAB6D8C689DF42DBD689F6F" = {
@@ -238,12 +250,14 @@
 				51D0B8FD680608BAF5020BFE,
 				C86459ECAEFA78BC4D8D517C,
 				B3934EDA49FBAD13B2EB4FB3,
+				83A58823F659CAEA7AE2A932,
 				D2CEB122BCF9ECDC6BB42176,
 				FE86A99A33849697E1E79465,
 				5F3F4CF63DA77EBEC5901461,
 				5139C70DAC1DF582846ECB07,
 				E38AB440B2BCDAE2D4200AFB,
 				190A0C3A4F860B1556438087,
+				D5171724E8DC95710602ADE6,
 				BFAB6D8C689DF42DBD689F6F,
 				380AABF370EB0AB44A1CCF6F,
 				3B9DD1294571767A6BDCBE9D,
@@ -363,6 +377,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = B3934EDA49FBAD13B2EB4FB3;
 		};
+		"9C01BA543BDAA76EEFA4A02A" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 83A58823F659CAEA7AE2A932;
+		};
 		"7099A060F81C0382F95DD211" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = 2147483647;
@@ -373,6 +391,7 @@
 				B542E6D429544F89E6775EC5,
 				D03C65C5E28591996732114F,
 				84C4FB7FE594032EF8AE8A80,
+				9C01BA543BDAA76EEFA4A02A,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};

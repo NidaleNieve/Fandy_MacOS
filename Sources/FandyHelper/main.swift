@@ -9,6 +9,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     let queue = DispatchQueue(label: "is.dsr.fandy.helper.safety", qos: .userInitiated)
     let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "helper")
     let coordinator: HelperCoordinator
+    let requests = HelperRequestGate()
     var timer: DispatchSourceTimer?
     var power: PowerNotifications?
     init(hardware: AppleFanHardware, sampler: HardwareSnapshotReader) {
@@ -33,9 +34,16 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         guard connection.effectiveUserIdentifier != 0 else { return false }
         let object = HelperConnection(service: self)
+        guard requests.connect(owner: object.owner) else { return false }
         connection.exportedInterface = NSXPCInterface(with: FanHelperXPC.self)
         connection.exportedObject = object
-        connection.invalidationHandler = { [self] in queue.async { [self] in coordinator.disconnected(owner: object.owner) } }
+        connection.invalidationHandler = { [self] in
+            guard requests.close(owner: object.owner) else { return }
+            queue.async { [self] in
+                coordinator.disconnected(owner: object.owner)
+                requests.disconnected(owner: object.owner)
+            }
+        }
         connection.interruptionHandler = connection.invalidationHandler
         connection.resume(); return true
     }
@@ -51,39 +59,52 @@ func ownSigningTeam() throws -> String {
 final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
     let owner = UUID()
     let service: HelperService
-    var limiter = MessageRateLimiter()
     init(service: HelperService) { self.service = service }
-    private func allowed() -> Bool { limiter.allow(at: ProcessInfo.processInfo.systemUptime) }
-    func status(withReply reply: @escaping (Data?, String?) -> Void) {
-        let callback = DataReply(reply)
+    private func reject() {
+        guard let ticket = service.requests.rejection(owner: owner) else { return }
         service.queue.async { [self] in
-            guard allowed() else { service.coordinator.reject(owner: owner); callback.call(nil, ControlError.excessiveMessages.localizedDescription); return }
-            do { callback.call(try Wire.encode(service.coordinator.status()), nil) } catch { callback.call(nil, error.localizedDescription) }
+            defer { service.requests.finish(ticket) }
+            if service.requests.isOpen(ticket) { service.coordinator.reject(owner: owner) }
         }
     }
-    func beginLease(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
-        let callback = DataReply(reply)
+    private func request(bytes: Int? = nil, reply: DataReply,
+                         work: @escaping @Sendable (HelperCoordinator) throws -> Data) {
+        let ticket: HelperRequestGate.Ticket
+        do { ticket = try service.requests.admit(owner: owner, bytes: bytes, now: ProcessInfo.processInfo.systemUptime) }
+        catch { reject(); reply.call(nil, error.localizedDescription); return }
         service.queue.async { [self] in
-            do {
-                guard allowed() else { throw ControlError.excessiveMessages }
-                callback.call(try Wire.encode(service.coordinator.begin(Wire.decode(LeaseRequest.self, from: data), owner: owner)), nil)
-            } catch { service.coordinator.reject(owner: owner); callback.call(nil, error.localizedDescription) }
+            defer { service.requests.finish(ticket) }
+            guard service.requests.isOpen(ticket) else { reply.call(nil, ControlError.staleSession.localizedDescription); return }
+            do { reply.call(try work(service.coordinator), nil) }
+            catch { service.coordinator.reject(owner: owner); reply.call(nil, error.localizedDescription) }
+        }
+    }
+    func status(withReply reply: @escaping (Data?, String?) -> Void) {
+        request(reply: DataReply(reply)) { try Wire.encode($0.status()) }
+    }
+    func beginLease(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
+        request(bytes: data.count, reply: DataReply(reply)) { [owner] coordinator in
+            try Wire.encode(coordinator.begin(Wire.decode(LeaseRequest.self, from: data), owner: owner))
         }
     }
     func applyTargets(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
-        let callback = DataReply(reply)
-        service.queue.async { [self] in
-            do {
-                guard allowed() else { throw ControlError.excessiveMessages }
-                try service.coordinator.apply(Wire.decode(TargetRequest.self, from: data), owner: owner)
-                callback.call(Data(), nil)
-            } catch { service.coordinator.reject(owner: owner); callback.call(nil, error.localizedDescription) }
+        request(bytes: data.count, reply: DataReply(reply)) { [owner] coordinator in
+            try coordinator.apply(Wire.decode(TargetRequest.self, from: data), owner: owner)
+            return Data()
         }
     }
     func restoreAutomatic(withReply reply: @escaping (Bool, String?) -> Void) {
         let callback = BoolReply(reply)
-        // Safe release remains available even if a caller exhausted its normal message budget.
-        service.queue.async { [self] in let verified = service.coordinator.restore(); callback.call(verified, verified ? nil : ControlError.restorationUnverified.localizedDescription) }
+        let ticket: HelperRequestGate.Ticket
+        do { ticket = try service.requests.admitRestoration(owner: owner) }
+        catch { callback.call(false, error.localizedDescription); return }
+        // Reserved release capacity is independent of ordinary queue/rate limits.
+        service.queue.async { [self] in
+            defer { service.requests.finish(ticket) }
+            guard service.requests.isOpen(ticket) else { callback.call(false, ControlError.staleSession.localizedDescription); return }
+            let verified = service.coordinator.restore()
+            callback.call(verified, verified ? nil : ControlError.restorationUnverified.localizedDescription)
+        }
     }
 }
 // Foundation XPC callbacks cross into our serial queue; the framework owns their thread safety.

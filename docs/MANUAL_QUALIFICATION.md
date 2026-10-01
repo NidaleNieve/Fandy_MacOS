@@ -10,6 +10,8 @@ The admission and deadline model is implemented and tested, but is **not connect
 
 Targets are computed independently as **fresh actual RPM + 200**. The complete request must fit each fan's actual minimum/maximum before either fan is admitted. If a fan is stopped, or lacks the upward margin, the whole trial is skipped: no substitution of minimum RPM, downward clamp, or partial test. Apple currently may stop the fans, so a future qualification session must wait for normal Apple-controlled spinning rather than force a different first-test target.
 
+Stopped-fan rejection is explicit even if hardware reports a zero minimum. Admission must not accidentally turn a stopped fan into a 200 RPM trial.
+
 ## Deadline and revocation
 
 The first trial has an absolute five-second deadline. Recovery trials have an absolute fifteen-second deadline and a ten-second heartbeat timeout. Time begins at admission, before any future mode/target transaction. Heartbeats never move the deadline. A session is one-use; once stopped, it cannot reactivate. A future helper dispatcher must also prevent repeated calls from extending a trial and require verified restoration before admitting any new session.
@@ -20,6 +22,6 @@ Revocation is a decision to restore; it does **not** claim physical handback. Th
 
 ## Validation and remaining gates
 
-Eleven new Swift tests cover stage/model separation, every missing sensor role, restoration proof, independent fan bounds, stopped/ceiling-limited fans, sensor/thermal admission, fixed deadlines, heartbeat expiration, connection ownership, malformed messages, topology changes, acquisition freshness and lifecycle revocation. All physical manual-mode and target functions still reject requests.
+Twelve qualification tests cover stage/model separation, every missing sensor role, restoration proof, independent fan bounds, stopped/ceiling-limited fans including a zero reported minimum, sensor/thermal admission, fixed deadlines, heartbeat expiration, connection ownership, malformed messages, topology changes, acquisition freshness and lifecycle revocation. All physical manual-mode and target functions still reject requests.
 
 Next: resolve [chip coverage](SENSOR_EVIDENCE.md) and [sensor identity](SENSOR_EVIDENCE.md), review an injected-transport physical writer, add the dedicated authenticated qualification operation, then perform the five-second upward trial with immediate verified release. Live SIGKILL/disconnect/heartbeat/restart/sleep and the full recovery matrix remain mandatory before profiles. A dead, blocked or suspended helper cannot execute any timer; no bounded model removes that residual limitation.

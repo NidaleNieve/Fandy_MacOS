@@ -6,6 +6,8 @@ A small native Apple Silicon macOS menu-bar fan controller with named profiles a
 
 The next manual-test admission/deadline model is implemented and tested without a physical writer or new XPC operation. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
 
+See [the development checkpoint and remaining work](docs/DEVELOPMENT_STATUS.md) for the current milestone and resumption order.
+
 ## Build and run
 
 Requires Apple Silicon, macOS 15+, Xcode 16+ with Swift 6. Tested here with Xcode 27 / Swift 6.4 on Mac17,9 (M5 Pro).
@@ -54,6 +56,8 @@ build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restore
 ```
 
 The fixed restoration flags also include `--helper-restoration-register`, `--helper-restoration-unregister`, and `--helper-restoration-check`. They accept no hardware or payload arguments. Check performs three automatic-only requests and a 60-second independent observation; it distinguishes real manual handback from idempotence. Unregister restores first. Background registration uses SMAppService and native macOS approval; no custom root installer is used.
+
+The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed restoration-only helper it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately.
 
 The registered bundle is preserved separately from Xcode build output. Do not remove or overwrite it while registered. The original observation service was unregistered before replacement; its old diagnostic flags are retained only for observation builds.
 

@@ -58,6 +58,13 @@ private func manualSnapshot(at time: Double) -> HardwareSnapshot {
         }
     }
 }
+@Test func qualificationNeverStartsStoppedFanEvenWithZeroReportedMinimum() {
+    var snapshot = fixture(); snapshot.fans[0].minimumRPM = 0; snapshot.fans[0].actualRPM = 0
+    #expect(throws: ControlError.invalidFan) {
+        try ManualQualificationPlan(capabilities: qualifiedCapabilities(stage: .manualQualification), actualModel: "Test",
+            owner: UUID(), trial: .initial, snapshot: snapshot, now: 10, automaticVerified: true)
+    }
+}
 @Test func qualificationRejectsOwnershipStaleCandidateAndThermalUncertainty() {
     var bad: [HardwareSnapshot] = []
     var snapshot = fixture(); snapshot.fans[0].mode = .manual; bad.append(snapshot)
