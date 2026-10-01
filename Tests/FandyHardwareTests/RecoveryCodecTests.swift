@@ -109,3 +109,39 @@ private func automaticMetadata() -> DiscoveredSensor {
     #expect(io.requests.map { $0[42] } == [9])
     #expect(io.commands.isEmpty)
 }
+
+@Test func targetReadbackCanSettleWithoutAnotherWriteAndKeepsOriginalDeadline() throws {
+    var now = 1.0, count = 0
+    let fan = Fan(id: 0, min: 2317, max: 7826, actual: 0, target: 0, mode: .manual)
+    try RecoveryTargetReadback.awaitTarget(FanTarget(0, 2517), baseline: fan, deadline: 6,
+        clock: { now }, read: { count += 1; var value = fan; value.targetRPM = count == 3 ? 2517 : 0; return value }, pause: { now += 0.1 })
+    #expect(count == 3); #expect(now < 1.5)
+    #expect(throws: ControlError.staleSession) {
+        try RecoveryTargetReadback.awaitTarget(FanTarget(0, 2517), baseline: fan, deadline: now + 0.05,
+            clock: { now }, read: { fan }, pause: { now += 0.1 })
+    }
+}
+@Test func targetReadbackRejectsWrongModeCompetingTargetsBoundsAndPersistentZero() {
+    let baseline = Fan(id: 0, min: 2317, max: 7826, actual: 0, target: 0, mode: .manual)
+    for failure in 0..<4 {
+        var now = 1.0, reads = 0
+        var fan = baseline
+        if failure == 0 { fan.mode = .automatic }
+        if failure == 1 { fan.targetRPM = 2700 }
+        if failure == 2 { fan.maximumRPM = 7800 }
+        #expect(throws: (any Error).self) {
+            try RecoveryTargetReadback.awaitTarget(FanTarget(0, 2517), baseline: baseline, deadline: 6,
+                clock: { now }, read: { reads += 1; return fan }, pause: { now += 0.1 })
+        }
+        #expect(reads <= 7)
+    }
+}
+
+@Test func targetReadbackRejectsLateAcknowledgementEvenBeforeTheOverallTrialDeadline() {
+    var now = 1.0
+    let fan = Fan(id: 0, min: 2317, max: 7826, actual: 0, target: 2517, mode: .manual)
+    #expect(throws: ControlError.staleSession) {
+        try RecoveryTargetReadback.awaitTarget(FanTarget(0, 2517), baseline: fan, deadline: 6,
+            clock: { now }, read: { now += 0.6; return fan }, pause: {})
+    }
+}

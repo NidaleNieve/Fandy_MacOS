@@ -68,6 +68,13 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         try requireRecoveryDeadline(deadline)
         try SMCRecoveryWriter.targetStartedStopped(target: target, fan: fresh, metadata: metadata, transport: self)
         try requireRecoveryDeadline(deadline)
+        try RecoveryTargetReadback.awaitTarget(target, baseline: fresh, deadline: deadline,
+            clock: { ProcessInfo.processInfo.systemUptime }, read: { [self] in
+                try requireRecoveryDeadline(deadline)
+                guard let observed = try enumerateFans().first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
+                return observed
+            }, pause: { Thread.sleep(forTimeInterval: 0.01) })
+        try requireRecoveryDeadline(deadline)
     }
     private func requireRecoveryDeadline(_ deadline: Double) throws {
         guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canQualifyRecovery,
