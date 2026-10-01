@@ -6,9 +6,17 @@ public protocol FanHardwareIO: Sendable {
     func setManual(fanID: Int) throws
     func setTarget(fanID: Int, rpm: Double) throws
     func readMode(fanID: Int) throws -> FanMode
+    func applyValidatedTargets(_ targets: [FanTarget]) throws
 }
 public extension FanHardwareIO {
     func fanIDsForRestoration() throws -> [Int] { try enumerateFans().map(\.id) }
+    func applyValidatedTargets(_ targets: [FanTarget]) throws {
+        for target in targets {
+            try setManual(fanID: target.fanID)
+            guard try readMode(fanID: target.fanID) == .manual else { throw ControlError.restorationUnverified }
+            try setTarget(fanID: target.fanID, rpm: target.rpm)
+        }
+    }
 }
 public enum FanRestoration {
     /// Attempt every independently known fan. No target clearing or alternate mode/key guesses.
@@ -51,11 +59,7 @@ public enum FanRestoration {
             guard let fan = fans.first(where: { $0.id == target.fanID }), target.rpm.isFinite, target.rpm >= fan.minimumRPM, target.rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
         }
         do {
-            for target in targets {
-                try io.setManual(fanID: target.fanID)
-                guard try io.readMode(fanID: target.fanID) == .manual else { throw ControlError.restorationUnverified }
-                try io.setTarget(fanID: target.fanID, rpm: target.rpm)
-            }
+            try io.applyValidatedTargets(targets)
         } catch {
             // A failed write can have applied. Never assume unchanged hardware.
             try? restore(using: io)

@@ -150,7 +150,7 @@ import FandyHardware
         try await apply(targets,generation:generation,required:SensorRole.safety)
     }
     func apply(_ targets: [FanTarget], generation requested: UInt64, required: Set<SensorRole>) async throws {
-        guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canControl else { throw ControlError.hardwareUnqualified }
+        guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).permits(required: required) else { throw ControlError.hardwareUnqualified }
         let token = UUID(); operationToken = token
         if generation != requested || lease == nil {
             lease = nil; generation = nil
@@ -164,7 +164,7 @@ import FandyHardware
             let data = try await dataCall { proxy, reply in proxy.beginLease(request, withReply: reply) }
             try requireCurrent(token)
             let received = try Wire.decode(ControlLease.self, from: data)
-            guard received.generation == requested, required.union(SensorRole.safety).isSubset(of: received.required) else { throw ControlError.staleSession }
+            guard received.generation == requested, received.required == required else { throw ControlError.staleSession }
             lease = received; generation = requested
         }
         let status = try await status()

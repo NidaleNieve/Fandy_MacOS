@@ -20,6 +20,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case recoveryHeartbeat = "--helper-recovery-heartbeat"
     case recoveryDisconnect = "--helper-recovery-disconnect"
     case recoveryHold = "--helper-recovery-hold"
+    case maximumCheck = "--profile-max-check"
+    case maximumQuit = "--profile-max-quit-check"
+    case maximumHeartbeat = "--profile-max-heartbeat-check"
 
     static func parse(_ arguments: [String]) throws -> Self? {
         let actions = allCases.filter { arguments.contains($0.rawValue) }
@@ -40,12 +43,13 @@ enum HelperDiagnosticAction: String, CaseIterable {
         let client = FanXPCClient()
         do {
             switch action {
+            case .maximumCheck, .maximumQuit, .maximumHeartbeat: return await checkMaximum(action)
             case .register: try HelperManager.installObservation()
             case .unregister: try await HelperManager.uninstallObservation(client: client)
             case .status, .check: break
             case .registerRestoration:
-                guard [.restorationQualification, .recoveryQualification].contains(SensorRegistry.capabilities.stage),
-                      SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl else { throw ControlError.unauthorized }
+                guard [.restorationQualification, .recoveryQualification, .maximumControl, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
+                      SensorRegistry.capabilities.canRestore else { throw ControlError.unauthorized }
                 try HelperManager.install()
             case .unregisterRestoration: try await HelperManager.uninstall(client: client)
             case .statusRestoration: break
@@ -67,7 +71,6 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 if action == .check { report["checks"] = try await client.checkObservationProtocol() }
                 if action == .checkRestorationProtocol { report["checks"] = try await client.checkRestorationProtocol() }
                 let status = try await client.status()
-                guard !status.manualQualified else { throw ControlError.unauthorized }
                 report["observationOnly"] = status.observationOnly
                 report["physicalWritesEnabled"] = status.capabilities?.canRestore ?? false
                 report["automaticObserved"] = status.automaticVerified
@@ -91,11 +94,65 @@ enum HelperDiagnosticAction: String, CaseIterable {
             return 1
         }
     }
+    private static func checkMaximum(_ action: HelperDiagnosticAction) async -> Int32 {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyMaxCheck-\(UUID().uuidString)")
+        let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false)
+        do {
+            guard model.capabilities.permits(BuiltInProfiles.maximum), HelperManager.installed else { throw ControlError.hardwareUnqualified }
+            let reader = try SMCReader()
+            for _ in 0..<5 { await model.tick(); try await Task.sleep(for: .milliseconds(250)) }
+            guard model.ownership == .appleObserved, model.canActivate(BuiltInProfiles.maximum) else { throw ControlError.restorationUnverified }
+            model.select("max")
+            for _ in 0..<10 {
+                await model.tick()
+                if model.machine.state == .customActive { break }
+                if model.machine.selected.kind == .system { throw ControlError.helperUnavailable }
+                try await Task.sleep(for: .seconds(1))
+            }
+            guard model.machine.state == .customActive, model.isSelected("max") else { throw ControlError.helperUnavailable }
+            var reachedMaximum = false
+            for _ in 0..<8 {
+                let fans = try reader.fans()
+                guard fans.allSatisfy({ $0.mode == .manual && $0.targetRPM == $0.maximumRPM }) else { throw ControlError.restorationUnverified }
+                reachedMaximum = reachedMaximum || fans.allSatisfy { $0.actualRPM >= $0.maximumRPM * 0.9 }
+                emit(["event": "maximumActive", "fans": try encoded(fans), "state": model.machine.state.rawValue])
+                try await Task.sleep(for: .seconds(1))
+                if action != .maximumHeartbeat { await model.tick() }
+            }
+            guard reachedMaximum else { throw ControlError.invalidFan }
+            if action == .maximumHeartbeat {
+                var restored = false
+                for _ in 0..<24 {
+                    if try reader.fans().allSatisfy({ $0.mode == .automatic }) { restored = true; break }
+                    try await Task.sleep(for: .milliseconds(250))
+                }
+                let status = try await FanXPCClient().status()
+                guard restored, status.automaticVerified, status.restoration?.fans.allSatisfy(\.releasedManual) == true else { throw ControlError.restorationUnverified }
+                emit(["event": "heartbeatExpired", "restoration": try encoded(status.restoration)])
+                await model.prepareForTermination()
+            } else if action == .maximumQuit {
+                await model.prepareForTermination()
+            } else { model.select("system") }
+            for _ in 0..<10 {
+                try await Task.sleep(for: .milliseconds(100)); await model.tick()
+                if model.machine.state == .system { break }
+            }
+            guard model.machine.state == .system, (action == .maximumCheck ? model.isSelected("system") : model.canTerminate),
+                  try reader.fans().allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+            await model.prepareForTermination()
+            emit(["event": "result", "productionMaximum": "passed", "action": action.rawValue, "fans": try encoded(reader.fans())])
+            return 0
+        } catch {
+            await model.prepareForTermination()
+            emit(["event": "failure", "productionMaximum": "failed", "error": error.localizedDescription])
+            return 1
+        }
+    }
     private static func requireRestorationHelper(_ client: FanXPCClient) async throws {
         let status = try await client.status()
-        guard [.restorationQualification, .recoveryQualification].contains(SensorRegistry.capabilities.stage),
-              !status.observationOnly, !status.manualQualified,
-              [.restorationQualification, .recoveryQualification].contains(status.capabilities?.stage ?? .observation),
+        guard [.restorationQualification, .recoveryQualification, .maximumControl, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
+              !status.observationOnly,
+              [.restorationQualification, .recoveryQualification, .maximumControl, .qualifiedControl].contains(status.capabilities?.stage ?? .observation),
               status.capabilities?.forMachine(HardwareSnapshotReader.machineModel()).canRestore == true else { throw ControlError.unauthorized }
     }
     private static func checkRestoration(_ client: FanXPCClient) async throws -> Int32 {

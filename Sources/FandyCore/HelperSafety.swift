@@ -25,9 +25,9 @@ public struct HelperSafety: Sendable {
     public mutating func revoke() { lease = nil; restoring = true; systemVerified = false }
     public mutating func begin(owner: UUID, generation requested: UInt64, required: Set<SensorRole>, snapshot: HardwareSnapshot, now: Double) throws -> ControlLease {
         guard systemVerified, !restoring, lease == nil, (owner != previousOwner || requested >= generation) else { throw ControlError.staleSession }
-        try snapshot.validate(now: now, required: required.union(SensorRole.safety))
+        try snapshot.validate(now: now, required: required)
         generation = requested; previousOwner = owner
-        let fresh = ControlLease(id: UUID(), owner: owner, generation: requested, renewedAt: now, required: required.union(SensorRole.safety))
+        let fresh = ControlLease(id: UUID(), owner: owner, generation: requested, renewedAt: now, required: required)
         lease = fresh; systemVerified = false
         return fresh
     }
@@ -38,11 +38,14 @@ public struct HelperSafety: Sendable {
         try snapshot.validate(now: now, required: current.required)
         guard targets.count == snapshot.fans.count, Set(targets.map(\.fanID)).count == targets.count,
               Set(targets.map(\.fanID)) == Set(snapshot.fans.map(\.id)) else { throw ControlError.invalidFan }
-        let safety = try BuiltInProfiles.guardCurve.evaluate(BuiltInProfiles.guardCurve.temperature(in: snapshot, now: now))
+        let safety = current.required.isEmpty ? 0 : try BuiltInProfiles.guardCurve.evaluate(BuiltInProfiles.guardCurve.temperature(in: snapshot, now: now))
         var safe: [FanTarget] = []
         for target in targets {
             guard let fan = snapshot.fans.first(where: { $0.id == target.fanID }), target.rpm.isFinite,
                   target.rpm >= fan.minimumRPM, target.rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
+            if current.required.isEmpty {
+                guard target.rpm == fan.maximumRPM else { throw ControlError.invalidFan }
+            }
             safe.append(FanTarget(target.fanID, max(target.rpm, try fan.rpm(percent: safety))))
         }
         current.renewedAt = now; lease = current

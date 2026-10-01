@@ -43,7 +43,7 @@ public struct ControlMachine: Sendable {
         do {
             let demand = try ProfileEngine().evaluate(selected, snapshot: snapshot, now: now)
             if snapshot.id != lastHealthySample { healthyCount += 1; lastHealthySample = snapshot.id }
-            if state == .initializingCustom && healthyCount < 5 { return .none }
+            if state == .initializingCustom && healthyCount < (selected.kind == .maximum ? 1 : 5) { return .none }
             if state == .initializingCustom && selected.automaticAtIdle && demand.percent == 0 {
                 automaticAtIdle = true; state = .restoringSystem; return .restore(generation: generation)
             }

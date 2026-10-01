@@ -13,7 +13,7 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
         self.id = id; self.name = name; self.kind = kind; self.bundled = bundled; defaultRevision = 1; self.curves = curves; self.floor = floor; self.automaticAtIdle = automaticAtIdle
     }
     public var protected: Bool { id == "system" || id == "max" }
-    public var requiredSensors: Set<SensorRole> { curves.filter(\.enabled).reduce(SensorRole.safety) { $0.union($1.input.required) } }
+    public var requiredSensors: Set<SensorRole> { if kind == .system || kind == .maximum { return [] }; return curves.filter(\.enabled).reduce(SensorRole.safety) { $0.union($1.input.required) } }
     public func validate() throws {
         guard !id.isEmpty, id.utf8.count <= 128, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 80,
               floor.isFinite, (0...100).contains(floor), curves.count <= 4,
@@ -58,6 +58,7 @@ public struct ProfileEngine: Sendable {
         try profile.validate()
         if profile.kind == .system { return Demand(percent: 0, safetyPercent: 0, byCurve: [:]) }
         try snapshot.validate(now: now, required: profile.requiredSensors)
+        if profile.kind == .maximum { return Demand(percent: 100, safetyPercent: 0, byCurve: [:]) }
         let guardCurve = BuiltInProfiles.guardCurve
         let safety = try guardCurve.evaluate(guardCurve.temperature(in: snapshot, now: now))
         var byCurve: [CurveInput: Double] = [:]

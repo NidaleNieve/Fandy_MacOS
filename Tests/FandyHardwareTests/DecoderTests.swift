@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import FandyHardware
+import FandyCore
 @Test func smcTypedFloatAndFixedPoint() {
     #expect(SMCDecoder.decode(type:"flt ",bytes:[0,0,0x3e,0x42])==47.5)
     #expect(SMCDecoder.decode(type:"ioft",bytes:[0,0x80,0x2f,0,0,0,0,0])==47.5)
@@ -14,8 +15,9 @@ import Testing
     #expect(SMCDecoder.decode(type:"flt ",bytes:[0])==nil)
     #expect(SMCDecoder.decode(type:"hex_",bytes:[0,0,0,0])==nil)
 }
-@Test func unqualifiedMappingsCannotEnableHardwareWrites() {
-    #expect(!SensorRegistry.capabilities.canControl)
+@Test func unqualifiedMappingsCannotEnableTemperaturePolicies() {
+    #expect(SensorRegistry.capabilities.permits(BuiltInProfiles.maximum))
+    #expect(!SensorRegistry.capabilities.permits(BuiltInProfiles.gaming))
     #expect(SensorRegistry.capabilities.sensors.allSatisfy { $0.state == .pending })
     #expect(SensorRegistry.mappings.first{$0.role == .airflowTop}?.keys==["TaTP"])
 }

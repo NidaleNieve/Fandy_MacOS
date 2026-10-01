@@ -268,3 +268,69 @@ private actor DeferredControlClient: PrivilegedFanClient {
         }
     }
 }
+
+private actor MaximumClient: PrivilegedFanClient {
+    var fans = monitoringFixture().fans
+    var applies = 0
+    var restores = 0
+    var blocker: String?
+    func block() { blocker = "Known competing fan controller is running." }
+    func status() -> HelperStatus {
+        var snapshot = monitoringFixture(); snapshot.fans = fans
+        var status = HelperStatus(automaticVerified: fans.allSatisfy { $0.mode == .automatic }, manualQualified: true, snapshot: snapshot)
+        status.recoveryBlocker = blocker; return status
+    }
+    func apply(_ targets: [FanTarget], generation: UInt64) throws { try apply(targets, generation: generation, required: []) }
+    func apply(_ targets: [FanTarget], generation: UInt64, required: Set<SensorRole>) throws {
+        guard required.isEmpty, targets.count == fans.count,
+              targets.allSatisfy({ target in fans.contains { $0.id == target.fanID && $0.maximumRPM == target.rpm } }) else { throw ControlError.invalidFan }
+        applies += 1
+        for i in fans.indices { fans[i].mode = .manual; fans[i].targetRPM = fans[i].maximumRPM }
+    }
+    func restoreAutomatic() {
+        restores += 1
+        for i in fans.indices { fans[i].mode = .automatic }
+    }
+    func counts() -> (Int, Int) { (applies, restores) }
+}
+@MainActor @Test func productionMaximumActivatesWithCandidateTemperaturesAndSystemAndWakeRelease() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let caps = HardwareCapabilities(model: "Test", stage: .maximumControl, topology: .verified,
+        automaticRestoration: .verified, manualTransaction: .verified)
+    let client = MaximumClient()
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+        client: client, capabilities: caps, helperAvailable: { true }, clock: { 10 })
+    await model.tick(); #expect(model.isSelected("system")); #expect(model.canActivate(BuiltInProfiles.maximum))
+    #expect(!model.canActivate(BuiltInProfiles.gaming)); #expect(!model.canActivate(BuiltInProfiles.coolChassis))
+    model.select("max"); #expect(!model.isSelected("max"))
+    await model.tick()
+    #expect(model.isSelected("max")); #expect(model.machine.percent == 100)
+    model.select("system")
+    while await client.counts().1 == 0 { await Task.yield() }
+    for _ in 0..<10 { await Task.yield() }
+    await model.tick(); #expect(model.isSelected("system"))
+    model.select("max"); for _ in 0..<5 { await model.tick() }; #expect(model.isSelected("max"))
+    model.powerTransition(); for _ in 0..<10 { await Task.yield() }; await model.tick()
+    #expect(model.isSelected("system")); #expect(!model.isSelected("max"))
+    await model.prepareForTermination(); #expect(model.canTerminate)
+}
+@Test func maximumDiagnosticRejectsCallerSelectedTargetsAndDurations() throws {
+    #expect(try HelperDiagnosticAction.parse(["Fandy", "--profile-max-check"]) == .maximumCheck)
+    for value in ["--rpm=7000", "--duration=20", "--fan=0", "--profile=gaming"] {
+        #expect(throws: ControlError.malformedMessage) { try HelperDiagnosticAction.parse(["Fandy", "--profile-max-check", value]) }
+    }
+}
+
+@MainActor @Test func competingControllerRemovesProductionEligibilityBeforeClick() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let client = MaximumClient(); await client.block()
+    let caps = HardwareCapabilities(model: "Test", stage: .maximumControl, topology: .verified,
+        automaticRestoration: .verified, manualTransaction: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+        client: client, capabilities: caps, helperAvailable: { true }, clock: { 10 })
+    await model.tick(); #expect(!model.canActivate(BuiltInProfiles.maximum)); #expect(model.hardwareError != nil)
+    model.select("max"); #expect(model.machine.selected.kind == .system)
+    #expect(await client.counts().0 == 0)
+}

@@ -1,17 +1,17 @@
 # Hardware qualification gates
 
-Current signed authority is model-specific `recoveryQualification`: real monitoring, independently qualified automatic restoration and a separate bounded mechanical trial. Ordinary profile leases, arbitrary RPM/manual operations, automatic target clearing and unknown modes remain unavailable. Preferences and XPC payloads cannot grant authority.
+Current signed authority is model-specific `maximumControl`: real monitoring, verified automatic restoration and production fixed Max leases. Temperature profiles require their own evidence. Arbitrary sensor-free RPM, independent manual-mode primitives, automatic target clearing and unknown modes remain unavailable. Preferences and XPC payloads cannot grant authority.
 
 | Gate | Actual state |
 | --- | --- |
 | Research / licensing / pure models / UI | Implemented; real monitoring is default and simulation is explicit. |
-| All requested sensor roles and coverage | Identity/coverage evidence remains pending. The revised roadmap qualifies sensors by policy requirements; production gating changes are still to be implemented. Mechanical tests qualify no mappings. |
+| All requested sensor roles and coverage | Identity/coverage evidence remains pending. The revised roadmap qualifies sensors by policy requirements; production gating is now policy-specific. Mechanical tests qualify no mappings. |
 | Automatic restoration | Both mode1→0 transitions, three idempotent requests and 60 seconds of independent mode observations previously passed. |
 | First modest manual trial | Passed: a single 2517 RPM request per fan, observed spin-up, five-second expiry and both mode1→0 handbacks. Bounded acknowledgement fixed premature readback. |
 | Exact write sequence | Same-connection metadata/write and bounded readback passed injected tests and physical modest trials. |
 | Live watchdog / disconnect / SIGKILL | Passed live heartbeat expiry, disconnect, fixed deadline and signed controller SIGKILL with independent mode reads. |
-| Helper restart / malformed inputs / sensor faults / quit / switching / sleep | Helper death/restart and physical sleep/wake remain pending. Dead/blocked-helper limitation remains explicit. |
-| Real profiles / calibration | Ordinary control remains disabled; next is fixed System/Max after minimum recovery, then chip/comfort features by their actual sensor requirements. |
+| Helper restart / malformed inputs / sensor faults / quit / switching / sleep | Live helper SIGKILL/restart handback passed. Physical sleep/wake remains pending. Dead/blocked-helper limitation remains explicit. |
+| Real profiles / calibration | System/Max are physically operational. Chip/comfort profiles await only their required sensor evidence, then bounded activation/calibration. |
 
 ## Release requirements
 
@@ -30,3 +30,7 @@ After first activation works, prove each recovery case with independent mode/RPM
 No screenshots, Computer Use or GUI automation. Raw reference CSV, recordings, operator details and signing configuration stay outside public Git. Preserve the registered bundle and unregister through verified release before replacement.
 
 The current mechanical path enforces a helper-side check for TG Pro's known privileged executable before admission and during ownership. Status exposes only a fixed blocker message, never process identifiers or paths. Bounded kernel process metadata enumeration provides no generic process/filesystem API to a caller. This detects a known conflict, not universal exclusive-ownership proof; modes/targets still require continuous checking. Safe restoration remains available despite that blocker.
+
+## Production acceptance
+
+The app-model Max diagnostic observed actual RPM near each reported maximum, then verified both modes 0 after System. Production Max lease SIGKILL and heartbeat expiry passed with independent mode observations and both initial-mode-1 restoration reports. Normal termination is exercised directly from active Max by a fixed native diagnostic. 157 Swift tests and signed native build pass. The helper self-kill diagnostic was temporary and removed; the dead/blocked-helper limitation remains documented.

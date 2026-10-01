@@ -55,7 +55,7 @@ public enum SMCRecoveryWriter {
         var validation = fan; validation.mode = .automatic
         try prepare(target: target, fan: validation, metadata: metadata, transport: transport)
     }
-    private static func write(key: String, type: String, attributes: UInt8, bytes: [UInt8], transport: any SMCStructTransport) throws {
+    fileprivate static func write(key: String, type: String, attributes: UInt8, bytes: [UInt8], transport: any SMCStructTransport) throws {
         var input = [UInt8](repeating: 0, count: 80)
         let number = key.utf8.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         for index in 0..<4 { input[index] = UInt8(truncatingIfNeeded: number >> (index * 8)) }
@@ -97,7 +97,7 @@ public enum RecoveryWriteError: Error, LocalizedError {
 /// Bounded observation only: do not reissue a command or accept a different target.
 public enum RecoveryTargetReadback {
     public static func awaitTarget(_ target: FanTarget, baseline: Fan, deadline: Double,
-                                   clock: () -> Double, read: () throws -> Fan, pause: () -> Void) throws {
+                                   clock: () -> Double, read: () throws -> Fan, pause: () -> Void, mode: FanMode = .manual) throws {
         let start = clock(), limit = min(deadline, start + 0.5)
         guard start.isFinite, deadline.isFinite, start < limit else { throw ControlError.staleSession }
         var previous = start
@@ -108,15 +108,49 @@ public enum RecoveryTargetReadback {
             try fan.validate()
             guard now.isFinite, now >= before, now >= previous, now < deadline, now <= limit else { throw ControlError.staleSession }
             previous = now
-            guard fan.id == target.fanID, fan.mode == .manual,
+            guard fan.id == target.fanID, fan.mode == mode,
                   fan.minimumRPM == baseline.minimumRPM, fan.maximumRPM == baseline.maximumRPM,
                   target.rpm.isFinite, target.rpm >= fan.minimumRPM, target.rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
             guard let observed = fan.targetRPM, observed.isFinite else { throw ControlError.invalidFan }
             if abs(observed - target.rpm) <= 0.5 { return }
-            guard observed == 0, now < limit else {
+            guard observed == 0 || observed == baseline.targetRPM, now < limit else {
                 throw RecoveryTrialError.targetMismatch(fanID: fan.id, expected: target.rpm, observed: observed)
             }
             pause()
+        }
+    }
+}
+
+/// Production codec, injected and pure. The root coordinator separately admits each policy.
+/// Uses only the two reviewed fan IDs and their freshly validated limits/metadata.
+public enum SMCProfileWriter {
+    public static func startStopped(fan: Fan, mode: DiscoveredSensor, previous: DiscoveredSensor,
+                                    transport: any SMCStructTransport) throws {
+        try fan.validate()
+        guard [0, 1].contains(fan.id), fan.mode == .automatic, fan.actualRPM == 0, fan.targetRPM == 0,
+              mode.key == "F\(fan.id)md", mode.type == "ui8 ", mode.size == 1, mode.attributes == 208,
+              mode.bytes == [0], mode.error == nil else { throw HardwareError.invalidMetadata }
+        try validateTargetMetadata(previous, fan: fan)
+        try SMCRecoveryWriter.write(key: mode.key, type: mode.type, attributes: mode.attributes, bytes: [1], transport: transport)
+    }
+    public static func target(_ target: FanTarget, fan: Fan, metadata: DiscoveredSensor, transport: any SMCStructTransport) throws {
+        try fan.validate()
+        guard [0, 1].contains(fan.id), target.fanID == fan.id, target.rpm.isFinite, target.rpm > 0,
+              target.rpm >= fan.minimumRPM, target.rpm <= fan.maximumRPM,
+              fan.mode == .automatic || fan.mode == .manual else { throw ControlError.invalidFan }
+        try validateTargetMetadata(metadata, fan: fan)
+        let encoded = Float(target.rpm)
+        guard encoded.isFinite, Double(encoded) >= fan.minimumRPM, Double(encoded) <= fan.maximumRPM,
+              abs(Double(encoded) - target.rpm) <= 0.5 else { throw ControlError.invalidFan }
+        let bytes = (0..<4).map { UInt8(truncatingIfNeeded: encoded.bitPattern >> ($0 * 8)) }
+        try SMCRecoveryWriter.write(key: metadata.key, type: metadata.type, attributes: metadata.attributes, bytes: bytes, transport: transport)
+    }
+    private static func validateTargetMetadata(_ metadata: DiscoveredSensor, fan: Fan) throws {
+        guard metadata.key == "F\(fan.id)Tg", metadata.type == "flt ", metadata.size == 4,
+              metadata.attributes == 212, metadata.bytes.count == 4, metadata.error == nil,
+              let value = metadata.value, value == SMCDecoder.decode(type: metadata.type, bytes: metadata.bytes),
+              value == fan.targetRPM, value == 0 || (value >= fan.minimumRPM && value <= fan.maximumRPM) else {
+            throw HardwareError.invalidMetadata
         }
     }
 }
