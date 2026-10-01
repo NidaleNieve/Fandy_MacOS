@@ -1,0 +1,2 @@
+#include "../Signing.xcconfig"
+#include? "FandyFanHelper.Debug.local.xcconfig"

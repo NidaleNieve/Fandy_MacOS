@@ -1,0 +1,45 @@
+# Hostile-input review
+
+Reviewed current source, 2026-09-30. This is a scoped engineering review, not an independent audit or completed physical qualification.
+
+| Question | Result |
+| --- | --- |
+| Can an arbitrary local process connect? | Listener pins Apple chain + exact own Team ID + app identifier through public Foundation requirement enforcement. Actual artifacts accept app/helper requirements and reject wrong ID/team. Live launchd rejects ad-hoc and same-Team/wrong-ID clients; genuine signed status succeeds before/after rejection. |
+| Can a caller supply an arbitrary fan ID? | Decode bounded integers; exact complete membership and uniqueness against independent enumeration; rejected before any write. Tested negative, huge, duplicate and absent IDs. |
+| Can integer overflow become a fan command? | UInt64 generation decode rejects negative/overflowing JSON; fan IDs stay Int and are range/membership checked before string key formatting. Finite RPM bounds are required. |
+| Can a caller request a file, URL, shell or process? | No interface carries those values. Root executable imports no Process/network API and writes no profile/log path. |
+| Can malformed values control fans? | Bounded typed decode, fixed roles/version, finite numbers, per-fan ranges, recent helper-issued snapshot IDs and immutable safety demand. Decode failure revokes the owning connection's lease. |
+| Can status act as heartbeat? | No. Successful validated target transactions only. A test repeatedly queries status before expiry and verifies release at expiry. |
+| Can stale state survive restart? | No persisted lease/target; coordinator starts unverified and restoration is the first action. Observation-only root stop/start through unregister/register tested; restart during a real manual lease remains pending. |
+| Can two clients share/steal a lease? | Owner UUID attached to one accepted connection; renew/disconnect validated against that owner. A second genuine connection cannot renew the first lease. Explicit safe-release remains available to authentic clients. |
+| Can partial writes masquerade as success? | Failure restores every fan; any failed readback prevents System verification. Spy tests cover first-fan restoration failure and second-fan target failure. |
+| Can a caller bypass sensor verification? | Helper independently reads required sensors plus mandatory CPU/GPU guard; caller has no temperature payload or qualification switch. Qualified=false currently refuses leases. |
+| Can a helper hang be recovered by its own timer? | No. Serial watchdog cannot execute through a hung I/O call or SIGSTOP. This explicit residual risk must be considered before hardware qualification. |
+
+Observation-only registration is compiled out as soon as either physical qualification becomes true. The observation coordinator rejects begin/apply/release and performs no mutations during startup, watchdog or sleep/wake; tests exercise all these paths. Ownership status is based on fresh typed fan telemetry; a failed read clears previous verified status. On 2026-10-01 live tests accepted the genuine renamed app and rejected ad-hoc and same-Team/wrong-ID callers. Malformed/oversized/unknown-role/overflowing requests, unqualified leases and forged targets were rejected. Read-only release was refused and genuine reconnect succeeded.
+
+Fixed restoration writes exist only in the helper target. Physical manual-mode/target methods currently reject; their implementation must follow the automatic-restoration gate. Restoration uses observed model-specific IDs and exact mode keys, independently of RPM/count telemetry; a failed canonical key never falls back to an unqualified legacy alias. The public CSMC module exports no write function or raw connection port. Temperature-only HID discovery is optional and does not consume input-device events. Normal app diagnostics are fixed-purpose user-space files; root logs use os.Logger.
+
+Observed signing: the locally configured signing Team, app is.dsr.fandy, helper is.dsr.fandy.fan-helper, hardened runtime. Signatures and nested bundle integrity were checked using codesign. Requirement construction tests also reject quotes/path characters to prevent requirement injection. Release qualification requires rechecking entitlements, signatures and exact identities in the installed package; development artifacts do not constitute release validation.
+
+Remaining review work: real launchd/XPC client enforcement and service ownership/approval, practical watchdog scheduling under load, SMC blocked-I/O behavior, current firmware automatic restoration, helper crash/restart, sleep/wake, competing controllers and acoustic/thermal calibration. Do not expose a helper installation button as a workaround for those unresolved gates.
+
+## Mutual identity and callback verification, 2026-10-01
+
+The genuine client additionally pins a deliberately incorrect helper identifier on a separate read-only connection and requires Foundation's exact code-signing-requirement failure (NSXPCConnectionCodeSigningRequirementFailure4102, SDK declaration available macOS13+). A timeout or generic connection error does not pass this test. A genuine status query follows the rejection to establish continued service health. XPC completion/error callbacks are explicitly Sendable and use a locked exactly-once continuation gate; the corrected probe and genuine requirement-failure path exercise background callback delivery.
+
+## Production monitoring review — 2026-10-01
+
+Hardware authority now comes from immutable, model-scoped compiled capabilities and per-role evidence. Observation permits no writes; every requested sensor, topology and physical restoration/manual proof is required before qualified control. A helper status report cannot grant the local app authority. All existing authentication and four-method XPC restrictions remain in effect.
+
+No target-clearing writer remains. The only prepared physical encoder emits automatic mode 0 for canonical, validated lowercase mode metadata; mode 3 is left untouched. It has no RPM/manual/arbitrary-key encoder. The real transport rechecks root UID and compiled authority; inert transport tests verify exact bytes and reject malformed metadata/results. Per-fan restoration attempts remain independent of sensor/RPM telemetry, retain partial failures, and retry rather than hide a failed attempt behind a successful-looking observation.
+
+Preview calculations return a type without targets or leases and do not change original sensor qualification. App lifecycle tokens and XPC transaction tokens prevent obsolete reads/lease replies from reviving a cancelled profile. Normal monitoring quit sends no mutation request. No registered service was replaced or given write authority during this milestone. Live manual-mode failure testing remains required; a hung helper cannot execute its watchdog.
+
+## Restoration-first review — 2026-10-01
+
+The approved stage separates safe release from sensor qualification without widening the four-method XPC interface. Manual/control authorization still requires every requested sensor and physical proofs. Current root methods setManual/setTarget reject every request. The codec produces only automatic0 on canonical lowercase keys with exact ui8/size 1/attributes 208 metadata and current mode 0/1. Mode3 and changed metadata fail closed; target clearing remains absent.
+
+Both-fan manual-to-automatic handback, three repeat requests and60 second independent mode readback passed. Startup results are retained separately from subsequent idempotent requests, without persisted manual state. Reports expose initial/immediate/final modes and partial failures. Genuine status and release succeeded through the existing mutual signing requirements; earlier wrong-ID/ad-hoc rejection remains recorded. Restored mode 0 is not inferred from RPM.
+
+Source review additionally identified an idle external ownership change incorrectly scheduling release retries. Status now invalidates ownership without initiating a write fight. Failed explicit Fandy releases continue retrying. Regression coverage distinguishes these cases. The bounded measurement executable has no XPC/write API and does not ship inside the helper/app. Live recovery from Fandy-owned manual state remains untested because sensor qualification still blocks manual implementation.

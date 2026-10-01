@@ -1,0 +1,726 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = 1;
+	"classes" = {};
+	"objectVersion" = 77;
+	"objects" = {
+		"3B4B7C88C79578697F216634" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/AppModel.swift";
+			"sourceTree" = "<group>";
+		};
+		"9A6ECCAA56620715A84F6DCC" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/CurveEditor.swift";
+			"sourceTree" = "<group>";
+		};
+		"8E639CEF8DDAE615620B8426" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/FanXPCClient.swift";
+			"sourceTree" = "<group>";
+		};
+		"51D0B8FD680608BAF5020BFE" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/FandyApp.swift";
+			"sourceTree" = "<group>";
+		};
+		"C86459ECAEFA78BC4D8D517C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/HelperDiagnostics.swift";
+			"sourceTree" = "<group>";
+		};
+		"B3934EDA49FBAD13B2EB4FB3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/ProfileEditor.swift";
+			"sourceTree" = "<group>";
+		};
+		"D2CEB122BCF9ECDC6BB42176" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/ControlMachine.swift";
+			"sourceTree" = "<group>";
+		};
+		"FE86A99A33849697E1E79465" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/Curves.swift";
+			"sourceTree" = "<group>";
+		};
+		"5F3F4CF63DA77EBEC5901461" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/FanRestoration.swift";
+			"sourceTree" = "<group>";
+		};
+		"5139C70DAC1DF582846ECB07" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/FandyIdentity.swift";
+			"sourceTree" = "<group>";
+		};
+		"E38AB440B2BCDAE2D4200AFB" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/HardwareCapabilities.swift";
+			"sourceTree" = "<group>";
+		};
+		"190A0C3A4F860B1556438087" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/HelperCoordinator.swift";
+			"sourceTree" = "<group>";
+		};
+		"BFAB6D8C689DF42DBD689F6F" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/HelperSafety.swift";
+			"sourceTree" = "<group>";
+		};
+		"380AABF370EB0AB44A1CCF6F" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/ManualQualification.swift";
+			"sourceTree" = "<group>";
+		};
+		"3B9DD1294571767A6BDCBE9D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/MeasurementSafety.swift";
+			"sourceTree" = "<group>";
+		};
+		"6004F86E59C8744938F1A36A" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/MockBackend.swift";
+			"sourceTree" = "<group>";
+		};
+		"B097A9D6879D03AD75F9CCA0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/Models.swift";
+			"sourceTree" = "<group>";
+		};
+		"B477D544D3F52A227229E6B8" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/Persistence.swift";
+			"sourceTree" = "<group>";
+		};
+		"6A4855631F163370C30D97C9" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/Profiles.swift";
+			"sourceTree" = "<group>";
+		};
+		"1A1154160BA13DE6385FA574" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/RotatingDiagnostics.swift";
+			"sourceTree" = "<group>";
+		};
+		"74A6605E5BC8A76E53AD7E30" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/ShadowProfileEngine.swift";
+			"sourceTree" = "<group>";
+		};
+		"7D4FCEE70A0EA2D08A3E0A93" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyDiscovery/main.swift";
+			"sourceTree" = "<group>";
+		};
+		"8E20A7F12E2E8568005EC514" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/HIDTemperatureReader.swift";
+			"sourceTree" = "<group>";
+		};
+		"031749FCE3DFED0C14D7F2D5" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/SMCAutomaticModeWriter.swift";
+			"sourceTree" = "<group>";
+		};
+		"9BB8432D0B42288D0ECD032D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/SMCReader.swift";
+			"sourceTree" = "<group>";
+		};
+		"41F3ACA045E77688F708EE66" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/SensorRegistry.swift";
+			"sourceTree" = "<group>";
+		};
+		"57FCB5DCEC16155E559464C3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHelper/FanHardware.swift";
+			"sourceTree" = "<group>";
+		};
+		"80A626670EC6CC202A4A8911" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHelper/PowerNotifications.swift";
+			"sourceTree" = "<group>";
+		};
+		"F6B3CB705C2406A666E17CA8" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHelper/main.swift";
+			"sourceTree" = "<group>";
+		};
+		"45E3598E5F4AC81F2D119516" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyMeasurement/main.swift";
+			"sourceTree" = "<group>";
+		};
+		"59407258BF62199A2697374B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Config/is.dsr.fandy.fan-helper.plist";
+			"sourceTree" = "<group>";
+		};
+		"7367AB9A454559025D4D8EE2" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text";
+			"path" = "THIRD_PARTY_NOTICES.md";
+			"sourceTree" = "<group>";
+		};
+		"46610887A7913B54A6B70E7D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder";
+			"path" = "docs/licenses";
+			"sourceTree" = "<group>";
+		};
+		"ED8F7DF021C9E9C519408A96" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Config/App-Info.plist";
+			"sourceTree" = "<group>";
+		};
+		"681C948D238C526E9E3424E0" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"path" = "Fandy.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"D7B61112ADFD2D44AA9EEB60" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "compiled.mach-o.executable";
+			"path" = "FandyFanHelper";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"0A3E27B8CA818264D75C8D81" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				681C948D238C526E9E3424E0,
+				D7B61112ADFD2D44AA9EEB60,
+			);
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"19F479106CE8C3BA8C106518" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				3B4B7C88C79578697F216634,
+				9A6ECCAA56620715A84F6DCC,
+				8E639CEF8DDAE615620B8426,
+				51D0B8FD680608BAF5020BFE,
+				C86459ECAEFA78BC4D8D517C,
+				B3934EDA49FBAD13B2EB4FB3,
+				D2CEB122BCF9ECDC6BB42176,
+				FE86A99A33849697E1E79465,
+				5F3F4CF63DA77EBEC5901461,
+				5139C70DAC1DF582846ECB07,
+				E38AB440B2BCDAE2D4200AFB,
+				190A0C3A4F860B1556438087,
+				BFAB6D8C689DF42DBD689F6F,
+				380AABF370EB0AB44A1CCF6F,
+				3B9DD1294571767A6BDCBE9D,
+				6004F86E59C8744938F1A36A,
+				B097A9D6879D03AD75F9CCA0,
+				B477D544D3F52A227229E6B8,
+				6A4855631F163370C30D97C9,
+				1A1154160BA13DE6385FA574,
+				74A6605E5BC8A76E53AD7E30,
+				7D4FCEE70A0EA2D08A3E0A93,
+				8E20A7F12E2E8568005EC514,
+				031749FCE3DFED0C14D7F2D5,
+				9BB8432D0B42288D0ECD032D,
+				41F3ACA045E77688F708EE66,
+				57FCB5DCEC16155E559464C3,
+				80A626670EC6CC202A4A8911,
+				F6B3CB705C2406A666E17CA8,
+				45E3598E5F4AC81F2D119516,
+				59407258BF62199A2697374B,
+				ED8F7DF021C9E9C519408A96,
+				7367AB9A454559025D4D8EE2,
+				46610887A7913B54A6B70E7D,
+				0A3E27B8CA818264D75C8D81,
+				2FF407783ED718C818AF1C27,
+				5C23E7D987F56D91DB3C62F3,
+				60F19F6CB2903EAE8439EBEC,
+				B3E3C00683904C9BE20DC005,
+				D50B95C702B4C3DBF7123349,
+				259B6989159EC19DCD364CD3,
+			);
+			"sourceTree" = "<group>";
+		};
+		"BC4A71180870F7945155FBB0" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = ".";
+		};
+		"2FF407783ED718C818AF1C27" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "Config/Signing/project.Debug.xcconfig";
+			"sourceTree" = "<group>";
+		};
+		"488864B3D19480A82F7F1786" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
+				"SDKROOT" = "macosx";
+				"ARCHS" = "arm64";
+				"SWIFT_VERSION" = "6.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+			};
+			"baseConfigurationReference" = 2FF407783ED718C818AF1C27;
+			"name" = "Debug";
+		};
+		"5C23E7D987F56D91DB3C62F3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "Config/Signing/project.Release.xcconfig";
+			"sourceTree" = "<group>";
+		};
+		"35B1014F135DE9B45529B733" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
+				"SDKROOT" = "macosx";
+				"ARCHS" = "arm64";
+				"SWIFT_VERSION" = "6.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+			};
+			"baseConfigurationReference" = 5C23E7D987F56D91DB3C62F3;
+			"name" = "Release";
+		};
+		"B4E10CAA9C5E22150B71559C" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				488864B3D19480A82F7F1786,
+				35B1014F135DE9B45529B733,
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Debug";
+		};
+		"43FFA59EE5B6860410079F34" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 3B4B7C88C79578697F216634;
+		};
+		"54E08E461525A4E404448A81" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 9A6ECCAA56620715A84F6DCC;
+		};
+		"59F320D3FCD95443EF12DCEE" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 8E639CEF8DDAE615620B8426;
+		};
+		"B542E6D429544F89E6775EC5" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 51D0B8FD680608BAF5020BFE;
+		};
+		"D03C65C5E28591996732114F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = C86459ECAEFA78BC4D8D517C;
+		};
+		"84C4FB7FE594032EF8AE8A80" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = B3934EDA49FBAD13B2EB4FB3;
+		};
+		"7099A060F81C0382F95DD211" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				43FFA59EE5B6860410079F34,
+				54E08E461525A4E404448A81,
+				59F320D3FCD95443EF12DCEE,
+				B542E6D429544F89E6775EC5,
+				D03C65C5E28591996732114F,
+				84C4FB7FE594032EF8AE8A80,
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"D8A47F4A5D560B797C7DF70C" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = BC4A71180870F7945155FBB0;
+			"productName" = "FandyCore";
+		};
+		"8D6A72B3FDA83A8A363A8293" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = D8A47F4A5D560B797C7DF70C;
+		};
+		"B3A0DECBF87295E75F7A68DD" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = BC4A71180870F7945155FBB0;
+			"productName" = "FandyHardware";
+		};
+		"F0DAA3158924557CDD43780C" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = B3A0DECBF87295E75F7A68DD;
+		};
+		"6FA21FD5D112574F2EC7C0FA" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				8D6A72B3FDA83A8A363A8293,
+				F0DAA3158924557CDD43780C,
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"7F8F7749F99D3CD6A0BD1280" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 7367AB9A454559025D4D8EE2;
+		};
+		"715503FC66ACB177FDB9B741" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 46610887A7913B54A6B70E7D;
+		};
+		"F9187E824FE171A6F0EFAE28" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				7F8F7749F99D3CD6A0BD1280,
+				715503FC66ACB177FDB9B741,
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"803932F7A97FAA234D9EF5B9" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = 244210E48437B6556980A702;
+			"proxyType" = 1;
+			"remoteGlobalIDString" = BF5585DB99B3652823128692;
+			"remoteInfo" = "FandyFanHelper";
+		};
+		"5AF79E40EE09C928EAA1BF0B" = {
+			"isa" = "PBXTargetDependency";
+			"target" = BF5585DB99B3652823128692;
+			"targetProxy" = 803932F7A97FAA234D9EF5B9;
+		};
+		"50FCF5956B7BDF610828B507" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = D7B61112ADFD2D44AA9EEB60;
+			"settings" = {
+				"ATTRIBUTES" = (
+					"CodeSignOnCopy",
+				);
+			};
+		};
+		"1C17FDA0F9A5703C63602A24" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 59407258BF62199A2697374B;
+		};
+		"EDC0263597BF60BDB8301E61" = {
+			"isa" = "PBXCopyFilesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"dstPath" = "Contents/Library/HelperTools";
+			"dstSubfolderSpec" = 1;
+			"files" = (
+				50FCF5956B7BDF610828B507,
+			);
+			"name" = "Embed Helper";
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"F2461BCFFE5DB8BC951FD26B" = {
+			"isa" = "PBXCopyFilesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"dstPath" = "Contents/Library/LaunchDaemons";
+			"dstSubfolderSpec" = 1;
+			"files" = (
+				1C17FDA0F9A5703C63602A24,
+			);
+			"name" = "Embed Launch Daemon";
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"60F19F6CB2903EAE8439EBEC" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "Config/Signing/Fandy.Debug.xcconfig";
+			"sourceTree" = "<group>";
+		};
+		"5DD10041974222627141DE66" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
+				"SDKROOT" = "macosx";
+				"ARCHS" = "arm64";
+				"SWIFT_VERSION" = "6.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"PRODUCT_NAME" = "Fandy";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "is.dsr.fandy";
+				"SKIP_INSTALL" = "NO";
+				"INFOPLIST_FILE" = "Config/App-Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+			};
+			"baseConfigurationReference" = 60F19F6CB2903EAE8439EBEC;
+			"name" = "Debug";
+		};
+		"B3E3C00683904C9BE20DC005" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "Config/Signing/Fandy.Release.xcconfig";
+			"sourceTree" = "<group>";
+		};
+		"675E1C846DA7DF885EEBCB2F" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
+				"SDKROOT" = "macosx";
+				"ARCHS" = "arm64";
+				"SWIFT_VERSION" = "6.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"PRODUCT_NAME" = "Fandy";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "is.dsr.fandy";
+				"SKIP_INSTALL" = "NO";
+				"INFOPLIST_FILE" = "Config/App-Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+			};
+			"baseConfigurationReference" = B3E3C00683904C9BE20DC005;
+			"name" = "Release";
+		};
+		"37DE3F5F2F49BC974D39A056" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				5DD10041974222627141DE66,
+				675E1C846DA7DF885EEBCB2F,
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Debug";
+		};
+		"C1E9827DB735CA9BAA54A540" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = 37DE3F5F2F49BC974D39A056;
+			"buildPhases" = (
+				7099A060F81C0382F95DD211,
+				6FA21FD5D112574F2EC7C0FA,
+				F9187E824FE171A6F0EFAE28,
+				EDC0263597BF60BDB8301E61,
+				F2461BCFFE5DB8BC951FD26B,
+			);
+			"buildRules" = ();
+			"dependencies" = (
+				5AF79E40EE09C928EAA1BF0B,
+			);
+			"name" = "Fandy";
+			"packageProductDependencies" = (
+				D8A47F4A5D560B797C7DF70C,
+				B3A0DECBF87295E75F7A68DD,
+			);
+			"productName" = "Fandy";
+			"productReference" = 681C948D238C526E9E3424E0;
+			"productType" = "com.apple.product-type.application";
+		};
+		"8857B59C05BAAF09870FF483" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 57FCB5DCEC16155E559464C3;
+		};
+		"FF93523D022A2ADB0908EA9C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 80A626670EC6CC202A4A8911;
+		};
+		"F127927A4ED70971DDE6268D" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = F6B3CB705C2406A666E17CA8;
+		};
+		"51B4EA58B3A112342434A84E" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				8857B59C05BAAF09870FF483,
+				FF93523D022A2ADB0908EA9C,
+				F127927A4ED70971DDE6268D,
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"FCDC0C4B499A16FD84736841" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = BC4A71180870F7945155FBB0;
+			"productName" = "FandyCore";
+		};
+		"823FA2714A8E9A3F49AB0B87" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = FCDC0C4B499A16FD84736841;
+		};
+		"EF12194B3AC08DA997777363" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = BC4A71180870F7945155FBB0;
+			"productName" = "FandyHardware";
+		};
+		"B99FAACD1B59BBFBD3A73B56" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = EF12194B3AC08DA997777363;
+		};
+		"D1B5F77E1E8CB86A7BF3D30B" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				823FA2714A8E9A3F49AB0B87,
+				B99FAACD1B59BBFBD3A73B56,
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"D50B95C702B4C3DBF7123349" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "Config/Signing/FandyFanHelper.Debug.xcconfig";
+			"sourceTree" = "<group>";
+		};
+		"C269A8D6E293E6EEBF1F8283" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
+				"SDKROOT" = "macosx";
+				"ARCHS" = "arm64";
+				"SWIFT_VERSION" = "6.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"PRODUCT_NAME" = "FandyFanHelper";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "is.dsr.fandy.fan-helper";
+				"SKIP_INSTALL" = "NO";
+				"OTHER_CODE_SIGN_FLAGS" = "--identifier is.dsr.fandy.fan-helper";
+				"INSTALL_PATH" = "/usr/local/libexec";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+			};
+			"baseConfigurationReference" = D50B95C702B4C3DBF7123349;
+			"name" = "Debug";
+		};
+		"259B6989159EC19DCD364CD3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "Config/Signing/FandyFanHelper.Release.xcconfig";
+			"sourceTree" = "<group>";
+		};
+		"62B26A5D25174DA41D64E0FB" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
+				"SDKROOT" = "macosx";
+				"ARCHS" = "arm64";
+				"SWIFT_VERSION" = "6.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"PRODUCT_NAME" = "FandyFanHelper";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "is.dsr.fandy.fan-helper";
+				"SKIP_INSTALL" = "NO";
+				"OTHER_CODE_SIGN_FLAGS" = "--identifier is.dsr.fandy.fan-helper";
+				"INSTALL_PATH" = "/usr/local/libexec";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+			};
+			"baseConfigurationReference" = 259B6989159EC19DCD364CD3;
+			"name" = "Release";
+		};
+		"755AF2D2788F88754BFB3792" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				C269A8D6E293E6EEBF1F8283,
+				62B26A5D25174DA41D64E0FB,
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Debug";
+		};
+		"BF5585DB99B3652823128692" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = 755AF2D2788F88754BFB3792;
+			"buildPhases" = (
+				51B4EA58B3A112342434A84E,
+				D1B5F77E1E8CB86A7BF3D30B,
+			);
+			"buildRules" = ();
+			"dependencies" = ();
+			"name" = "FandyFanHelper";
+			"packageProductDependencies" = (
+				FCDC0C4B499A16FD84736841,
+				EF12194B3AC08DA997777363,
+			);
+			"productName" = "FandyFanHelper";
+			"productReference" = D7B61112ADFD2D44AA9EEB60;
+			"productType" = "com.apple.product-type.tool";
+		};
+		"244210E48437B6556980A702" = {
+			"isa" = "PBXProject";
+			"attributes" = {
+				"BuildIndependentTargetsInParallel" = "YES";
+				"LastUpgradeCheck" = "2700";
+			};
+			"buildConfigurationList" = B4E10CAA9C5E22150B71559C;
+			"compatibilityVersion" = "Xcode 16.0";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = 0;
+			"knownRegions" = (
+				"en",
+				"Base",
+			);
+			"mainGroup" = 19F479106CE8C3BA8C106518;
+			"productRefGroup" = 0A3E27B8CA818264D75C8D81;
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"packageReferences" = (
+				BC4A71180870F7945155FBB0,
+			);
+			"targets" = (
+				C1E9827DB735CA9BAA54A540,
+				BF5585DB99B3652823128692,
+			);
+		};
+	};
+	"rootObject" = 244210E48437B6556980A702;
+}
