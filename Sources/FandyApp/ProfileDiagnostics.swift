@@ -49,6 +49,19 @@ import FandyHardware
                         try await Task.sleep(for: .seconds(1))
                     }
                     emit(["event": "activeCurveEditPassed", "fans": try encoded(reader.fans())])
+                    // Exercise the same draft boundary used by the graphical/numeric editor.
+                    var draft = CurveDraft(edited.curves[0]); draft.select(edited.curves[0].points[0].id)
+                    draft.temperatureText = "85"
+                    guard draft.applyNumbers() == nil, model.profiles.first(where: { $0.id == edited.id }) == edited else {
+                        throw ControlError.invalidCurve("An invalid editor draft replaced the active profile.")
+                    }
+                    draft.temperatureText = "45"; draft.percentText = "2.5"
+                    guard let validated = draft.applyNumbers(locale: Locale(identifier: "en_US_POSIX")) else {
+                        throw ControlError.invalidCurve("The corrected editor draft did not validate.")
+                    }
+                    edited.curves[0] = validated; model.update(edited); await model.tick()
+                    guard model.isSelected(edited.id), try reader.fans().allSatisfy({ $0.mode == .manual }) else { throw ControlError.restorationUnverified }
+                    emit(["event": "editorDraftBoundaryPassed"])
                 }
                 model.select("system")
                 try await awaitSystem(model, reader: reader)

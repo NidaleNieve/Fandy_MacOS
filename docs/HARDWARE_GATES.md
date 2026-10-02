@@ -42,3 +42,7 @@ The signed `qualifiedControl` build enables every temperature profile with six r
 Variable-speed qualification observed actual RPM during warm re-entry, target updates and both-fan release. Heartbeat expiry 10.51s, disconnect 1.04s, fixed deadline 15.14s, controller SIGKILL recovery 0.17s, and active normal termination passed. The first eight-second warm observation was too short: positive RPM appeared around nine seconds. Production retains its ten-second stalled-fan check. Whole-RPM upward normalization fixes fractional target acknowledgement and applies to independent helper escalation.
 
 189 Swift tests, 31 Python tests, signed single-job build and strict deep signature verification pass. Helper replacement used verified release/unregister/absence/register. Actual active sleep/wake remains pending; startup/wake reset is implemented and tested in models. A dead or blocked helper cannot run its watchdog. Raw recordings and signing configuration remain private.
+
+## Native-polish regression
+
+200 Swift tests and 31 tool tests pass after editor/status improvements. Signed single-job compilation, strict deep signature verification and the refreshed real-profile diagnostic passed, including invalid-draft retention/correction and active numerical editing. System-first startup and independent both-fan automatic observations passed. This pass changed no hardware transaction or authority; earlier recovery evidence is retained, and physical sleep/wake remains unobserved.
