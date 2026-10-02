@@ -1,3 +1,5 @@
+> Temperature integration update: [current results and blockers](docs/TEMPERATURE_PROFILE_STATUS.md). Four comfort roles are reviewed. The curve-qualification stage and helper-owned 15-second deadline are implemented/tested but inactive in the delivered maximum-only build.
+
 > Current production: signed `maximumControl` permits System and fixed per-fan maximum. The RPC surface remains the same five narrow methods. Curve authority requires its own verified inputs; pending proximity identities do not block unrelated policies. No process-control diagnostic ships in the helper.
 
 # Security

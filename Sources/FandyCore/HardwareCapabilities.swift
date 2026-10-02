@@ -1,7 +1,7 @@
 import Foundation
 
 public enum HardwareStage: String, Codable, Sendable {
-    case observation, restorationQualification, recoveryQualification, manualQualification, maximumControl, qualifiedControl
+    case observation, restorationQualification, recoveryQualification, manualQualification, maximumControl, curveQualification, qualifiedControl
 }
 public enum QualificationState: String, Codable, Sendable { case pending, verified }
 public struct SensorEvidence: Codable, Sendable, Equatable {
@@ -42,7 +42,7 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     // restoration-first stage cannot enter manual mode, even with fully qualified sensors.
     public var canRestore: Bool { stage != .observation && topology == .verified }
     public var canControl: Bool {
-        [.maximumControl, .qualifiedControl].contains(stage) && canRestore && automaticRestoration == .verified && manualTransaction == .verified
+        [.maximumControl, .curveQualification, .qualifiedControl].contains(stage) && canRestore && automaticRestoration == .verified && manualTransaction == .verified
     }
     public func permits(_ profile: Profile) -> Bool {
         guard canControl else { return false }
@@ -50,8 +50,9 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
         return stage == .qualifiedControl && profile.requiredSensors.isSubset(of: verifiedRoles)
     }
     public func permits(required: Set<SensorRole>) -> Bool {
-        canControl && (required.isEmpty || (stage == .qualifiedControl && SensorRole.safety.isSubset(of: required) && required.isSubset(of: verifiedRoles)))
+        canControl && (required.isEmpty || ([.curveQualification, .qualifiedControl].contains(stage) && SensorRole.safety.isSubset(of: required) && required.isSubset(of: verifiedRoles)))
     }
+    public var canQualifyCurves: Bool { stage == .curveQualification && canControl && SensorRole.safety.isSubset(of: verifiedRoles) }
     /// Separate, signed-build authority for bounded qualification; never admits profile leases.
     /// The current restoration build cannot obtain it through preferences or XPC data.
     public var canQualifyManual: Bool {
@@ -64,6 +65,12 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     }
     public func forMachine(_ actual: String) -> Self {
         actual == model ? self : Self(model: actual)
+    }
+    public func reasonUnavailable(_ profile: Profile) -> String {
+        let missing = profile.requiredSensors.subtracting(verifiedRoles).sorted { $0.rawValue < $1.rawValue }
+        if !missing.isEmpty { return "Awaiting sensor verification: " + missing.map(\.name).joined(separator: ", ") }
+        if stage == .curveQualification && profile.kind == .custom { return "Variable-speed handback testing is not finished." }
+        return blockers.first ?? "This profile is not qualified for this hardware."
     }
     public var blockers: [String] {
         var result: [String] = []
@@ -91,7 +98,7 @@ public struct ProfileEligibility: Sendable {
                                 snapshot: HardwareSnapshot?, now: Double) -> Self {
         do {
             try profile.validate()
-            guard capabilities.permits(profile) else { return Self(allowed: false, reason: capabilities.blockers.first ?? "This profile is not qualified for this hardware.") }
+            guard capabilities.permits(profile) else { return Self(allowed: false, reason: capabilities.reasonUnavailable(profile)) }
             guard helper == .controlReady else { throw ControlError.helperUnavailable }
             guard let snapshot else { throw ControlError.invalidSnapshot }
             try snapshot.validate(now: now, required: profile.requiredSensors)

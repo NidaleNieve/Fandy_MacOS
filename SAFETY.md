@@ -1,3 +1,5 @@
+> Temperature integration update: [current results and blockers](docs/TEMPERATURE_PROFILE_STATUS.md). Four comfort roles are reviewed. The curve-qualification stage and helper-owned 15-second deadline are implemented/tested but inactive in the delivered maximum-only build.
+
 # Safety
 
 ## Current qualification

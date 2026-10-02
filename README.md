@@ -6,7 +6,7 @@ A small native Apple Silicon macOS menu-bar fan controller with named profiles a
 
 The former bounded mechanical-test endpoint is disabled in the production maximum stage. Its qualification results cannot grant authority to temperature profiles. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
 
-See [the development checkpoint and remaining work](docs/DEVELOPMENT_STATUS.md) for the current milestone and resumption order.
+See [temperature-profile progress and exact blockers](docs/TEMPERATURE_PROFILE_STATUS.md) and [the development checkpoint](docs/DEVELOPMENT_STATUS.md) for the current milestone and resumption order.
 
 ## Build and run
 
@@ -57,15 +57,15 @@ build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restore
 
 The fixed `--helper-restoration-register` and `--helper-restoration-unregister` flags accept no hardware or payload arguments. Unregister restores first. Background registration uses SMAppService and native macOS approval; no custom root installer is used. The older `--helper-restoration-check` diagnostic is restricted to qualification builds: it performs three automatic-only requests and a 60-second independent observation, distinguishing real manual handback from idempotence. Use the production Max diagnostics below for the current control-capable build.
 
-The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed non-production helper with no active trial it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately.
+The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed non-production helper with no active trial it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately. Four comfort roles are reviewed; unresolved chip inputs still block all temperature profiles.
 
 Older recovery-stage builds used the signed app's fixed `--helper-recovery-initial`, `--helper-recovery-deadline`, `--helper-recovery-heartbeat`, `--helper-recovery-disconnect` and `--helper-recovery-hold` diagnostics. They accept no hardware/duration parameters and must wait for exclusive ownership. Initial deadline is5 seconds; subsequent mechanical trials are15 seconds with a10-second heartbeat timeout. [Exact admission and actual results](docs/MANUAL_QUALIFICATION.md).
 
-The production app has fixed `--profile-max-check`, `--profile-max-quit-check` and `--profile-max-heartbeat-check` diagnostics. These temporarily run Max, verify actual RPM, and verify System/termination/heartbeat handback. They accept no RPM, fan or duration arguments. They are development tests, not needed for normal use. The temporary own-helper SIGKILL diagnostic was removed after the restart test.
+The production app has fixed `--profile-max-check`, `--profile-max-quit-check` and `--profile-max-heartbeat-check` diagnostics. These temporarily run Max, verify actual RPM, and verify System/termination/heartbeat handback. They accept no RPM, fan or duration arguments. They are development tests, not needed for normal use. The temporary own-helper SIGKILL diagnostic was removed after the restart test. Prepared curve diagnostics reject the current maximum-only build; their finite qualification authority remains inactive pending verified chip inputs.
 
 The registered bundle is preserved separately from Xcode build output. Do not remove or overwrite it while registered. The original observation service was unregistered before replacement; its old diagnostic flags are retained only for observation builds.
 
-The separate development-only `build/swift/debug/fandy-measure --bounded-cycle` performs a fixed 16-minute sensor recording under verified automatic ownership, including two low-duty 30-second CPU/GPU pulses. It aborts on ownership loss, stale/missing chip inputs, serious thermal pressure, or the 75°C diagnostic ceiling. It cannot write fans and is not normal app functionality. Measurement and qualification results are recorded in [hardware gates](docs/HARDWARE_GATES.md).
+The separate development-only `build/swift/debug/fandy-measure --bounded-cycle` performs a fixed 11-minute sensor recording under verified automatic ownership, including two low-duty 30-second CPU/GPU pulses. It aborts on ownership loss, stale/missing chip inputs, serious thermal pressure, or the 75°C diagnostic ceiling. It cannot write fans and is not normal app functionality. Measurement and qualification results are recorded in [hardware gates](docs/HARDWARE_GATES.md).
 
 Sensor comparison also supports `--json`, explicitly flags flat/ambiguous data, and never edits qualification. Run its tests using `python3 -m unittest discover -s Tests/ToolTests -v`.
 

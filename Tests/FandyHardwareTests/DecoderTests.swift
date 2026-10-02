@@ -18,7 +18,8 @@ import FandyCore
 @Test func unqualifiedMappingsCannotEnableTemperaturePolicies() {
     #expect(SensorRegistry.capabilities.permits(BuiltInProfiles.maximum))
     #expect(!SensorRegistry.capabilities.permits(BuiltInProfiles.gaming))
-    #expect(SensorRegistry.capabilities.sensors.allSatisfy { $0.state == .pending })
+    #expect(SensorRegistry.capabilities.verifiedRoles == SensorRegistry.reviewedComfortRoles)
+    #expect(!SensorRole.safety.isSubset(of: SensorRegistry.capabilities.verifiedRoles))
     #expect(SensorRegistry.mappings.first{$0.role == .airflowTop}?.keys==["TaTP"])
 }
 
@@ -79,4 +80,50 @@ private func modeMetadata(_ mode: UInt8 = 1) -> DiscoveredSensor {
         #expect(throws: (any Error).self) { try SMCAutomaticModeWriter.restore(fanID: 0, metadata: metadata, transport: spy) }
     }
     #expect(spy.requests.isEmpty)
+}
+
+private func temperatureSample(_ key: String, _ value: Float, at time: Double = 10) -> DiscoveredSensor {
+    let raw = value.bitPattern
+    return DiscoveredSensor(key: key, type: "flt ", size: 4, attributes: 0,
+        bytes: (0..<4).map { UInt8(truncatingIfNeeded: raw >> ($0 * 8)) }, value: Double(value), error: nil, sampledAt: time)
+}
+@Test func independentSensorGroupsAndCompletionTimestamps() {
+    let samples = ["Tp00": temperatureSample("Tp00", 40, at: 10.2), "Tm00": temperatureSample("Tm00", 60, at: 10.4)]
+    let average = SensorMapping(role: .cpuAverage, keys: ["Tp00"])
+    let peak = SensorMapping(role: .cpuPeak, keys: ["Tp00", "Tm00"], reduction: .maximum)
+    let read: (String) throws -> DiscoveredSensor = { try #require(samples[$0]) }
+    let a = average.reading(sequence: 3, qualified: true, now: 10, read: read)
+    let p = peak.reading(sequence: 3, qualified: true, now: 10, read: read)
+    #expect(a.celsius == 40); #expect(p.celsius == 60)
+    #expect(a.sampledAt == 10.2); #expect(p.sampledAt == 10.2)
+    #expect(a.sequence == 3); #expect(p.health == .valid)
+    #expect(throws: (any Error).self) { _ = try p.value(now: 13.3) }
+}
+@Test func missingOrMalformedMemberNeverBecomesPartialAggregate() {
+    let mapping = SensorMapping(role: .gpuPeak, keys: ["Tg0U", "Tg1Y"], reduction: .maximum)
+    var malformed = temperatureSample("Tg1Y", 60); malformed.type = "ioft"
+    let good = temperatureSample("Tg0U", 50)
+    for bad in [malformed, temperatureSample("Tg1Y", .nan), temperatureSample("Tg1Y", .infinity)] {
+        let reading = mapping.reading(sequence: 1, qualified: true, now: 10, read: { $0 == "Tg0U" ? good : bad })
+        #expect(reading.celsius == nil); #expect(reading.health == .missing)
+    }
+    let missing = mapping.reading(sequence: 1, qualified: true, now: 10, read: { key in
+        guard key == "Tg0U" else { throw HardwareError.invalidKey }; return good
+    })
+    #expect(missing.celsius == nil)
+    let duplicate = SensorMapping(role: .gpuPeak, keys: ["Tg0U", "Tg0U"])
+    #expect(duplicate.reading(sequence: 1, qualified: true, now: 10, read: { _ in good }).health == .corrupt)
+}
+@Test func sensorRegistryDoesNotSilentlyRequireAbsentGenericGPUKey() {
+    #expect(SensorRegistry.publishedGPUKeys.contains("Tg1g"))
+    #expect(!SensorRegistry.mappings.first { $0.role == .gpuPeak }!.keys.contains("Tg1g"))
+    #expect(SensorRegistry.mappings.first { $0.role == .cpuPeak }!.reduction == .maximum)
+}
+
+@Test func bothObservedCPUFamiliesAreIncludedOnlyAsExplicitCandidates() {
+    #expect(SensorRegistry.cpuRegionCandidates.count == 63)
+    #expect(SensorRegistry.cpuRegionCandidates.contains("Tm04"))
+    #expect(SensorRegistry.cpuRegionCandidates.contains("Tp00"))
+    #expect(!SensorRegistry.capabilities.verifiedRoles.contains(.cpuPeak))
+    #expect(!SensorRegistry.capabilities.canQualifyCurves)
 }

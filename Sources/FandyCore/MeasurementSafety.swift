@@ -27,7 +27,7 @@ public enum MeasurementPhase: String, Codable, Sendable {
         case ..<210: return .cpuCooldown
         case ..<240: return .gpu
         case ..<360: return .gpuCooldown
-        case ..<960: return .chassis
+        case ..<660: return .chassis
         default: return nil
         }
     }

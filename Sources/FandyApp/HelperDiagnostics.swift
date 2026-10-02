@@ -20,6 +20,10 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case recoveryHeartbeat = "--helper-recovery-heartbeat"
     case recoveryDisconnect = "--helper-recovery-disconnect"
     case recoveryHold = "--helper-recovery-hold"
+    case curveCheck = "--profile-curve-check"
+    case curveHeartbeat = "--profile-curve-heartbeat-check"
+    case curveDisconnect = "--profile-curve-disconnect-check"
+    case curveHold = "--profile-curve-hold-check"
     case maximumCheck = "--profile-max-check"
     case maximumQuit = "--profile-max-quit-check"
     case maximumHeartbeat = "--profile-max-heartbeat-check"
@@ -43,12 +47,13 @@ enum HelperDiagnosticAction: String, CaseIterable {
         let client = FanXPCClient()
         do {
             switch action {
+            case .curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold: return await checkCurve(action)
             case .maximumCheck, .maximumQuit, .maximumHeartbeat: return await checkMaximum(action)
             case .register: try HelperManager.installObservation()
             case .unregister: try await HelperManager.uninstallObservation(client: client)
             case .status, .check: break
             case .registerRestoration:
-                guard [.restorationQualification, .recoveryQualification, .maximumControl, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
+                guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
                       SensorRegistry.capabilities.canRestore else { throw ControlError.unauthorized }
                 try HelperManager.install()
             case .unregisterRestoration: try await HelperManager.uninstall(client: client)
@@ -91,6 +96,75 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 return 2
             }
             emit(["action": action.rawValue, "registration": name(HelperManager.service.status), "error": error.localizedDescription])
+            return 1
+        }
+    }
+    /// Fixed curve trial in the signed qualification build; the root lease owns its 15s deadline.
+    /// No caller-provided keys, RPM, duration, profile or authority are accepted.
+    private static func checkCurve(_ action: HelperDiagnosticAction) async -> Int32 {
+        let client = FanXPCClient()
+        var writeAdmitted = false
+        do {
+            guard SensorRegistry.capabilities.canQualifyCurves, HelperManager.installed else { throw ControlError.hardwareUnqualified }
+            let reader = try SMCReader()
+            for _ in 0..<5 { _ = try await client.status(); try await Task.sleep(for: .milliseconds(250)) }
+            let status = try await client.status()
+            guard status.capabilities?.canQualifyCurves == true, status.automaticVerified,
+                  let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
+            try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: SensorRole.safety)
+            let floors = try snapshot.fans.map { fan -> FanTarget in
+                let rpm = max(fan.minimumRPM, fan.actualRPM) + 200
+                guard rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
+                return FanTarget(fan.id, rpm)
+            }
+            let started = ProcessInfo.processInfo.systemUptime
+            var activated = false, positiveRPM = false, disconnected = false
+            while ProcessInfo.processInfo.systemUptime - started < 18 {
+                let elapsed = ProcessInfo.processInfo.systemUptime - started
+                let fans = try reader.fans()
+                if activated && fans.allSatisfy({ $0.mode == .automatic }) {
+                    guard action != .curveCheck else { throw ControlError.restorationUnverified }
+                    emit(["event": "curveRecovery", "elapsed": elapsed, "fans": try encoded(fans)])
+                    try await client.restoreAutomatic()
+                    return 0
+                }
+                if action == .curveCheck && elapsed >= 5 {
+                    guard activated, positiveRPM else { throw ControlError.restorationUnverified }
+                    try await client.restoreAutomatic()
+                    let restored = try reader.fans()
+                    guard restored.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+                    emit(["event": "curveHandback", "elapsed": elapsed, "fans": try encoded(restored)])
+                    return 0
+                }
+                let renew = !activated || action == .curveCheck || (action == .curveHold && elapsed < 12)
+                if renew {
+                    let current = try await client.status()
+                    guard let currentSnapshot = current.snapshot else { throw ControlError.invalidSnapshot }
+                    let demand = try ProfileEngine().evaluate(BuiltInProfiles.systemPlus, snapshot: currentSnapshot, now: ProcessInfo.processInfo.systemUptime)
+                    let targets = try currentSnapshot.fans.map { fan -> FanTarget in
+                        guard let floor = floors.first(where: { $0.fanID == fan.id }) else { throw ControlError.invalidFan }
+                        // A small upward-only target change also exercises repeated target acknowledgement.
+                        let step = elapsed >= 2 ? 50.0 : 0.0
+                        return FanTarget(fan.id, max(try fan.rpm(percent: demand.percent), min(fan.maximumRPM, floor.rpm + step)))
+                    }
+                    writeAdmitted = true
+                    try await client.apply(targets, generation: 1, required: SensorRole.safety)
+                    activated = true
+                }
+                let observed = try reader.fans()
+                positiveRPM = positiveRPM || observed.allSatisfy { fan in
+                    floors.first(where: { $0.fanID == fan.id }).map { fan.actualRPM >= $0.rpm - 150 } ?? false
+                }
+                emit(["event": "curveActive", "elapsed": elapsed, "fans": try encoded(observed)])
+                if action == .curveDisconnect && activated && !disconnected {
+                    client.disconnectForRecoveryTest(); disconnected = true
+                }
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            throw ControlError.restorationUnverified
+        } catch {
+            if writeAdmitted { try? await client.restoreAutomatic() }
+            emit(["event": "curveDiagnosticFailed", "error": error.localizedDescription])
             return 1
         }
     }
@@ -150,9 +224,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
     }
     private static func requireRestorationHelper(_ client: FanXPCClient) async throws {
         let status = try await client.status()
-        guard [.restorationQualification, .recoveryQualification, .maximumControl, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
+        guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
               !status.observationOnly,
-              [.restorationQualification, .recoveryQualification, .maximumControl, .qualifiedControl].contains(status.capabilities?.stage ?? .observation),
+              [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(status.capabilities?.stage ?? .observation),
               status.capabilities?.forMachine(HardwareSnapshotReader.machineModel()).canRestore == true else { throw ControlError.unauthorized }
     }
     private static func checkRestoration(_ client: FanXPCClient) async throws -> Int32 {

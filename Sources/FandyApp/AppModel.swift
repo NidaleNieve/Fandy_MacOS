@@ -92,7 +92,8 @@ import ServiceManagement
         return "Simulation · \(controlStatus)"
     }
     private var controlStatus: String {
-        switch machine.state {
+        if machine.automaticAtIdle && machine.state == .customActive { return "\(machine.selected.name) · Apple auto at idle" }
+        return switch machine.state {
         case .system: "System"
         case .initializingCustom: "Starting \(machine.selected.name)…"
         case .customActive: "\(machine.selected.name) · \(Int(machine.percent.rounded()))%"

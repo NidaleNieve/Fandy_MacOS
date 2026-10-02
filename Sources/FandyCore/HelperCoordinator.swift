@@ -16,6 +16,7 @@ public final class HelperCoordinator {
     private var healthy = 0
     private var targets: [FanTarget] = []
     private var leaseFans: [Fan] = []
+    private var qualificationFloors: [Int: Double] = [:]
     private var targetsStartedAt: Double?
     private var fault: String?
     private var restoration: RestorationReport?
@@ -35,7 +36,7 @@ public final class HelperCoordinator {
             safety.revoke(); fault = ControlError.hardwareUnqualified.localizedDescription
             return false
         }
-        event("Restoring automatic fan control"); safety.revoke(); targets = []; leaseFans = []; targetsStartedAt = nil; restoration = nil
+        event("Restoring automatic fan control"); safety.revoke(); targets = []; leaseFans = []; targetsStartedAt = nil; qualificationFloors = [:]; restoration = nil
         do {
             restoration = try FanRestoration.report(using: io)
             if let report = restoration, let data = try? JSONEncoder().encode(report), let text = String(data: data, encoding: .utf8) { event("Restoration report: " + text) }
@@ -105,7 +106,16 @@ public final class HelperCoordinator {
         guard healthy >= (request.required.isEmpty ? 1 : 5) else { throw ControlError.invalidSnapshot }
         guard snapshot.fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
         targets = []
-        let lease = try safety.begin(owner: owner, generation: request.generation, required: request.required, snapshot: snapshot, now: clock())
+        let qualifying = capabilities.stage == .curveQualification && !request.required.isEmpty
+        qualificationFloors = [:]
+        if qualifying {
+            for fan in snapshot.fans {
+                let minimum = max(fan.minimumRPM, fan.actualRPM) + 200
+                guard minimum <= fan.maximumRPM else { throw ControlError.invalidFan }
+                qualificationFloors[fan.id] = minimum
+            }
+        }
+        let lease = try safety.begin(owner: owner, generation: request.generation, required: request.required, snapshot: snapshot, now: clock(), qualification: qualifying)
         leaseFans = snapshot.fans
         return lease
     }
@@ -118,8 +128,18 @@ public final class HelperCoordinator {
             if !targets.isEmpty {
                 guard snapshot.fans.allSatisfy({ ownsTarget($0) }) else { throw ControlError.restorationUnverified }
             }
+            if !qualificationFloors.isEmpty {
+                guard request.targets.allSatisfy({ target in
+                    qualificationFloors[target.fanID].map { target.rpm >= $0 } ?? false
+                }) else { throw ControlError.invalidFan }
+            }
             let validated = try safety.validateAndRenew(owner: owner, leaseID: request.leaseID, generation: request.generation, targets: request.targets, snapshot: snapshot, now: clock())
+            // Reserve the physical batch's two-second budget inside the nonrenewable trial.
+            if let deadline = safety.lease?.expiresAt {
+                guard deadline - clock() >= 2 else { throw ControlError.staleSession }
+            }
             try FanRestoration.apply(validated, using: io)
+            guard !safety.expired(at: clock()) else { throw ControlError.staleSession }
             _ = try acquire() // Required sensors and bounds must still be healthy after I/O.
             if targets.isEmpty { targetsStartedAt = clock() }
             targets = validated

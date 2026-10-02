@@ -5,6 +5,7 @@ public struct ControlLease: Codable, Sendable, Equatable {
     public var generation: UInt64
     public var renewedAt: Double
     public var required: Set<SensorRole>
+    public var expiresAt: Double? = nil
 }
 /// No physical I/O. The helper serializes these decisions with hardware effects.
 public struct HelperSafety: Sendable {
@@ -23,18 +24,19 @@ public struct HelperSafety: Sendable {
         systemVerified = automatic && !restoring
     }
     public mutating func revoke() { lease = nil; restoring = true; systemVerified = false }
-    public mutating func begin(owner: UUID, generation requested: UInt64, required: Set<SensorRole>, snapshot: HardwareSnapshot, now: Double) throws -> ControlLease {
+    public mutating func begin(owner: UUID, generation requested: UInt64, required: Set<SensorRole>, snapshot: HardwareSnapshot, now: Double, qualification: Bool = false) throws -> ControlLease {
         guard systemVerified, !restoring, lease == nil, (owner != previousOwner || requested >= generation) else { throw ControlError.staleSession }
         try snapshot.validate(now: now, required: required)
         generation = requested; previousOwner = owner
-        let fresh = ControlLease(id: UUID(), owner: owner, generation: requested, renewedAt: now, required: required)
+        let fresh = ControlLease(id: UUID(), owner: owner, generation: requested, renewedAt: now, required: required, expiresAt: qualification ? now + 15 : nil)
         lease = fresh; systemVerified = false
         return fresh
     }
     public mutating func validateAndRenew(owner: UUID, leaseID: UUID, generation requested: UInt64, targets: [FanTarget], snapshot: HardwareSnapshot, now: Double) throws -> [FanTarget] {
         guard var current = lease, current.owner == owner, current.id == leaseID,
               requested == current.generation, requested == generation, !restoring,
-              now.isFinite, now >= current.renewedAt, now - current.renewedAt < timeout else { throw ControlError.staleSession }
+              now.isFinite, now >= current.renewedAt, now - current.renewedAt < timeout,
+              current.expiresAt.map({ $0.isFinite && now < $0 }) ?? true else { throw ControlError.staleSession }
         try snapshot.validate(now: now, required: current.required)
         guard targets.count == snapshot.fans.count, Set(targets.map(\.fanID)).count == targets.count,
               Set(targets.map(\.fanID)) == Set(snapshot.fans.map(\.id)) else { throw ControlError.invalidFan }
@@ -51,7 +53,7 @@ public struct HelperSafety: Sendable {
         current.renewedAt = now; lease = current
         return safe
     }
-    public func expired(at now: Double) -> Bool { lease.map { !now.isFinite || now < $0.renewedAt || now - $0.renewedAt >= timeout } ?? false }
+    public func expired(at now: Double) -> Bool { lease.map { !now.isFinite || now < $0.renewedAt || now - $0.renewedAt >= timeout || ($0.expiresAt.map { now >= $0 || !$0.isFinite } ?? false) } ?? false }
     public mutating func disconnect(owner: UUID) -> Bool { guard lease?.owner == owner else { return false }; revoke(); return true }
 }
 public struct MessageRateLimiter: Sendable {

@@ -10,6 +10,13 @@ public struct DiscoveredSensor: Codable, Sendable, Equatable {
     public var bytes: [UInt8]
     public var value: Double?
     public var error: String?
+    /// Monotonic completion time; absent in older discovery recordings.
+    public var sampledAt: Double? = nil
+    public init(key: String, type: String, size: Int, attributes: UInt8, bytes: [UInt8],
+                value: Double?, error: String?, sampledAt: Double? = nil) {
+        self.key = key; self.type = type; self.size = size; self.attributes = attributes
+        self.bytes = bytes; self.value = value; self.error = error; self.sampledAt = sampledAt
+    }
 }
 public enum SMCDecoder {
     public static func decode(type: String, bytes: [UInt8]) -> Double? {
@@ -49,7 +56,7 @@ public final class SMCReader: @unchecked Sendable {
         guard result == 0 else { throw HardwareError.smc(result) }
         let type = withUnsafeBytes(of: raw.type) { String(bytes: $0.prefix(4), encoding: .ascii) ?? "????" }
         let bytes = withUnsafeBytes(of: raw.bytes) { Array($0.prefix(Int(raw.size))) }
-        return DiscoveredSensor(key: key, type: type, size: Int(raw.size), attributes: raw.attributes, bytes: bytes, value: SMCDecoder.decode(type: type, bytes: bytes), error: nil)
+        return DiscoveredSensor(key: key, type: type, size: Int(raw.size), attributes: raw.attributes, bytes: bytes, value: SMCDecoder.decode(type: type, bytes: bytes), error: nil, sampledAt: ProcessInfo.processInfo.systemUptime)
     }
     public func enumerate(prefix: String? = nil) throws -> [DiscoveredSensor] {
         let count = try read("#KEY")

@@ -334,3 +334,11 @@ private actor MaximumClient: PrivilegedFanClient {
     model.select("max"); #expect(model.machine.selected.kind == .system)
     #expect(await client.counts().0 == 0)
 }
+
+@Test @MainActor func curveDiagnosticArgumentsAreFixedAndCannotSelectHardware() throws {
+    for action in [HelperDiagnosticAction.curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold] {
+        #expect(try HelperDiagnosticAction.parse(["Fandy", action.rawValue]) == action)
+        #expect(throws: (any Error).self) { _ = try HelperDiagnosticAction.parse(["Fandy", action.rawValue, "--rpm", "3000"]) }
+        #expect(throws: (any Error).self) { _ = try HelperDiagnosticAction.parse(["Fandy", action.rawValue, "--duration", "9999"]) }
+    }
+}
