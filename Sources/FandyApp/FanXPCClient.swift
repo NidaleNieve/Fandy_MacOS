@@ -84,6 +84,38 @@ import FandyHardware
               !SensorRegistry.capabilities.canQualifyManual else { throw ControlError.unauthorized }
         return try await checkRestrictedProtocol(observationOnly: false)
     }
+    /// Production-safe negative checks: no valid lease or target request is transmitted.
+    func checkProductionProtocol() async throws -> [String] {
+        let initial = try await status()
+        guard SensorRegistry.capabilities.stage == .qualifiedControl,
+              initial.capabilities?.stage == .qualifiedControl, initial.automaticVerified,
+              initial.manualQualified, initial.recovery?.active != true else { throw ControlError.unauthorized }
+        var checks = ["authenticatedStatus"]
+        do {
+            for probe in try ProductionSecurityProbe.cases() {
+                try await Task.sleep(for: .milliseconds(500))
+                do {
+                    _ = try await dataCall { proxy, reply in
+                        switch probe.method {
+                        case .begin: proxy.beginLease(probe.data, withReply: reply)
+                        case .targets: proxy.applyTargets(probe.data, withReply: reply)
+                        case .recovery: proxy.qualifyRecovery(probe.data, withReply: reply)
+                        }
+                    }
+                    throw ControlError.unauthorized
+                } catch ControlError.invalidProfile { checks.append(probe.name + "Rejected") }
+            }
+            disconnectForRecoveryTest()
+            guard try await status().automaticVerified else { throw ControlError.restorationUnverified }
+            checks.append("reconnectedStatus")
+            try await checkWrongHelperIdentity(); checks.append("wrongHelperIdentityRejected")
+            guard try await status().automaticVerified else { throw ControlError.restorationUnverified }
+            return checks
+        } catch {
+            try? await restoreAutomatic()
+            throw error
+        }
+    }
     private func checkRestrictedProtocol(observationOnly: Bool) async throws -> [String] {
         let initial = try await status()
         guard initial.observationOnly == observationOnly, !initial.manualQualified,

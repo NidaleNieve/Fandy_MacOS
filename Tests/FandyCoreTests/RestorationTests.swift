@@ -9,7 +9,7 @@ final class FanSpy: FanHardwareIO, @unchecked Sendable {
     var modeReads: [Int: Int] = [:]
     var conflictOnFinalRead = false
     var inventoryFailure=false
-    var calls:[String]=[];var failAuto:Int?;var failTarget:Int?;var now:Double=10;var hot=false;var invalid=false
+    var calls:[String]=[];var failAuto:Int?;var failTarget:Int?;var failManual:Int?;var now:Double=10;var hot=false;var invalid=false
     func enumerateFans() throws -> [Fan] { if inventoryFailure { throw ControlError.invalidFan };return fans }
     func fanIDsForRestoration() throws -> [Int] { fans.map(\.id) }
     func readMode(fanID:Int) throws -> FanMode {
@@ -18,8 +18,16 @@ final class FanSpy: FanHardwareIO, @unchecked Sendable {
         return fans[fanID].mode
     }
     func setAutomatic(fanID:Int) throws { calls.append("auto\(fanID)");if failAuto==fanID { throw ControlError.invalidFan };fans[fanID].mode = .automatic }
-    func setManual(fanID:Int) throws { calls.append("manual\(fanID)");fans[fanID].mode = .manual }
+    func setManual(fanID:Int) throws { calls.append("manual\(fanID)");if failManual==fanID { throw ControlError.invalidFan };fans[fanID].mode = .manual }
     func setTarget(fanID:Int,rpm:Double) throws { calls.append("target\(fanID)");if failTarget==fanID { throw ControlError.invalidFan };fans[fanID].targetRPM=rpm }
+    func applyValidatedTargets(_ targets: [FanTarget]) throws {
+        // Match the reviewed production adapter: all modes, then all targets.
+        for target in targets where fans[target.fanID].mode == .automatic {
+            try setManual(fanID: target.fanID)
+            guard try readMode(fanID: target.fanID) == .manual else { throw ControlError.restorationUnverified }
+        }
+        for target in targets { try setTarget(fanID: target.fanID, rpm: target.rpm) }
+    }
     func snapshot() -> HardwareSnapshot {
         let readings=SensorRole.allCases.map { SensorReading($0,invalid && $0 == .gpuPeak ? nil : hot ? 85 : 40,at:now,sequence:UInt64(now*10)) }
         return HardwareSnapshot(at:now,sensors:readings,fans:fans)

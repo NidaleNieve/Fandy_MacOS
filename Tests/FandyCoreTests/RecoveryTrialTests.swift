@@ -39,8 +39,7 @@ private final class RecoveryRig: RecoveryFanHardwareIO, @unchecked Sendable {
         if failingRestore == fanID { throw ControlError.restorationUnverified }
         fans[fanID].mode = .automatic; fans[fanID].targetRPM = 0
     }
-    func setManual(fanID: Int) throws { throw ControlError.unauthorized }
-    func setTarget(fanID: Int, rpm: Double) throws { throw ControlError.unauthorized }
+    func applyValidatedTargets(_ targets: [FanTarget]) throws { throw ControlError.unauthorized }
     func prepareRecoveryTarget(_ target: FanTarget, deadline: Double) throws {
         events.append("prepare\(target.fanID)")
         if prepareFailure { throw ControlError.invalidFan }

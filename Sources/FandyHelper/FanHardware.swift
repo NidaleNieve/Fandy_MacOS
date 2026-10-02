@@ -39,9 +39,6 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         guard mode.type == "ui8 ", mode.size == 1, mode.bytes.count == 1 else { throw HardwareError.invalidMetadata }
         try SMCAutomaticModeWriter.restore(fanID: fanID, metadata: mode, transport: self)
     }
-    // No independent mode/target primitive is exposed; production writes are validated batches.
-    func setManual(fanID: Int) throws { throw ControlError.hardwareUnqualified }
-    func setTarget(fanID: Int, rpm: Double) throws { throw ControlError.hardwareUnqualified }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] {
         try SMCProfileWriter.normalizedTargets(targets, fans: enumerateFans())
     }

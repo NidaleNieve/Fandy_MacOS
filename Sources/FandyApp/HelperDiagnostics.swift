@@ -26,6 +26,13 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case curveHold = "--profile-curve-hold-check"
     case curveSpinning = "--profile-curve-spinning-check"
     case curveQuit = "--profile-curve-quit-check"
+    case productionHeartbeat = "--profiles-recovery-heartbeat"
+    case productionDisconnect = "--profiles-recovery-disconnect"
+    case productionQuit = "--profiles-recovery-quit"
+    case productionHold = "--profiles-recovery-hold"
+    case productionSecurity = "--helper-security-check"
+    case performance = "--performance-check"
+    case profilesSleep = "--profiles-sleep-check"
     case profilesLive = "--profiles-live-check"
     case profilesCalibration = "--profiles-calibration-check"
     case maximumCheck = "--profile-max-check"
@@ -53,11 +60,14 @@ enum HelperDiagnosticAction: String, CaseIterable {
             switch action {
             case .curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold, .curveQuit: return await checkCurve(action)
             case .curveSpinning: return await checkSpinningCurve()
+            case .productionHeartbeat, .productionDisconnect, .productionQuit, .productionHold: return await ProductionRecoveryDiagnostics.run(action)
+            case .performance: return await PerformanceDiagnostics.run()
+            case .profilesSleep: return await SleepDiagnostics.run()
             case .profilesLive, .profilesCalibration: return await ProfileDiagnostics.run(action)
             case .maximumCheck, .maximumQuit, .maximumHeartbeat: return await checkMaximum(action)
             case .register: try HelperManager.installObservation()
             case .unregister: try await HelperManager.uninstallObservation(client: client)
-            case .status, .check: break
+            case .status, .check, .productionSecurity: break
             case .registerRestoration:
                 guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
                       SensorRegistry.capabilities.canRestore else { throw ControlError.unauthorized }
@@ -79,6 +89,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 "manualWritesEnabled": SensorRegistry.capabilities.canControl]
             report["recoveryTrialsEnabled"] = SensorRegistry.capabilities.canQualifyRecovery
             if state == .enabled {
+                if action == .productionSecurity { report["checks"] = try await client.checkProductionProtocol() }
                 if action == .check { report["checks"] = try await client.checkObservationProtocol() }
                 if action == .checkRestorationProtocol { report["checks"] = try await client.checkRestorationProtocol() }
                 let status = try await client.status()
@@ -93,7 +104,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 report["helperStatus"] = try encoded(status)
             }
             emit(report)
-            if (action == .check || action == .checkRestorationProtocol) && state != .enabled { return 2 }
+            if (action == .check || action == .checkRestorationProtocol || action == .productionSecurity) && state != .enabled { return 2 }
             return state == .requiresApproval ? 2 : state == .notFound ? 1 : 0
         } catch {
             if (action == .register || action == .registerRestoration) && HelperManager.service.status == .requiresApproval {

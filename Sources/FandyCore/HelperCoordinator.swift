@@ -18,6 +18,9 @@ public final class HelperCoordinator {
     private var leaseFans: [Fan] = []
     private var qualificationFloors: [Int: Double] = [:]
     private var targetsStartedAt: Double?
+    private var lastWatchdogObservationAt: Double?
+    /// Expiry/release decisions run every 100ms; full SMC acquisition is bounded to 2Hz.
+    private let watchdogObservationInterval = 0.5
     private var fault: String?
     private var restoration: RestorationReport?
     private var startupRestoration: RestorationReport?
@@ -37,7 +40,7 @@ public final class HelperCoordinator {
             safety.revoke(); fault = ControlError.hardwareUnqualified.localizedDescription
             return false
         }
-        event("Restoring automatic fan control"); safety.revoke(); targets = []; leaseFans = []; targetsStartedAt = nil; qualificationFloors = [:]; restoration = nil
+        event("Restoring automatic fan control"); safety.revoke(); targets = []; leaseFans = []; targetsStartedAt = nil; lastWatchdogObservationAt = nil; qualificationFloors = [:]; restoration = nil
         do {
             restoration = try FanRestoration.report(using: io)
             if let report = restoration, let data = try? JSONEncoder().encode(report), let text = String(data: data, encoding: .utf8) { event("Restoration report: " + text) }
@@ -77,6 +80,7 @@ public final class HelperCoordinator {
                 do { try recordHealthy(snapshot) } catch { healthy = 0; samples = [] }
             } else { snapshot = try acquire() }
             if safety.lease != nil {
+                try safety.requireLiveLease(at: clock())
                 guard snapshot.fans.allSatisfy({ fan in targets.isEmpty ? fan.mode == .automatic : ownsTarget(fan) }) else { throw ControlError.restorationUnverified }
             }
             if safety.lease == nil {
@@ -87,7 +91,7 @@ public final class HelperCoordinator {
             return HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, snapshot: snapshot, fault: fault, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
         } catch {
             if safety.lease != nil { _ = restore() }
-            else { safety.restorationFinished(false) }
+            else { safety.observationFailed() }
             return HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, fault: error.localizedDescription, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
         }
     }
@@ -146,9 +150,11 @@ public final class HelperCoordinator {
             if let deadline = safety.lease?.expiresAt {
                 guard deadline - clock() >= 2 else { throw ControlError.staleSession }
             }
+            try safety.requireLiveLease(at: clock())
             try FanRestoration.apply(validated, using: io)
-            guard !safety.expired(at: clock()) else { throw ControlError.staleSession }
+            try safety.requireLiveLease(at: clock())
             _ = try acquire() // Required sensors and bounds must still be healthy after I/O.
+            try safety.requireLiveLease(at: clock())
             if targets.isEmpty { targetsStartedAt = clock() }
             targets = validated
         } catch {
@@ -181,8 +187,15 @@ public final class HelperCoordinator {
         if safety.restoring { _ = restore(); return }
         guard safety.lease != nil else { return }
         do {
+            let now = clock()
+            if let last = lastWatchdogObservationAt {
+                guard now >= last else { throw ControlError.invalidNumber }
+                if now - last < watchdogObservationInterval { return }
+            }
+            lastWatchdogObservationAt = now
             try requireExclusive()
             let snapshot = try acquire()
+            try safety.requireLiveLease(at: clock())
             if targets.isEmpty {
                 guard snapshot.fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
                 return
@@ -199,7 +212,12 @@ public final class HelperCoordinator {
                 return FanTarget(target.fanID, max(target.rpm, try fan.rpm(percent: percent)))
             }
             let final = try normalized(elevated, fans: snapshot.fans)
-            if final != targets { try FanRestoration.apply(final, using: io); targets = final }
+            try safety.requireLiveLease(at: clock())
+            if final != targets {
+                try FanRestoration.apply(final, using: io)
+                try safety.requireLiveLease(at: clock())
+                targets = final
+            }
         } catch { _ = restore() }
     }
 }

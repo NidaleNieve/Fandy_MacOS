@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 import FandyCore
 @testable import FandyApp
@@ -397,4 +398,41 @@ private actor EnvelopeClient: PrivilegedFanClient {
     await client.loseEnvelope(); await model.tick()
     #expect(model.machine.selected.kind == .system); #expect(!model.isSelected("gaming"))
     #expect(await client.counts().1 > 0)
+}
+
+@MainActor @Test func pollingRestartOwnsExactlyOnePairOfPowerObservers() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let center = NotificationCenter()
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+                         simulation: true, powerCenter: center)
+    model.start(); model.stop(); model.start(); model.start()
+    let generation = model.machine.generation
+    center.post(name: NSWorkspace.willSleepNotification, object: nil)
+    for _ in 0..<20 { await Task.yield() }
+    #expect(model.machine.generation == generation + 1)
+    model.stop()
+    center.post(name: NSWorkspace.didWakeNotification, object: nil)
+    for _ in 0..<20 { await Task.yield() }
+    #expect(model.machine.generation == generation + 1)
+    await model.prepareForTermination(); model.start()
+    let terminated = model.machine.generation
+    center.post(name: NSWorkspace.willSleepNotification, object: nil)
+    for _ in 0..<20 { await Task.yield() }
+    #expect(model.machine.generation == terminated)
+}
+
+@MainActor @Test func productionIdleMonitoringFailuresNeverIssueFanCommands() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let client = MonitoringClient()
+    let caps = HardwareCapabilities(model: "Test", stage: .qualifiedControl, topology: .verified,
+                                    automaticRestoration: .verified, manualTransaction: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+                         client: client, capabilities: caps, helperAvailable: { true }, clock: { 10 })
+    await model.tick(); await client.setFailed()
+    for _ in 0..<4 { await model.tick() }
+    #expect(model.snapshot == nil); #expect(model.machine.state == .system)
+    #expect(!model.isSelected("system")); #expect(model.helperHealth == .fault)
+    let counts = await client.counts(); #expect(counts.0 == 0); #expect(counts.1 == 0)
 }
