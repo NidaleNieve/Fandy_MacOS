@@ -47,7 +47,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         guard targets.count == baseline.count, Set(targets.map(\.fanID)) == Set(baseline.map(\.id)),
               targets.allSatisfy({ target in baseline.contains {
                   $0.id == target.fanID && target.rpm.isFinite && target.rpm >= $0.minimumRPM && target.rpm <= $0.maximumRPM &&
-                  (SensorRegistry.capabilities.stage == .qualifiedControl || target.rpm == $0.maximumRPM)
+                  ([.curveQualification, .qualifiedControl].contains(SensorRegistry.capabilities.stage) || target.rpm == $0.maximumRPM)
               } }) else { throw ControlError.invalidFan }
         let deadline = ProcessInfo.processInfo.systemUptime + 2
         for target in targets {

@@ -93,7 +93,7 @@ struct Record: Encodable {
     let elapsed: Double
     let fans: [Fan]
     let keys: [DiscoveredSensor]
-    let hid: [HIDTemperature] = []
+    let hid: [HIDTemperature]
     let note = "Bounded read-only measurement. Candidate sensor identities remain unqualified."
 }
 func emit<T: Encodable>(_ value: T) throws {
@@ -101,11 +101,18 @@ func emit<T: Encodable>(_ value: T) throws {
     var data = try encoder.encode(value); data.append(10); FileHandle.standardOutput.write(data)
 }
 guard CommandLine.arguments == [CommandLine.arguments[0], "--bounded-cycle"] else {
-    FileHandle.standardError.write(Data("Usage: fandy-measure --bounded-cycle\nFixed 16-minute read-only cycle; two low-duty 30-second stimuli under verified automatic fan mode.\n".utf8)); exit(2)
+    FileHandle.standardError.write(Data("Usage: fandy-measure --bounded-cycle\nFixed 11-minute read-only cycle; two low-duty 30-second stimuli under verified automatic fan mode.\n".utf8)); exit(2)
 }
 do {
     guard HardwareSnapshotReader.machineModel() == SensorRegistry.model else { throw ControlError.hardwareUnqualified }
     let reader = try SMCReader(), sampler = try HardwareSnapshotReader()
+    // Enumerate once, before the timed baseline. This catalog is discovery evidence only;
+    // no prefix family is promoted into a production control mapping.
+    let catalog = try reader.enumerate(prefix: "T")
+    let selected = catalog.filter { sample in sample.type == "flt " && sample.size == 4 &&
+        ["Tp", "Tm", "Tg"].contains { sample.key.hasPrefix($0) } }.map(\.key)
+    let comfort = SensorRegistry.mappings.flatMap(\.keys)
+    let measurementKeys = Array(Set(selected + comfort)).sorted()
     let started = ProcessInfo.processInfo.systemUptime
     let stimulus = try Stimulus(startedAt: started)
     defer { stimulus.stop() }
@@ -114,7 +121,15 @@ do {
         let snapshot = try sampler.snapshot()
         try MeasurementSafety.validate(snapshot, now: ProcessInfo.processInfo.systemUptime)
         if let error = stimulus.error() { throw ControlError.invalidProfile(error) }
-        let keys = try reader.enumerate(prefix: "T")
+        let keys = measurementKeys.map { key -> DiscoveredSensor in
+            do { return try reader.read(key) }
+            catch { return DiscoveredSensor(key: key, type: "unknown", size: 0, attributes: 0, bytes: [], value: nil, error: error.localizedDescription) }
+        }
+        guard keys.allSatisfy({ key in
+            guard let value = key.value else { return false }
+            return key.type == "flt " && value.isFinite && value > 0 && value < MeasurementSafety.ceilingC
+        }) else { throw ControlError.invalidSnapshot }
+        let hid = HIDTemperatureReader.read()
         // Enumeration may block; reacquire ownership/temperatures before renewing stimulus admission.
         let fresh = try sampler.snapshot()
         try MeasurementSafety.validate(fresh, now: ProcessInfo.processInfo.systemUptime)
@@ -123,11 +138,11 @@ do {
         if let current {
             try emit(Record(timestamp: ISO8601DateFormatter().string(from: Date()), model: SensorRegistry.model,
                             os: ProcessInfo.processInfo.operatingSystemVersionString, phase: current,
-                            elapsed: ProcessInfo.processInfo.systemUptime - started, fans: fresh.fans, keys: keys))
+                            elapsed: ProcessInfo.processInfo.systemUptime - started, fans: fresh.fans, keys: keys, hid: hid))
         }
         Thread.sleep(forTimeInterval: max(0, 1 - (ProcessInfo.processInfo.systemUptime - fresh.sampledAt)))
     }
-    FileHandle.standardError.write(Data("Measurement completed: 960-second bounded cycle, no fan writes.\n".utf8))
+    FileHandle.standardError.write(Data("Measurement completed: 660-second bounded cycle, no fan writes.\n".utf8))
 } catch {
     FileHandle.standardError.write(Data("Measurement aborted: \(error.localizedDescription)\n".utf8)); exit(1)
 }

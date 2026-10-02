@@ -166,7 +166,7 @@ import Testing
     #expect(MeasurementPhase.at(60) == .cpu); #expect(MeasurementPhase.at(90) == .cpuCooldown)
     #expect(MeasurementPhase.at(210) == .gpu); #expect(MeasurementPhase.at(240) == .gpuCooldown)
     #expect(MeasurementPhase.at(360) == .chassis)
-    for elapsed in [960.0, -1, .nan, .infinity] { #expect(MeasurementPhase.at(elapsed) == nil) }
+    for elapsed in [660.0, 960.0, -1, .nan, .infinity] { #expect(MeasurementPhase.at(elapsed) == nil) }
 }
 
 @Test func idleExternalOwnershipConflictDoesNotStartAWriteFight() {
@@ -258,4 +258,105 @@ import Testing
     spy.now += 5; try send(); coordinator.watchdog(); #expect(spy.fans[0].mode == .manual)
     spy.now += 5; try send(); coordinator.watchdog()
     #expect(spy.fans.allSatisfy { $0.mode == .automatic })
+}
+
+@Test func curveQualificationCannotActivateOrdinaryProfilesOrSkipSensors() throws {
+    let capabilities = qualifiedCapabilities(stage: .curveQualification)
+    #expect(capabilities.canQualifyCurves)
+    #expect(capabilities.permits(BuiltInProfiles.maximum))
+    #expect(!capabilities.permits(BuiltInProfiles.systemPlus))
+    #expect(capabilities.permits(required: SensorRole.safety))
+    let missing = HardwareCapabilities(model: "Test", stage: .curveQualification, topology: .verified,
+                                      automaticRestoration: .verified, manualTransaction: .verified)
+    #expect(!missing.canQualifyCurves); #expect(!missing.permits(required: SensorRole.safety))
+}
+@Test func qualificationDeadlineCannotBeExtendedByHeartbeats() throws {
+    var safety = HelperSafety(); safety.restorationFinished(true)
+    let owner = UUID()
+    let lease = try safety.begin(owner: owner, generation: 1, required: SensorRole.safety, snapshot: fixture(), now: 10, qualification: true)
+    #expect(lease.expiresAt == 25)
+    _ = try safety.validateAndRenew(owner: owner, leaseID: lease.id, generation: 1,
+        targets: [FanTarget(0, 4000), FanTarget(1, 4500)], snapshot: fixture(at: 18), now: 18)
+    var snapshot = fixture(); snapshot.sampledAt = 24
+    snapshot.sensors = snapshot.sensors.map { var reading = $0; reading.sampledAt = 24; return reading }
+    _ = try safety.validateAndRenew(owner: owner, leaseID: lease.id, generation: 1,
+        targets: [FanTarget(0, 4000), FanTarget(1, 4500)], snapshot: snapshot, now: 24)
+    #expect(safety.lease?.expiresAt == 25); #expect(!safety.expired(at: 24.9)); #expect(safety.expired(at: 25))
+    #expect(throws: (any Error).self) { _ = try safety.validateAndRenew(owner: owner, leaseID: lease.id, generation: 1,
+        targets: [FanTarget(0, 4000), FanTarget(1, 4500)], snapshot: snapshot, now: 25) }
+}
+@Test func profileBlockerNamesOnlyItsRequiredUnverifiedRoles() {
+    let full = qualifiedCapabilities()
+    let missing = HardwareCapabilities(model: full.model, stage: .qualifiedControl,
+        sensors: full.sensors.filter { $0.role != .actuator && $0.role != .charger }, topology: .verified,
+        automaticRestoration: .verified, manualTransaction: .verified)
+    #expect(missing.permits(BuiltInProfiles.systemPlus))
+    #expect(!missing.permits(BuiltInProfiles.school))
+    #expect(missing.reasonUnavailable(BuiltInProfiles.school).contains("Trackpad Actuator"))
+    #expect(!missing.reasonUnavailable(BuiltInProfiles.school).contains("Charger"))
+}
+
+@Test func curveQualificationRejectsDownwardRequestAndRestoresBothFans() throws {
+    let spy = FanSpy()
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(stage: .curveQualification),
+        read: { spy.snapshot() }, clock: { spy.now })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: owner)
+    #expect(lease.expiresAt == 25)
+    let snapshot = coordinator.status().snapshot!
+    #expect(throws: (any Error).self) {
+        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+            targets: [FanTarget(0, 3100), FanTarget(1, 3200)]), owner: owner)
+    }
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic })
+    #expect(!spy.calls.contains("manual0"))
+}
+@Test func boundedCurveLeaseExpiresEvenWithSuccessfulRenewal() throws {
+    let spy = FanSpy()
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(stage: .curveQualification),
+        read: { spy.snapshot() }, clock: { spy.now })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: owner)
+    for now in [10.0, 18, 23] {
+        spy.now = now
+        let snapshot = coordinator.status().snapshot!
+        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+            targets: [FanTarget(0, 3200), FanTarget(1, 3200)]), owner: owner)
+    }
+    spy.now = 25; coordinator.watchdog()
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic }); #expect(coordinator.status().automaticVerified)
+}
+
+@Test func trialRejectsLateBatchBeforeItsPhysicalBudgetWouldCrossDeadline() throws {
+    let spy = FanSpy()
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(stage: .curveQualification),
+        read: { spy.snapshot() }, clock: { spy.now })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: owner)
+    for now in [10.0, 18] {
+        spy.now = now; let snapshot = coordinator.status().snapshot!
+        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+            targets: [FanTarget(0, 3200), FanTarget(1, 3200)]), owner: owner)
+    }
+    spy.now = 24; let snapshot = coordinator.status().snapshot!
+    let count = spy.calls.filter { $0.hasPrefix("target") }.count
+    #expect(throws: (any Error).self) {
+        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+            targets: [FanTarget(0, 3300), FanTarget(1, 3300)]), owner: owner)
+    }
+    #expect(spy.calls.filter { $0.hasPrefix("target") }.count == count)
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic })
+}
+
+@Test func wireCannotSupplyQualificationDeadlineOrAuthority() throws {
+    let data = Data("{\"version\":2,\"generation\":1,\"required\":[\"cpuPeak\",\"gpuPeak\"],\"expiresAt\":999999999,\"qualified\":true}".utf8)
+    let request = try Wire.decode(LeaseRequest.self, from: data)
+    let spy = FanSpy()
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(stage: .curveQualification),
+        read: { spy.snapshot() }, clock: { spy.now })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let lease = try coordinator.begin(request, owner: UUID())
+    #expect(lease.expiresAt == spy.now + 15)
+    let old = Data("{\"id\":\"11111111-1111-1111-1111-111111111111\",\"owner\":\"22222222-2222-2222-2222-222222222222\",\"generation\":1,\"renewedAt\":10,\"required\":[]}".utf8)
+    #expect(try Wire.decode(ControlLease.self, from: old).expiresAt == nil)
 }

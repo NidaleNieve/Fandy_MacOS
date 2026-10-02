@@ -1,10 +1,12 @@
+> Latest checkpoint: [temperature-profile integration](TEMPERATURE_PROFILE_STATUS.md), 2026-10-02. Four comfort roles reviewed; CPU/GPU coverage and Top semantics remain pending. 169 Swift tests and 30 tool tests pass. System/Max remain enabled; the bounded curve stage is implemented but inactive. The single targeted measurement completed without fan writes.
+
 # Development checkpoint — 2026-10-01
 
 ## Working production milestone
 
 **System and Max now work on the real Mac17,9.** The signed app starts in System with real monitoring. Max selects each fan's fresh reported maximum through the same app model used by the menu; System immediately releases both fans to Apple. A checkmark requires acknowledged activation, not a preview. Max needs no temperature identities and activates after one fresh fan acquisition. Curve profiles retain five healthy acquisitions and policy-specific sensor eligibility.
 
-The installed production stage is `maximumControl`. Mechanical transaction/recovery evidence is verified; all twelve requested sensor identities/coverage records remain pending. This does not block Max. Temperature-based profiles cannot activate yet. Proximity sensors no longer block unrelated policies: `permits(profile)` and the helper's required-role check replace the former all-twelve production switch. No preference or received capability report can grant writes.
+The installed production stage is `maximumControl`. Mechanical transaction/recovery evidence is verified; four comfort roles are reviewed; the remaining chip, Top and proximity records remain pending. This does not block Max. Temperature-based profiles cannot activate yet. Proximity sensors no longer block unrelated policies: `permits(profile)` and the helper's required-role check replace the former all-twelve production switch. No preference or received capability report can grant writes.
 
 The pure production codec and root batch writer are connected and tested. The maximum stage independently rejects every target below the relevant fan's reported maximum. Future curve authority requires a reviewed signed stage and its required verified sensors; no unverified input is promoted by mechanical tests. Low-level independent setManual/setTarget primitives remain unavailable.
 
@@ -30,7 +32,7 @@ The temporary authenticated own-helper SIGKILL action was removed. The productio
 
 ## Verification and installation
 
-157 Swift tests pass (20 hardware, 115 core, 22 app). All 27 Python tool tests pass. Single-job signed native compilation and strict deep signature verification pass. Focused additions cover per-policy capabilities, sensor-free fixed maximum, lower-target rejection, per-fan limits, target ownership, competing controllers, persistent stalled fans, immediate Max, System/wake cleanup and production command encoding.
+169 Swift tests pass (24 hardware, 122 core, 23 app). All 30 Python tool tests pass. Single-job signed native compilation and strict deep signature verification pass. Focused additions cover per-policy capabilities, sensor-free fixed maximum, lower-target rejection, per-fan limits, target ownership, competing controllers, persistent stalled fans, immediate Max, System/wake cleanup and production command encoding.
 
 The preserved signed app is `build/MonitoringDSR/Fandy.app`, registered normally through SMAppService after verified release/unregister and old-service absence. Existing identity `is.dsr.fandy`, helper identity and local signing team remain intact. The final installed build passed a five-tick functional check in real monitoring/System with control-ready helper health and Apple-observed ownership. Authenticated status and three independent fan recordings confirmed automatic mode on both fans. The menu-bar app was then relaunched in System; simulation remains explicit. Raw logs, private signing configuration and the exact local handoff stay ignored by Git.
 
@@ -38,7 +40,7 @@ The preserved signed app is `build/MonitoringDSR/Fandy.app`, registered normally
 
 1. Resolve CPU/GPU peak membership/coverage using independent current-model provenance or a discriminating source/measurement. Do not repeat idle recordings: the published CPU group may omit the independently observed Tm domain, and one published GPU key is absent. Source tables and rounded temperature agreement are insufficient to settle these conflicts.
 2. Review the required chip roles, enable the signed per-policy curve stage, and perform one bounded System+ activation through the already-connected batch writer. Initial activation from a spinning Apple-controlled baseline uses target-first acknowledgement; rejected preload never falls back to an alternative sequence.
-3. Establish only the comfort roles used by Cool Chassis/School, then enable those profiles. The three proximity roles may remain informational. Curve mapping/source evidence stays explicit; no renamed candidate is treated as proof.
+3. Finish the remaining Top comfort role, then enable comfort profiles after chip qualification. Trackpad, Actuator and Left/Right are already reviewed. The three proximity roles may remain informational. Curve mapping/source evidence stays explicit; no renamed candidate is treated as proof.
 4. Measure actual sleep/wake and rapid production switching. Core lifecycle, race, stale reply, authentication, malformed input and failure tests remain retained; run focused physical regressions when their paths become enabled.
 5. Calibrate System/System+/Cool Chassis with human comfort feedback near 27°C Trackpad, 25°C Actuator, 33°C Airflow. Tune gaming separately; no promised exact temperatures, synthetic stress, clock or power changes.
 6. Human UI review, release configuration/notarization/distribution and any resulting fixes follow functional completion.
@@ -47,7 +49,7 @@ Latest source review checked the current [Stats M5 table](https://github.com/exe
 
 ## Resume / reproduce
 
-Read this checkpoint, [hardware gates](HARDWARE_GATES.md), [sensor evidence](SENSOR_EVIDENCE.md) and ignored `docs/local/DEVELOPMENT_HANDOFF.md`.
+Read [the latest temperature checkpoint](TEMPERATURE_PROFILE_STATUS.md), this checkpoint, [hardware gates](HARDWARE_GATES.md), [sensor evidence](SENSOR_EVIDENCE.md) and ignored `docs/local/DEVELOPMENT_HANDOFF.md`.
 
 ```sh
 Scripts/test.sh -j 1 --no-parallel

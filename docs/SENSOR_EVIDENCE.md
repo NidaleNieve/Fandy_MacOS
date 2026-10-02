@@ -1,16 +1,16 @@
 # Sensor candidates and required evidence
 
-All identities and chip peak coverage remain pending on the reviewed Mac17,9 model. The public repository contains candidate mappings and reproducible analysis tools, but excludes raw recordings, reference CSV files and operator-specific measurements. Normal operation reads hardware independently; TG Pro is a development reference only.
+Four comfort identities are reviewed on Mac17,9: Trackpad, Actuator, Airflow Left/Right. Chip coverage, Top semantics and informational proximity mappings remain pending. See [the composite review and targeted result](TEMPERATURE_PROFILE_STATUS.md). The public repository contains candidate mappings and reproducible analysis tools, but excludes raw recordings, reference CSV files and operator-specific measurements. Normal operation reads hardware independently; TG Pro is a development reference only.
 
 | Role | Candidate / source | Required review |
 | --- | --- | --- |
-| CPU average / peak | Complete published Stats M5 CPU group | Active membership, averaging semantics and reliable hottest-core coverage. Wider unselected Tp/Tm readings must be explained. |
+| CPU average / peak | Explicit 23 Tp / 40 Tm informational manifest; published Stats anchors | Active membership, averaging semantics and reliable hottest-core coverage. Wider unselected Tp/Tm readings must be explained. |
 | GPU average / peak | Published Stats M5 GPU group; absent members recorded separately | Exact-model region membership and peak coverage; unselected Tg readings and acquisition lag. |
-| Trackpad | Ts0P; historical VirtualSMC name | Current-model provenance, contemporaneous reference agreement and competing candidates. |
-| Actuator | Ts1P; historical VirtualSMC name | Current-model provenance and separate temperature scale. |
-| Airflow Left | TaLP; Stats name | Exact-model identity and timing agreement. |
+| Trackpad | Ts0P; historical VirtualSMC name | Reviewed composite comfort evidence; physical surface accuracy is not asserted. |
+| Actuator | Ts1P; historical VirtualSMC name | Reviewed; separate scale and documented competing candidates. |
+| Airflow Left | TaLP; Stats name | Reviewed source/typed acquisition/reference/response evidence. |
 | Airflow Top | TaTP; iSMC Apple Ambient Top Proximity candidate | Exact-model Airflow Top identity. Ambient and Airflow descriptions cannot be assumed equivalent. |
-| Airflow Right | TaRF; Stats name | Exact-model identity and timing agreement. |
+| Airflow Right | TaRF; Stats name | Reviewed source/typed acquisition/reference/response evidence. |
 | Charger Proximity | TCHP; historical VirtualSMC name | Model-sensitive conflicts and corroboration. Charging alone must not drive aggressive comfort cooling. |
 | Power Supply Proximity | TPSP; iSMC broad-platform candidate | Exact-model identity and competing interpretations. |
 | Wireless Proximity | TW0P; historical wireless / Stats Airport name | Current-model corroboration and timing agreement. |
@@ -25,4 +25,4 @@ Raw data and detailed reports remain local. Review [hardware gates](HARDWARE_GAT
 
 ## Current source check
 
-The current [Stats M5 definitions](https://github.com/exelban/stats/blob/master/Modules/Sensors/values.swift) retain the published Tp/Tg candidates. [ThermalForge’s Mac17,9 compatibility report](https://github.com/ProducerGuy/ThermalForge/issues/26) reports Max/Auto operation but does not settle the local Tm-domain, missing GPU-member or comfort-label questions. Neither is new exact-model identity/coverage proof. No evidence flag changed. System/Max qualification is mechanical and independent of these unresolved labels.
+The current [Stats M5 definitions](https://github.com/exelban/stats/blob/master/Modules/Sensors/values.swift) retain the published Tp/Tg candidates. [ThermalForge’s Mac17,9 compatibility report](https://github.com/ProducerGuy/ThermalForge/issues/26) reports Max/Auto operation but does not settle the local Tm-domain, missing GPU-member or comfort-label questions. Neither is new exact-model identity/coverage proof. At that source check no evidence flag changed; the later four-role composite review is linked above. System/Max qualification is mechanical and independent of these unresolved labels.

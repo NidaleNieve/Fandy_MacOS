@@ -1,3 +1,5 @@
+> Temperature integration update: [current results and blockers](TEMPERATURE_PROFILE_STATUS.md). Four comfort roles are reviewed. The curve-qualification stage and helper-owned 15-second deadline are implemented/tested but inactive in the delivered maximum-only build.
+
 # Hardware qualification gates
 
 Current signed authority is model-specific `maximumControl`: real monitoring, verified automatic restoration and production fixed Max leases. Temperature profiles require their own evidence. Arbitrary sensor-free RPM, independent manual-mode primitives, automatic target clearing and unknown modes remain unavailable. Preferences and XPC payloads cannot grant authority.

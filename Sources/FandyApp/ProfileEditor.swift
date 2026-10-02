@@ -146,7 +146,7 @@ struct SettingsView: View {
                 if HelperManager.service.status == .requiresApproval {
                     Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                 }
-                Text(model.capabilities.canRestore ? "System can restore Apple automatic control. Custom profiles await verification." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
+                Text(model.capabilities.stage == .qualifiedControl ? "Eligible profiles control real fans. System restores Apple automatic control." : model.capabilities.canRestore ? "System and Max are available. Temperature profiles await their required inputs and activation test." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Hardware verification") {
                     LabeledContent("Sensor roles", value: "\(model.capabilities.verifiedRoles.intersection(HardwareCapabilities.requiredRoles).count) / \(HardwareCapabilities.requiredRoles.count) verified")
                     LabeledContent("Automatic handback", value: model.capabilities.automaticRestoration == .verified ? "Verified" : "Pending")
