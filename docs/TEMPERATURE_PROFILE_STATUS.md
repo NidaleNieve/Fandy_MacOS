@@ -1,18 +1,37 @@
-# Temperature-profile checkpoint — 2026-10-02
+# Temperature-profile delivery — 2026-10-02
 
-Latest continuation: [a separate conservative chip-envelope path](CHIP_ENVELOPE.md) is implemented and tested but inactive, pending the user's policy decision. A new 180-second render recording has 146 contemporaneous TG Pro pairs; GPU variation remained insufficient to qualify individual regions. The current build still grants only System/Max. This supersedes the earlier statement that the reference log has no new rows; that statement remains true for the earlier 660-second session.
+The production registry now selects `qualifiedControl` on Mac17,9. System+, Gaming, Cool Chassis, School and custom curves use real independently acquired temperatures. System and Max remain protected. This supersedes the earlier maximum-only and inactive-envelope checkpoints.
 
-System and Max remain operational. Temperature profiles are **not enabled**: the bounded measurement did not resolve CPU membership and GPU coverage sufficiently. No temperature-control experiment or simulated success was used to bypass that result. A final regression of the already-qualified Max/System path passed actual maximum RPM and both-fan automatic handback.
+## Control inputs
 
-## Implemented
+Chip control uses the maximum of a fixed 105-key Tp/Tm/Tg manifest, separately named **Chip envelope**. Every member is mandatory, fresh, correctly typed and finite. CPU/GPU averages remain informational estimates; their exact physical membership is not certified. Neither those estimates nor proximity candidates can substitute for a failed envelope. See [the policy and limitations](CHIP_ENVELOPE.md).
 
-The model-specific registry now supports independent average/maximum groups. Each SMC reading carries its monotonic completion time; a group uses its earliest member time so a long acquisition cannot make old data appear fresh. Missing, corrupt, nonfinite or wrongly typed members invalidate the entire group. Older discovery records decode without the optional timing field; they cannot masquerade as newly acquired control readings.
+Five chassis inputs are reviewed operationally: Trackpad Ts0P, Actuator Ts1P, Left TaLP, Right TaRF and **Top proximity TaTP**. Top uses independent ambient-top provenance, complete typed model observations, 1156 paired reference readings across an 18°C range and slow chassis response. This is an explicit proximity proxy on the airflow scale, not a certification of TG Pro's exact Airflow Top identity. TRDd/TRDc remain numerical competitors. The UI uses the proxy's actual reviewed description. A missing Top member invalidates an enabled airflow curve; it is never silently dropped.
 
-The CPU informational envelope explicitly includes the 23 observed Tp and 40 Tm candidates. Both families responded to the separate CPU pulse. This is a fixed current-model candidate manifest, not a runtime prefix-based control rule or a claim that every member is a CPU core. CPU averages remain candidate sensor averages, not verified per-core averages. GPU informational membership remains the seven present published candidates; absent Tg1g is documented rather than silently removed during acquisition.
+Trackpad/Actuator/Airflow retain independent temperature scales. Final demand is the maximum of enabled curves, profile floor and immutable chip guard. Charger, power supply and wireless remain informational candidates and never independently raise fan demand. Normal operation does not read the reference CSV or require TG Pro.
 
-A signed `curveQualification` stage is implemented and tested but **not selected in the delivered build**. Ordinary temperature profiles remain unavailable in that stage. Required verified sensor roles are still mandatory. Root-owned curve trials have a nonrenewable 15-second deadline, upward-only admission floors of max(observed RPM, spinning minimum) + 200 per fan, and the existing ten-second heartbeat timeout. A late batch is rejected before its two-second physical transaction budget would cross the deadline. The deadline is checked again after I/O; blocked kernel I/O remains the documented limitation.
+## Actual hardware fixes
 
-The XPC interface remains five methods. Optional lease expiry preserves older reply decoding; requests cannot supply expiry or qualification authority. Fixed curve check/heartbeat/disconnect/hold diagnostic flags accept no RPM, keys, duration or profile parameters and reject the current maximum-only build before issuing commands.
+- Automatic target preloading read back zero on this model. The reviewed production transaction establishes and verifies both manual modes before writing validated targets; it uses no unlock key, target clearing or alternative-write fallback.
+- Warm re-entry can take approximately nine seconds before actual RPM is reported. Eight-second diagnostics incorrectly failed before spin-up. Bounded recovery observations now fit inside the existing nonrenewable fifteen-second qualification lease. Production retains its ten-second stalled-fan check.
+- Firmware acknowledged a fractional request of 2867.9 as 2867 RPM. The helper now rounds upward to whole RPM within separately verified integral fan bounds, for both profile requests and independent thermal escalation. Ownership tracking uses those normalized targets. Curve interpolation remains continuous.
+- Every admitted controller update refreshes its validated SMC target. The client reuses only an immediately issued observation (at most 250 ms old) to avoid duplicate status RPCs. The helper still reads and validates hardware independently before each write; message limits were not increased.
+
+## Recovery evidence
+
+Spinning re-entry and subsequent target updates passed with actual RPM, followed by both mode-0 handbacks. Heartbeat expiry restored both fans at approximately 10.51 seconds; owned disconnect at approximately 1.04 seconds; the nonrenewable deadline at approximately 15.14 seconds. Controller SIGKILL after observed rotation returned both modes to automatic in 0.17 seconds. Normal termination from a variable-speed lease verified both automatic modes. Prior measured helper restart recovery is retained because startup restoration is unchanged.
+
+The original modest five-second trial and System/Max mechanical qualification remain valid. The former qualification authority is disabled in the production stage; callers cannot choose trial duration or unlock production by preferences/XPC. A dead or blocked helper still cannot execute its own watchdog.
+
+Software verification: 189 Swift tests (28 hardware, 134 core, 27 app), 31 Python tool tests, a single-job signed build and strict nested signature verification. Active curve editing preserved manual ownership; simulation-to-hardware reactivation and paced rapid-switch/System checks also passed. Actual production profile and calibration results are recorded in [delivery status](DEVELOPMENT_STATUS.md).
+
+## Follow-ups
+
+Physical sleep/wake with active ownership still needs an observed hardware test; both process state machines and the native notification handling are implemented and model-tested. Subjective comfort/noise feedback and sustained gaming calibration remain separate follow-ups. Exact CPU/GPU identities and the three informational proximity labels remain research goals rather than gates for the explicitly reviewed operational policy.
+
+## Earlier sensor evidence
+
+The following bounded measurements and source reviews are retained as evidence history. Their unresolved physical identities are not relabelled as proven by the operational policy.
 
 ## Bounded read-only result
 
@@ -42,15 +61,3 @@ The reference CSV contained no contemporaneous rows for this session. Its earlie
 | Charger, Power Supply, Wireless | Pending informational mappings. They do not gate profiles that do not use them. |
 
 Published naming references: [VirtualSMC keys](https://github.com/acidanthera/VirtualSMC/blob/master/Docs/SMCSensorKeys.txt), [Stats sensor definitions](https://github.com/exelban/stats/blob/master/Modules/Sensors/values.swift), [iSMC descriptors](https://github.com/dkorunic/iSMC/blob/master/smc/sensors.go). Existing license notices remain; no implementation or proprietary mapping table was copied.
-
-## Exact remaining work
-
-1. Obtain a discriminating GPU-region recording during an ordinary game/render workload, with a contemporaneous temperature-only reference if available. Do not repeat this ineffective low-duty pulse. Normal Fandy operation must remain independent of the reference app, and competing fan control must remain stopped.
-2. Resolve the Tm region membership using independently attributable current-model descriptions or evidence that distinguishes CPU regions from memory. A rapid thermal response alone cannot assign a physical identity.
-3. Review Top proximity versus Airflow Top semantics. Keep only this dependent comfort role pending; do not reopen the four completed comfort reviews without conflicting evidence.
-4. Once chip roles pass, install the bounded qualification build, run the fixed upward curve check and recovery cases, then enable System+/Gaming and chip-only custom profiles. Comfort profiles follow their final Top review.
-5. Physical sleep/wake, automatic-at-idle release/re-entry, rapid production curve switching and System/System+/Cool Chassis calibration still require the enabled curve path. These were not falsely marked passed by Max tests.
-
-The signed native build passes 169 Swift tests (24 hardware, 122 core, 23 app) and 30 Python tests. Installed functional monitoring passed with control-ready helper health, System state and both automatic fan modes. The inactive curve diagnostic was rejected. Strict deep signature verification passed.
-
-Delivered authority remains `maximumControl`. Four of twelve requested roles are reviewed; every temperature policy requires the unresolved CPU/GPU safety roles. The application is left in System. Raw recordings, the reference CSV, local signing configuration and private handoff stay outside Git.

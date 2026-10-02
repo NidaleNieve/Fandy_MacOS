@@ -15,15 +15,20 @@ import FandyCore
     #expect(SMCDecoder.decode(type:"flt ",bytes:[0])==nil)
     #expect(SMCDecoder.decode(type:"hex_",bytes:[0,0,0,0])==nil)
 }
-@Test func unqualifiedMappingsCannotEnableTemperaturePolicies() {
+@Test func operationalInputsEnableProfilesWithoutQualifyingExactChipIdentities() {
     #expect(SensorRegistry.capabilities.permits(BuiltInProfiles.maximum))
-    #expect(!SensorRegistry.capabilities.permits(BuiltInProfiles.gaming))
-    #expect(SensorRegistry.capabilities.verifiedRoles == SensorRegistry.reviewedComfortRoles)
+    for profile in BuiltInProfiles.all where profile.kind != .system { #expect(SensorRegistry.capabilities.permits(profile)) }
+    #expect(!SensorRegistry.capabilities.canQualifyCurves)
+    #expect(!SensorRegistry.capabilities.allSensorsVerified)
+    #expect(SensorRegistry.capabilities.requiredControlRoles.isSubset(of: SensorRegistry.capabilities.verifiedRoles))
+    #expect(SensorRegistry.capabilities.blockers.isEmpty)
+    #expect(SensorRegistry.capabilities.sensorName(.airflowTop) == "Top proximity")
+    #expect(SensorRegistry.capabilities.verifiedRoles == SensorRegistry.reviewedComfortRoles.union([.socPeak]))
     #expect(!SensorRole.safety.isSubset(of: SensorRegistry.capabilities.verifiedRoles))
     #expect(SensorRegistry.mappings.first{$0.role == .airflowTop}?.keys==["TaTP"])
 }
 
-@Test func envelopeManifestIsFixedCompleteAndDoesNotQualifyItself() throws {
+@Test func envelopeManifestIsFixedCompleteAndNeverDropsMissingMembers() throws {
     #expect(SensorRegistry.gpuRegionCandidates.count == 42)
     #expect(SensorRegistry.chipEnvelopeKeys.count == 105)
     #expect(Set(SensorRegistry.chipEnvelopeKeys).count == 105)
@@ -31,7 +36,7 @@ import FandyCore
     let mapping = SensorRegistry.mappings.first { $0.role == .socPeak }!
     #expect(mapping.reduction == .maximum)
     #expect(mapping.keys == SensorRegistry.chipEnvelopeKeys)
-    #expect(!SensorRegistry.capabilities.verifiedRoles.contains(.socPeak))
+    #expect(SensorRegistry.capabilities.verifiedRoles.contains(.socPeak))
     let sample: (String) throws -> DiscoveredSensor = { key in
         DiscoveredSensor(key: key, type: "flt ", size: 4, attributes: 0, bytes: [0,0,0,0],
                          value: key == "Tg3x" ? 85 : key == "Tm04" ? 80 : 40, error: nil, sampledAt: 10.1)

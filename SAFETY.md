@@ -1,10 +1,10 @@
-> Temperature integration update: [current results and blockers](docs/TEMPERATURE_PROFILE_STATUS.md). Four comfort roles are reviewed. The curve-qualification stage and helper-owned 15-second deadline are implemented/tested but inactive in the delivered maximum-only build.
+> Current delivery: [real temperature profiles and measured recovery](docs/TEMPERATURE_PROFILE_STATUS.md). The signed production policy uses a fixed chip envelope and five operational chassis inputs; exact CPU/GPU averages remain estimates, and Top is explicitly proximity.
 
 # Safety
 
 ## Current qualification
 
-**System/Max control is qualified on the reviewed Mac17,9; temperature profiles remain pending their required sensor evidence.** Both fans passed modest manual targets, watchdog/ownership recovery, helper restart and real Max-to-System operation. Max uses per-fan reported limits and does not need temperature identities. It cannot be used to request lower RPM without qualified chip inputs.
+**All built-in profiles and eligible custom curves are operational on Mac17,9 using the reviewed operational policy.** Both fans passed modest manual targets, watchdog/ownership recovery, helper restart and real Max-to-System operation. Max uses per-fan reported limits and does not need temperature identities. It cannot be used to request lower RPM without qualified chip inputs.
 
 ## System and custom ownership
 
@@ -20,7 +20,7 @@ Custom mode uses manual ownership and temporarily replaces Apple's ordinary dema
 
 | Event | Required behavior / current verification |
 | --- | --- |
-| Normal Quit | Request immediate automatic restoration, then terminate. Mock lifecycle/model tested; production active-Max termination is checked by the fixed native diagnostic. |
+| Normal Quit | Request immediate automatic restoration, then terminate. Model tested; physical active-Max and variable-speed termination passed native diagnostics. |
 | GUI crash, SIGKILL, frozen controller | Ten-second heartbeat expires; helper restores, checked every 100 ms. Physical heartbeat expiry and SIGKILL of the signed controller passed both-fan handback; coordinator tests also use a virtual clock. |
 | XPC disconnect | Revoke that connection's lease and restore; no other connection can renew it. Coordinator tested; physical owned disconnect passed both-fan handback. |
 | Helper crash/restart | launchd KeepAlive restarts it; startup revokes all state and restores. No stale target/lease is read from disk. Restart model tested; live helper SIGKILL/startup recovery passed during modest manual ownership. |
@@ -41,23 +41,23 @@ The OS/firmware's precise behavior under custom manual mode, sleep, reboot and h
 
 ## Hardware gates
 
-A separate [bounded recovery qualification path](docs/MANUAL_QUALIFICATION.md) is connected to authenticated XPC and helper-only writes. Targets are freshly computed per fan and never supplied by the caller. Initial deadline5 seconds; recovery deadline15 seconds; heartbeat10 seconds. Stopped/zero-target/cool admission permits a reviewed mode-first spinning-minimum+200 request. Spinning admission requires verified target-first preloading. Failure never switches order or clears targets; it restores all fans and retains first/later per-fan outcomes. The broader raw diagnostic guard is not sensor identity or complete chip coverage proof. Production eligibility is policy-specific. Max is sensor-free fixed maximum; curves require their actual chip/comfort roles. Proximity identities do not block unrelated policies.
+The historical [bounded recovery qualification path](docs/MANUAL_QUALIFICATION.md) used helper-derived targets, an initial five-second deadline, fifteen-second recovery deadlines and a ten-second heartbeat. Subsequent variable-speed qualification passed the full controller recovery cases before production curve authority was enabled. Its former deadline authority is disabled in production. The current batch sequence verifies both manual modes before validated targets; automatic target preloading failed on this model and is not a fallback path.
 
-Follow [docs/HARDWARE_GATES.md](docs/HARDWARE_GATES.md) in order. Do not grant compiled capabilities merely to make the UI usable. Repeated automatic restoration, modest manual testing and live controller watchdog proof have passed. Helper restart and production System/Max activation have passed; temperature profiles remain pending their own evidence. Sensor qualification must cover the inputs actually used by each policy under the revised delivery plan. Competing controllers must not issue fan writes. TG Pro's privileged helper is stopped for these tests; its displayed System setting alone previously did not establish exclusive ownership. Reference recordings remain development evidence. No maximum-RPM first test, no zero target while manual, no Ftst experiment and no die-target/system-service changes.
+Repeated automatic restoration, modest manual testing, watchdog recovery, helper restart, System/Max and temperature-profile activation have passed. Sensor qualification covers the operational inputs actually used by each policy. Competing controllers must not issue fan writes. TG Pro's privileged helper was stopped for these tests; its displayed System setting alone did not establish exclusive ownership. Reference recordings remain development evidence. No maximum-RPM first test, target clearing, Ftst experiment or die-target/system-service changes were made. See [hardware gates](docs/HARDWARE_GATES.md).
 
-Defaults still require logged light-workload comparisons in System, System+ and Cool Chassis, subjective typing comfort from the user, and actual gaming observations. The comfortable baseline is Trackpad ≈27°C, Actuator ≈25°C, Airflow ≈33°C; the warmer observation is ≈31°C/29°C/43–44°C. Do not promise exact temperatures or performance preservation under arbitrary load/ambient conditions.
+Five-minute sequential ordinary-use comparisons in System, System+ and Cool Chassis passed with stable demand. Defaults still require subjective typing-comfort/noise feedback and actual gaming observations; the comparison started cooler than the supplied comfort baseline. The comfortable baseline is Trackpad ≈27°C, Actuator ≈25°C, Airflow ≈33°C; the warmer observation is ≈31°C/29°C/43–44°C. Do not promise exact temperatures or performance preservation under arbitrary load/ambient conditions.
 
-## Class-time development boundary
+## Historical class-time development boundary
 
 Production monitoring is the normal startup path, with automatic release on helper startup, explicit System requests, lifecycle cleanup and failed Fandy restoration. It never issues manual RPM. Simulation is explicit. At that stage, every requested sensor role, including proximity roles, was required before manual tests or profiles. The subsequently approved bounded mechanical-test exception and revised policy-specific delivery plan are recorded below. Sensor failure cannot block the qualified mode-release path. The user ended the class-time restriction and authorized the physical restoration and bounded measurements documented above.
 
-## Latest physical result
+## Earlier mechanical results
 
 Both fans accepted 2517 RPM and spun up in a five-second mechanical test, then returned to automatic0. The failure was premature acknowledgement checking: early target reads could return0 after an accepted write. The helper now permits up to 500 ms of bounded read-only acknowledgement without a rewrite or deadline extension. Changed nonzero targets, mode/bounds faults, persistent zero and expiry still abort and restore.
 
 Actual heartbeat expiry 10.0293 s, owned disconnect 1.2152 s, fixed deadline 15.0064 s and signed controller SIGKILL passed both-fan handback; independent readings saw manual then automatic modes. Helper death/restart passed during an owned modest trial; physical sleep/wake remains untested. No Max, target clearing, power changes or emergency thermal-service changes occurred.
 
-The user shortened the delivery plan: sensors are to be qualified by the policy that uses them, rather than all twelve blocking every feature. The maximumControl stage now admits real System/Max leases. Curve leases remain disabled; no pending sensor was falsely marked valid.
+The user shortened the delivery plan: sensors are to be qualified by the policy that uses them, rather than all twelve blocking every feature. The former maximumControl stage admitted System/Max first. The current qualifiedControl stage also enables curves using the explicit chip-envelope and chassis-proxy policy; unresolved physical CPU/GPU identities were not relabelled as proven.
 
 The current mechanical path enforces a helper-side check for TG Pro's known privileged executable before admission and during ownership. Status exposes only a fixed blocker message, never process identifiers or paths. Bounded kernel process metadata enumeration provides no generic process/filesystem API to a caller. This detects a known conflict, not universal exclusive-ownership proof; modes/targets still require continuous checking. Safe restoration remains available despite that blocker.
 
@@ -66,3 +66,11 @@ The current mechanical path enforces a helper-side check for TG Pro's known priv
 Both reported maxima were 7826 RPM in this test, and manual readings reached approximately 7815 / 7780 RPM before verified System handback. Limits are freshly read separately. Production controller SIGKILL and heartbeat expiry passed both-fan release; the active termination diagnostic exercises normal cleanup. Target/mode acknowledgement alone did not count as physical Max proof: the fixed check observes RPM for eight seconds. A commanded fan still stopped/below its spinning minimum after ten seconds triggers restoration, without allowing heartbeats to hide a stalled fan.
 
 Sensor-free leases admit only exact maximum targets. The helper still requires fresh valid fan telemetry, supported modes/metadata, unchanged bounds and nominal/fair pressure. The temporary own-helper kill action was removed after restart acceptance. A blocked/dead helper remains unable to run its timer; one successful launchd recovery is evidence for the tested case, not a universal guarantee.
+
+## Production temperature integration
+
+The helper computes a fresh independent chip guard from the complete fixed 105-key envelope. Each required member must be typed, plausible and freshly acquired; no estimate/partial group substitutes on failure. Top proximity remains a mandatory airflow-group input with its uncertainty disclosed. Profile and helper escalation targets round upward to whole RPM within each fan's verified integral limits, and acknowledgement tracking uses normalized values. Invalid normalization restores both fans. Curves themselves retain continuous interpolation.
+
+The reviewed transaction establishes both manual modes before writing validated targets. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
+
+Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKILL and normal quit passed. Live profile activation, rapid switching and handback passed. Earlier helper-restart evidence remains applicable because startup restoration is unchanged. A dead or blocked helper cannot run its watchdog; active physical sleep/wake still needs an observed test.

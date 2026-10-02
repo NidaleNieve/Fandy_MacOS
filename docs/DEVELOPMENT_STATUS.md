@@ -1,59 +1,84 @@
-> Latest checkpoint: [chip-envelope integration](CHIP_ENVELOPE.md), 2026-10-02. The alternative policy is implemented but inactive pending the user's decision and live curve recovery acceptance. Exact CPU/GPU identities and Top semantics remain pending; System/Max remain enabled. A separate bounded render measurement matched fresh reference rows but did not resolve GPU identities.
-
-# Development checkpoint — 2026-10-01
+# Development checkpoint — 2026-10-02
 
 ## Working production milestone
 
-**System and Max now work on the real Mac17,9.** The signed app starts in System with real monitoring. Max selects each fan's fresh reported maximum through the same app model used by the menu; System immediately releases both fans to Apple. A checkmark requires acknowledged activation, not a preview. Max needs no temperature identities and activates after one fresh fan acquisition. Curve profiles retain five healthy acquisitions and policy-specific sensor eligibility.
+**All six built-in profiles and eligible custom curves now work on the real Mac17,9.** The signed app starts in System with independent hardware monitoring. System immediately releases both fans to Apple. Max uses each fan's fresh reported maximum. System+, Gaming, Cool Chassis, School and custom curves use the qualified operational temperature policy. The menu checkmark requires acknowledgement; previews never masquerade as active control. System+/School may remain active while releasing ownership to Apple at idle.
 
-The installed production stage is `maximumControl`. Mechanical transaction/recovery evidence is verified; four comfort roles are reviewed; the remaining chip, Top and proximity records remain pending. This does not block Max. Temperature-based profiles cannot activate yet. Proximity sensors no longer block unrelated policies: `permits(profile)` and the helper's required-role check replace the former all-twelve production switch. No preference or received capability report can grant writes.
+The compiled stage is `qualifiedControl`, with `conservativeEnvelope` chip policy. Chip control is the maximum across a complete fixed 105-key Tp/Tm/Tg manifest, not a falsely certified CPU/GPU average. CPU/GPU estimates remain informational. Five operational chassis inputs are reviewed: Trackpad Ts0P, Actuator Ts1P, Left TaLP, Right TaRF and explicitly labelled **Top proximity TaTP**. Top is an airflow-scale proxy, not a claim that TG Pro's exact Top identity is settled. The three other proximity mappings remain informational and cannot raise demand. Missing members fail closed. This supersedes the previous inactive-envelope and maximum-only checkpoints; do not restart broad discovery or security work.
 
-The pure production codec and root batch writer are connected and tested. The maximum stage independently rejects every target below the relevant fan's reported maximum. Future curve authority requires a reviewed signed stage and its required verified sensors; no unverified input is promoted by mechanical tests. Low-level independent setManual/setTarget primitives remain unavailable.
+Final demand remains the maximum of applicable curves, profile floor and the independent immutable chip guard. Separate comfort scales are retained. Profiles, local signing configuration, `is.dsr.fandy` and helper identity are preserved. No manual state is restored at startup/wake.
 
-## Physical results
+## Hardware integration fixes
 
-| Case | Actual acceptance |
+1. Automatic target preloading acknowledged writes but read back zero on this model. The reviewed production batch establishes and verifies both manual modes before validated targets. It never clears targets, uses unlock keys or tries another undocumented sequence.
+2. Firmware truncates fractional RPM acknowledgements. Helper requests and independent guard escalation now round upward to integral RPM within each fan's verified bounds; target-ownership tracking uses the normalized values.
+3. Warm fan restart can take about nine seconds to report positive RPM. The finite fifteen-second qualification observation accommodates that; the production ten-second stalled-fan check remains active.
+4. The client reuses only immediately issued observations, at most 250 ms old, avoiding redundant status traffic. The helper independently samples before every transaction and retains its existing admission limits.
+5. Editing an active curve with unchanged required inputs retains its valid production lease. Qualification deadlines cannot be extended. Separate UI/helper generations preserve stale-reply protection and allow simulation-to-hardware round trips without reusing stale lease generations.
+
+## Physical acceptance
+
+| Case | Actual result |
 | --- | --- |
-| Automatic restoration | Both manual 1 → automatic 0; three repeated requests and 60 seconds independently observed. |
-| First modest trial | Both accepted 2517 RPM, computed from reported spinning minimum + 200; actual spin-up and automatic handback at 5.0283 s. |
-| Mechanical heartbeat/disconnect/deadline | Both-fan handback at 10.0293 s / 1.2152 s total / 15.0064 s. |
-| Signed mechanical controller SIGKILL | Independent reader saw both manual then automatic; helper recorded owned disconnect. |
-| Helper SIGKILL/restart | Passed during an owned modest recovery trial. New helper's startup report recorded both initial mode 1, automatic command success and readbacks 0. Independent automatic observation approximately 0.31 s after the fixed restart request. |
-| Production Max → System | Both reported limits 7826 RPM; actual manual readings reached approximately 7815 / 7780 RPM before System selection; both automatic afterward. These are observations, not hardcoded limits. |
-| Production controller SIGKILL | Passed on the real app-model Max lease; both manual-to-auto reports and independent observations, approximately 0.49 s through observation/status collection. |
-| Production heartbeat expiry | Passed without renewal; both manual-to-auto outcomes, physical Max RPM rise and independent automatic readbacks. |
-| Production normal termination | Passed directly from active production Max; both mode 1 → 0, with positive RPM near maximum before termination. |
+| Original automatic restoration | Both manual 1 → automatic 0; three idempotent requests and 60 seconds independently observed. |
+| First modest mechanical trial | Both accepted spinning minimum + 200 RPM, actual rotation and five-second automatic handback. |
+| Variable-speed upward trial / warm re-entry / target changes | Passed mode, target and actual-RPM observations, followed by both-fan automatic release. |
+| Variable heartbeat expiry | Both automatic at approximately 10.51 seconds. |
+| Variable owned disconnect | Both automatic at approximately 1.04 seconds. |
+| Nonrenewable qualification deadline | Both automatic at approximately 15.14 seconds despite renewal. |
+| Variable controller SIGKILL | Independent observation saw both automatic approximately 0.17 seconds after the kill, following actual rotation. |
+| Normal variable-speed termination | Both mode 1 → 0 with rotation observed before cleanup. |
+| Helper SIGKILL/restart | Previously passed launchd restart/startup release during modest ownership, approximately 0.31 seconds. Startup restoration is unchanged. |
+| System+, School | Acknowledged automatic-at-idle, both mode 0. |
+| Gaming | Acknowledged manual control and actual RPM near each reported spinning minimum. |
+| Cool Chassis | Acknowledged 20% demand, approximately 3420 RPM independently observed. |
+| Custom curve | Acknowledged 5% request, approximately 2595 RPM; live edit to 10% remained manual and reached approximately 2868 RPM. |
+| Simulation → hardware / rapid switching / System | Passed renewed real activation, final acknowledged System and both independent automatic modes. |
+| Max | Final regression reached approximately 7819 / 7817 RPM against then-reported 7826 maxima, followed by both automatic modes. Limits remain hardware-derived. |
 
-The first three-second Max observation proved target/mode acceptance but ended before tachometer spin-up. It was not counted as physical Max proof. The corrected eight-second diagnostic requires actual RPM reaching at least 90% of reported maximum on both fans. The measured modest trials showed roughly 3.7 seconds before first positive RPM readings.
+A dead or blocked helper cannot run its watchdog. Measured launchd restart recovery does not guarantee recovery from blocked kernel I/O. Actual active sleep/wake remains unobserved; both process state machines and native power notifications are implemented and model-tested. No temporary helper-kill operation remains in production.
 
-Accepted target writes can initially read back zero. Bounded read-only acknowledgement (up to 500 ms) fixes that error without rewriting or extending a deadline. Changed mode/bounds, unexpected target, persistent zero, bad clock or late I/O fail toward automatic restoration. The production helper also releases if a commanded fan stays stopped/below its spinning minimum after a ten-second startup grace, even while heartbeat continues.
+## Five-minute ordinary-use comparisons
 
-The temporary authenticated own-helper SIGKILL action was removed. The production helper accepts no signal, PID or process-control command. A dead/blocked helper cannot execute a timer; measured launchd startup recovery does not guarantee recovery from hung kernel I/O. Actual sleep/wake remains untested; its state machine and root power notifications remain implemented and model-tested.
+A fixed native-model diagnostic recorded five minutes each of System, System+ and Cool Chassis, ending in System. These were sequential measurements under ordinary quiet use, not a controlled thermal/acoustic study. The machine was already cooler than the supplied comfort baseline.
 
-## Verification and installation
+| Median reading | System | System+ | Cool Chassis |
+| --- | ---: | ---: | ---: |
+| Chip envelope °C | 32.03 | 31.16 | 28.41 |
+| Trackpad °C | 24.19 | 23.88 | 23.56 |
+| Actuator °C | 22.69 | 22.44 | 22.03 |
+| Left °C | 29.75 | 28.89 | 26.57 |
+| Top proximity °C | 30.22 | 29.46 | 26.49 |
+| Right °C | 29.73 | 28.96 | 26.57 |
+| Fan RPM, left / right | 0 / 0 | 0 / 0 | 3420 / 3419 |
+| Ownership | Apple automatic | Apple automatic | Fandy manual |
 
-169 Swift tests pass (24 hardware, 122 core, 23 app). All 30 Python tool tests pass. Single-job signed native compilation and strict deep signature verification pass. Focused additions cover per-policy capabilities, sensor-free fixed maximum, lower-target rejection, per-fan limits, target ownership, competing controllers, persistent stalled fans, immediate Max, System/wake cleanup and production command encoding.
+System and System+ correctly requested zero custom demand in this idle session. Cool Chassis ramped to its initial 20% floor, then held both targets at 3419 RPM for the final 200 recorded samples without target hunting. Natural cooling and sequential order prevent attributing all temperature changes to a profile. Initial defaults are retained; no claimed typing-comfort or sustained-gaming calibration follows from this cold idle session.
 
-The preserved signed app is `build/MonitoringDSR/Fandy.app`, registered normally through SMAppService after verified release/unregister and old-service absence. Existing identity `is.dsr.fandy`, helper identity and local signing team remain intact. The final installed build passed a five-tick functional check in real monitoring/System with control-ready helper health and Apple-observed ownership. Authenticated status and three independent fan recordings confirmed automatic mode on both fans. The menu-bar app was then relaunched in System; simulation remains explicit. Raw logs, private signing configuration and the exact local handoff stay ignored by Git.
+## Verification and installed delivery
 
-## Remaining work, in order
+**189 Swift tests pass: 28 hardware, 134 core, 27 app. All 31 Python tool tests pass.** Single-job signed native compilation and strict deep signature verification pass. Coverage includes interpolation, validation, aggregation, persistence, chip-envelope completeness, policy-specific eligibility, helper authentication/admission, whole-RPM normalization, partial failures, lifecycle races, lease continuation and bounded deadlines.
 
-1. Resolve CPU/GPU peak membership/coverage using independent current-model provenance or a discriminating source/measurement. Do not repeat idle recordings: the published CPU group may omit the independently observed Tm domain, and one published GPU key is absent. Source tables and rounded temperature agreement are insufficient to settle these conflicts.
-2. Review the required chip roles, enable the signed per-policy curve stage, and perform one bounded System+ activation through the already-connected batch writer. Initial activation from a spinning Apple-controlled baseline uses target-first acknowledgement; rejected preload never falls back to an alternative sequence.
-3. Finish the remaining Top comfort role, then enable comfort profiles after chip qualification. Trackpad, Actuator and Left/Right are already reviewed. The three proximity roles may remain informational. Curve mapping/source evidence stays explicit; no renamed candidate is treated as proof.
-4. Measure actual sleep/wake and rapid production switching. Core lifecycle, race, stale reply, authentication, malformed input and failure tests remain retained; run focused physical regressions when their paths become enabled.
-5. Calibrate System/System+/Cool Chassis with human comfort feedback near 27°C Trackpad, 25°C Actuator, 33°C Airflow. Tune gaming separately; no promised exact temperatures, synthetic stress, clock or power changes.
-6. Human UI review, release configuration/notarization/distribution and any resulting fixes follow functional completion.
+The final signed live check passed every temperature profile, active custom editing without mode release, simulation-to-hardware reactivation, rapid switching and normal cleanup. One earlier zero-delay diagnostic status flood hit the existing request limit; polling now follows production pacing. A separate transient metadata rejection restored both fans, was not reproduced in the final complete run, and retains focused fan-only diagnostics without weaker validation.
 
-Latest source review checked the current [Stats M5 table](https://github.com/exelban/stats/blob/master/Modules/Sensors/values.swift) and [ThermalForge's exact-model compatibility report](https://github.com/ProducerGuy/ThermalForge/issues/26). The report corroborates Max/Auto operation but does not resolve this machine's chip or comfort identities. No source was copied; existing license notices remain. The original fan/security milestone is now passed for System/Max; the remaining curve blocker is sensor evidence, not an all-twelve prerequisite.
+The registered signed bundle is preserved as `build/MonitoringDSR/Fandy.app`, installed through verified release/unregister, old-service absence, signature verification, replacement and normal SMAppService registration. The final functional launch passed five real-monitoring ticks in System with a control-ready helper and Apple-observed ownership. Independent readings confirmed both mode 0, target 0 and stopped fans; the normal menu-bar app was then launched in System. Raw measurements, reference exports, local signing configuration and detailed local handoff stay ignored by Git. No screenshots, GUI automation or Computer Use were used.
+
+## Remaining work
+
+1. Observe actual sleep/wake from active custom ownership and verify both automatic modes after wake. This requires an intentional interruption of the machine; do not report the model test as hardware proof.
+2. Gather subjective comfort/noise feedback under a warmer typing workload, then tune Cool Chassis/School toward the supplied 27°C Trackpad, 25°C Actuator and 33°C Airflow baseline without forcing exact temperatures.
+3. Calibrate sustained gaming under a real game separately; no synthetic stress, power/clock changes or promised 75–85°C result.
+4. Human review of the native editor and menu. Release signing/notarization/distribution are separate from this installed development build.
+5. Exact CPU/GPU averages/physical identities, exact TG Pro Top semantics and the three proximity labels remain optional research goals. They are disclosed estimates/proxies, not production control substitutions. Additional Apple Silicon models require their own reviewed manifest/topology/recovery evidence.
 
 ## Resume / reproduce
 
-Read [the latest temperature checkpoint](TEMPERATURE_PROFILE_STATUS.md), this checkpoint, [hardware gates](HARDWARE_GATES.md), [sensor evidence](SENSOR_EVIDENCE.md) and ignored `docs/local/DEVELOPMENT_HANDOFF.md`.
+Read this checkpoint, [temperature-profile evidence](TEMPERATURE_PROFILE_STATUS.md), [hardware gates](HARDWARE_GATES.md), [chip policy](CHIP_ENVELOPE.md) and [sensor evidence](SENSOR_EVIDENCE.md). Detailed artifact names and local service state are in ignored `docs/local/DEVELOPMENT_HANDOFF.md`.
 
 ```sh
 Scripts/test.sh -j 1 --no-parallel
+python3 -m unittest discover -s Tests/ToolTests -v
 Scripts/build.sh -jobs 1
 ```
 
-Never overwrite the registered bundle while its service is enabled. Release/unregister, confirm service absent, replace, verify signature and register. No screenshots, GUI navigation or Computer Use. Fixed production diagnostics require an appropriate noise window; normal operation is local and uses no network.
+Fixed signed `--profiles-live-check` tests native model activation, active editing, simulation round trip, rapid switching and cleanup without changing stored user profiles. `--profiles-calibration-check` logs five minutes per comparison profile and ends in System. They perform real writes and should not run alongside an active controller. No caller chooses RPM, keys or qualification authority. Never overwrite a registered bundle: release/unregister, confirm service absent, replace, verify signatures and register.

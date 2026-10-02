@@ -1,6 +1,4 @@
-> Temperature integration update: [current results and blockers](docs/TEMPERATURE_PROFILE_STATUS.md). Four comfort roles are reviewed. The curve-qualification stage and helper-owned 15-second deadline are implemented/tested but inactive in the delivered maximum-only build.
-
-> Current production authority: `maximumControl` on the reviewed Mac17,9. System/Max operate physically. Required-role eligibility replaces the all-twelve production gate; temperature profiles remain pending their chip/comfort evidence. Historical stage descriptions below describe the qualification path, not extra prerequisites for Max.
+> Current delivery: [real temperature profiles and measured recovery](docs/TEMPERATURE_PROFILE_STATUS.md). The signed production policy uses a fixed chip envelope and five operational chassis inputs; exact CPU/GPU averages remain estimates, and Top is explicitly proximity.
 
 # Architecture
 
@@ -10,7 +8,7 @@
 
 `FandyFanHelper` is a separate, minimal root launch daemon bundled under `Contents/Library/HelperTools`. It privately owns verified restoration and a validated batch writer. Independent manual-mode/target primitives reject. Production Max is enabled; curves require policy-specific sensor evidence. It exposes five fixed XPC methods, authenticates the app through a public code-signing requirement, serializes I/O with a watchdog and IOPM notifications, and maintains no on-disk lease or target. The GUI never runs as root.
 
-The Xcode app target embeds the helper and its `Contents/Library/LaunchDaemons/is.dsr.fandy.fan-helper.plist`. The app uses `SMAppService.daemon` for registration after qualification. User approval of background service registration follows macOS's native flow. Production System/Max registration is enabled; temperature-profile authority remains disabled; no legacy SMJobBless, custom kernel code or generic root operations are used.
+The Xcode app target embeds the helper and its `Contents/Library/LaunchDaemons/is.dsr.fandy.fan-helper.plist`. The app uses `SMAppService.daemon` for registration after qualification. User approval of background service registration follows macOS's native flow. Production System/Max and eligible temperature-profile registration are enabled; no legacy SMJobBless, custom kernel code or generic root operations are used.
 
 ## Hardware facts and limits
 
@@ -18,13 +16,13 @@ AppleSMC userspace transactions, temperature identities, mode semantics and fan 
 
 Read-only discovery enumerates #KEY/key-at-index, retains type and raw bytes, decodes explicitly supported representations, and rejects non-finite temperatures. Unknown types remain unknown. ioft interpretation is exploratory and is not used for the active sensor registry. Friendly mappings are scoped to a machine model and individually carry qualification status. Missing keys never become zero. Other models can gain separate verified registries without changing views or the engine; they currently fail closed.
 
-CPU and GPU groups have average display readings and peak control readings. Candidate membership follows the open-source Stats M5 list, not broad prefix matching. TG Pro reports four GPU regions here; the relationship to the candidate SMC GPU sensors has not been proved. HID supplies PMU-labelled readings, not a verified substitute for CPU/GPU peaks or the comfort sensors.
+CPU/GPU averages and peaks are informational estimates with separately recorded candidate membership. Production chip control uses the complete fixed 105-key model manifest described in [CHIP_ENVELOPE](docs/CHIP_ENVELOPE.md); runtime prefix matching never chooses membership. TG Pro reports four GPU regions here; the relationship to the candidate SMC GPU sensors has not been proved. HID supplies PMU-labelled readings, not a verified substitute for CPU/GPU peaks or the comfort sensors.
 
 ## Policy and curves
 
 A version-1 profile contains ID/name/kind, built-in identity/default revision, four possible enabled curves, a normalized floor and an automatic-at-idle setting. Each curve contains 2–32 UUID nodes with finite ordered temperatures (0–125°C) and nondecreasing percentages (0–100). Linear interpolation saturates at either endpoint. Invalid drafts are never activated.
 
-The chip curve uses max(CPU peak, GPU peak). Airflow uses max(Left, Top, Right). Trackpad and Actuator each evaluate their own temperature scale. Proximity sensors are display/logging only in v1, preventing charging heat alone from controlling comfort. Final demand is max(all enabled curve requests, profile floor, immutable chip guard). No comfort demand can suppress chip cooling.
+On Mac17,9 the chip curve uses the separately named Chip envelope. The general model also supports independently qualified CPU/GPU peaks on future registries. Airflow uses max(Left, Top proximity, Right). Trackpad and Actuator each evaluate their own temperature scale. Proximity sensors are display/logging only in v1, preventing charging heat alone from controlling comfort. Final demand is max(all enabled curve requests, profile floor, immutable chip guard). No comfort demand can suppress chip cooling.
 
 Cool Chassis uses the user's comfortable baseline (Trackpad 27°C, Actuator 25°C, Airflow 33°C) and warmer observation (31°C, 29°C, 43–44°C) as two empirical calibration points. Initial trackpad nodes are 27/20%, 29/25%, 31/40%, 34/60%, 38/85%, 42/100%; Actuator temperatures are 2°C lower. Airflow has 33/20%, 36/25%, 40/40%, 44/55%, 50/75%, 60/100%. These are editable starting points, not final measured acoustic defaults. School's comfort demands are max(0, Cool Chassis percentage / 2 - 10).
 
@@ -50,7 +48,7 @@ HardwareCapabilities replaces global qualification booleans. Its immutable model
 
 ShadowProfileEngine creates a private informational copy of candidate readings, evaluates the existing engine and returns ProfilePreview. This type carries percentages and provenance, but no fan targets or control effects. Strict control evaluation continues to reject unverified readings. Missing, stale, corrupt and nonfinite inputs block previews too. Profile edits update preview demand without taking ownership.
 
-The compiled stage is maximumControl. The helper can release automatic mode and accept production fixed-Max leases. The mechanical endpoint and temperature-profile leases are disabled. Wire-version-2 status includes optional capability, restoration and retained startup-restoration reports. The registered bundle is preserved independently of build output.
+The compiled stage is qualifiedControl. The helper can release automatic mode, accept fixed-Max leases, and accept temperature leases with their complete verified operational inputs. Finite qualification authority is disabled after recovery acceptance. Wire-version-2 status includes optional capability, restoration and retained startup-restoration reports. The registered bundle is preserved independently of build output.
 
 `ManualQualificationPlan` and `ManualQualificationSession` are disconnected historical pure qualification models. They use separate `canQualifyManual` authority, fixed helper-derived +200 RPM targets, a five-second initial deadline, a fifteen-second recovery deadline and a ten-second heartbeat limit. They check all required roles, fresh acquisition, ownership and unchanged fan topology. No XPC endpoint or physical writer invokes them yet; revocation is a restoration decision, not a physical-success report.
 
@@ -58,11 +56,11 @@ Restoration reports contain each fan's readback and error, retain partial succes
 
 The development-only FandyMeasurement executable reads SMC independently and has no XPC or fan writer. A fixed phase schedule permits at most two 30-second low-duty stimuli, guarded by fresh automatic fan modes, complete candidate chip values and a75°C diagnostic ceiling. Core admission/schedule logic is tested; the tool is excluded from the bundled app/helper.
 
-## Finite mechanical trial
+## Historical finite mechanical trial
 
 `RecoveryObservationReader` independently samples the candidate registry and discovered positive flt4 Tp/Tm/Tg keys; its diagnostic peak is used only during finite tests, never to qualify roles. `RecoveryTrialCoordinator` receives the root-only IO, clock, sampler and restoration delegate. It owns a single connection/session, one initial5-second trial, at most eight15-second recovery trials, a10-second heartbeat and a nonrenewable absolute deadline. It checks acquisitions before/after each operation and releases on partial writes, changed ownership/target/bounds, sensor faults, disconnection, malformed owned input or power events.
 
-Spinning trials preload both targets under automatic mode before activation. A distinct stopped path requires both speeds/targets0 and below60°C diagnostic admission, then mode1/target per fan. It cannot be entered as a fallback after preload failure. The exact codec queries and verifies metadata on the writing connection before command6. Transcripts retain operation times/readbacks and the first restoration report separately from later idempotent releases. Client connection/operation tokens reject late responses.
+The historical mechanical path required spinning trials to preload both targets under automatic mode before activation. Subsequent current-model curve measurements rejected that preload behavior; the production batch uses the reviewed mode-first sequence below. A distinct stopped path requires both speeds/targets0 and below60°C diagnostic admission, then mode1/target per fan. It cannot be entered as a fallback after preload failure. The exact codec queries and verifies metadata on the writing connection before command6. Transcripts retain operation times/readbacks and the first restoration report separately from later idempotent releases. Client connection/operation tokens reject late responses.
 
 The signed app's CLI diagnostics observe fan modes/RPM independently and require both-fan manual handback for acceptance. They accept no hardware parameters. Early zero target readbacks were stale. A bounded 500 ms observation, without another write or changed deadline, acknowledged the target and passed modest manual/recovery tests after exclusive ownership was established. GUI startup remains monitoring/System; no menu profile invokes the trial. Dead/blocked-helper timers remain ineffective and launchd startup handback has passed during a modest manual trial; blocked I/O recovery is not guaranteed.
 
@@ -70,6 +68,16 @@ The current mechanical path enforces a helper-side check for TG Pro's known priv
 
 ## Production maximum integration
 
-The normal menu and fixed diagnostics share AppModel → ControlMachine → FanXPCClient → HelperCoordinator → AppleFanHardware. Empty required roles designate fixed maximum, never arbitrary sensor-free control. The helper independently validates actual fan limits, owns the lease and checks target ownership. Its batch writer validates each canonical mode/target metadata field, uses measured stopped mode-first admission or acknowledged automatic preload, and restores both on partial failure. The pure SMCProfileWriter has injected transport tests for range, type, precision and byte construction; curve writes remain behind signed role qualification.
+The normal menu and fixed diagnostics share AppModel → ControlMachine → FanXPCClient → HelperCoordinator → AppleFanHardware. Empty required roles designate fixed maximum, never arbitrary sensor-free control. The helper independently validates actual fan limits, owns the lease and checks target ownership. Its batch writer validates each canonical mode/target metadata field, establishes and verifies both manual modes before targets, and restores both on partial failure. The pure SMCProfileWriter has injected transport tests for range, type, precision and byte construction; curve writes remain behind signed role qualification.
 
 Max needs one fresh fan acquisition; curves retain five. Post-I/O acquisition validates required inputs and unchanged limits. Heartbeat is ten seconds and status is not renewal. A ten-second spin-up grace detects persistent stopped fans without rejecting the observed initial tachometer delay. Quit, System, disconnection, sleep/wake and faults revoke before restoration; startup never resurrects a lease. The temporary helper-kill diagnostic is absent from production.
+
+## Production temperature integration
+
+The helper computes a fresh independent chip guard from the complete fixed 105-key envelope. Each required member must be typed, plausible and freshly acquired; no estimate/partial group substitutes on failure. Top proximity remains a mandatory airflow-group input with its uncertainty disclosed. Profile and helper escalation targets round upward to whole RPM within each fan's verified integral limits, and acknowledgement tracking uses normalized values. Invalid normalization restores both fans. Curves themselves retain continuous interpolation.
+
+The reviewed transaction establishes both manual modes before writing validated targets. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
+
+Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKILL and normal quit passed. Live profile activation, rapid switching and handback passed. Earlier helper-restart evidence remains applicable because startup restoration is unchanged. A dead or blocked helper cannot run its watchdog; active physical sleep/wake still needs an observed test.
+
+Profile edits with unchanged required inputs may retain an existing valid production lease, avoiding an unnecessary release/re-entry. A finite qualification lease can never be extended that way. UI generations fence acknowledgements separately from monotonically increasing helper generations; a simulation round trip cannot reuse an old connection generation. Every retained-lease target is still independently validated by the helper.

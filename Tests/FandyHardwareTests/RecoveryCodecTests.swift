@@ -180,3 +180,38 @@ private func automaticMetadata() -> DiscoveredSensor {
     #expect(throws: (any Error).self) { try SMCProfileWriter.target(FanTarget(0, 3000), fan: fan, metadata: targetMetadata(4100), transport: io) }
     #expect(io.commands.count == count)
 }
+
+@Test func automaticAdmissionUsesReviewedModeFirstForSpinningFanWithoutClearingTarget() throws {
+    let io = RecoveryTransport()
+    var fan = Fan(id: 0, min: 2317, max: 7826, actual: 2500, target: 2600)
+    try SMCProfileWriter.startAutomatic(fan: fan, mode: automaticMetadata(), previous: targetMetadata(2600), transport: io)
+    fan.mode = .manual
+    try SMCProfileWriter.target(FanTarget(0, 2700), fan: fan, metadata: targetMetadata(2600), transport: io)
+    #expect(io.commands.count == 2)
+    #expect(Array(io.commands[0][0..<4]) == [0x64,0x6d,0x30,0x46])
+    #expect(io.commands[0][48] == 1)
+    #expect(SMCDecoder.decode(type: "flt ", bytes: Array(io.commands[1][48..<52])) == 2700)
+    let count = io.commands.count
+    for mode in [FanMode.system, .unknown, .manual] {
+        fan.mode = mode
+        #expect(throws: (any Error).self) { try SMCProfileWriter.startAutomatic(fan: fan, mode: automaticMetadata(), previous: targetMetadata(2600), transport: io) }
+    }
+    fan.mode = .automatic
+    #expect(throws: (any Error).self) { try SMCProfileWriter.startAutomatic(fan: fan, mode: automaticMetadata(), previous: targetMetadata(0), transport: io) }
+    var wrong = automaticMetadata(); wrong.attributes = 0
+    #expect(throws: (any Error).self) { try SMCProfileWriter.startAutomatic(fan: fan, mode: wrong, previous: targetMetadata(2600), transport: io) }
+    #expect(io.commands.count == count)
+}
+
+
+@Test func productionNormalizationRoundsUpWithinDifferentPerFanLimits() throws {
+    let fans = [Fan(id: 0, min: 2317, max: 7826, actual: 3000), Fan(id: 1, min: 2200, max: 7400, actual: 3000)]
+    let result = try SMCProfileWriter.normalizedTargets([FanTarget(0, 2867.9), FanTarget(1, 7399.8)], fans: fans)
+    #expect(result == [FanTarget(0, 2868), FanTarget(1, 7400)])
+    #expect(try SMCProfileWriter.normalizedTargets([FanTarget(0, 7826), FanTarget(1, 2200)], fans: fans) == [FanTarget(0, 7826), FanTarget(1, 2200)])
+    for targets in [[FanTarget(0, .nan), FanTarget(1, 3000)], [FanTarget(0, 7826.1), FanTarget(1, 3000)], [FanTarget(0, 2316.9), FanTarget(1, 3000)], [FanTarget(0, 3000), FanTarget(0, 3000)]] {
+        #expect(throws: (any Error).self) { try SMCProfileWriter.normalizedTargets(targets, fans: fans) }
+    }
+    var unknown = fans; unknown[0].maximumRPM = 7826.5
+    #expect(throws: (any Error).self) { try SMCProfileWriter.normalizedTargets([FanTarget(0, 3000), FanTarget(1, 3000)], fans: unknown) }
+}

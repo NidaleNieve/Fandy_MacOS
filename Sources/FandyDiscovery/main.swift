@@ -11,7 +11,17 @@ struct Report: Codable {
 }
 import FandyCore
 let args = Array(CommandLine.arguments.dropFirst())
-if args.contains("--help") { print("fandy-discover [--prefix T|F] [--samples N] [--interval seconds]\nRead-only SMC discovery. JSON lines on stdout; no fan writes."); exit(0) }
+if args.contains("--help") { print("fandy-discover [--prefix T|F] [--samples N] [--interval seconds]\nfandy-discover --fans-only\nRead-only SMC discovery. JSON lines on stdout; no fan writes."); exit(0) }
+if args == ["--fans-only"] {
+    do {
+        let reader = try SMCReader()
+        let report = Report(timestamp: ISO8601DateFormatter().string(from: Date()), model: HardwareSnapshotReader.machineModel(),
+                            os: ProcessInfo.processInfo.operatingSystemVersionString, fans: try reader.fans(), keys: [], hid: [],
+                            note: "Independent read-only fan observation; no helper connection or fan writes.")
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        var data = try encoder.encode(report); data.append(10); FileHandle.standardOutput.write(data); exit(0)
+    } catch { FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8)); exit(1) }
+}
 func option(_ name: String) -> String? { guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }; return args[i+1] }
 let samples = Int(option("--samples") ?? "1") ?? 0
 let interval = Double(option("--interval") ?? "1") ?? .nan

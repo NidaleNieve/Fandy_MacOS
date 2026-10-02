@@ -7,8 +7,10 @@ public protocol FanHardwareIO: Sendable {
     func setTarget(fanID: Int, rpm: Double) throws
     func readMode(fanID: Int) throws -> FanMode
     func applyValidatedTargets(_ targets: [FanTarget]) throws
+    func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget]
 }
 public extension FanHardwareIO {
+    func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { targets }
     func fanIDsForRestoration() throws -> [Int] { try enumerateFans().map(\.id) }
     func applyValidatedTargets(_ targets: [FanTarget]) throws {
         for target in targets {

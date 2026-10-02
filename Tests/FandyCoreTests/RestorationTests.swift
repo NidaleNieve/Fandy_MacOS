@@ -3,6 +3,8 @@ import Testing
 @testable import FandyCore
 // Each test owns its spy. Production serializes I/O; unchecked Sendable supports that protocol boundary.
 final class FanSpy: FanHardwareIO, @unchecked Sendable {
+    var normalize: ([FanTarget]) throws -> [FanTarget] = { $0 }
+    func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { try normalize(targets) }
     var fans=[Fan(id:0,min:2000,max:8000,actual:3000,mode:.manual),Fan(id:1,min:2200,max:7400,actual:3000,mode:.manual)]
     var modeReads: [Int: Int] = [:]
     var conflictOnFinalRead = false
@@ -178,4 +180,26 @@ func qualifiedCapabilities(stage: HardwareStage = .qualifiedControl) -> Hardware
     HardwareCapabilities(model: "Test", stage: stage,
         sensors: HardwareCapabilities.requiredRoles.map { SensorEvidence(role: $0, keys: ["TEST"], state: .verified, source: "Injected test evidence", limitation: "Not hardware qualification") },
         topology: .verified, automaticRestoration: .verified, manualTransaction: .verified)
+}
+
+@Test func normalizedAcknowledgementsAndIndependentGuardUseTheSamePhysicalTargets() throws {
+    let spy = FanSpy(); spy.normalize = { $0.map { FanTarget($0.fanID, ceil($0.rpm)) } }
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(), read: {
+        var snapshot = spy.snapshot()
+        if spy.hot { for i in snapshot.sensors.indices { snapshot.sensors[i].celsius = 78.2 } }
+        return snapshot
+    }, clock: { spy.now })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: owner)
+    let snapshot = coordinator.status().snapshot!
+    try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id, targets: [FanTarget(0, 3000.2), FanTarget(1, 3000.7)]), owner: owner)
+    #expect(coordinator.status().fault == nil)
+    #expect(spy.fans.allSatisfy { $0.targetRPM == 3001 })
+    spy.hot = true; spy.now += 1; coordinator.watchdog()
+    #expect(coordinator.status().fault == nil)
+    #expect(spy.fans.allSatisfy { $0.targetRPM! == ceil($0.targetRPM!) && $0.targetRPM! > 3001 })
+    spy.normalize = { $0.map { FanTarget($0.fanID, $0.rpm - 1) } }
+    let fresh = coordinator.status().snapshot!
+    #expect(throws: ControlError.invalidFan) { try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: fresh.id, targets: [FanTarget(0, 3000.2), FanTarget(1, 3000.7)]), owner: owner) }
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic })
 }

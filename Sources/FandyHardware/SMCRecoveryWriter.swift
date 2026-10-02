@@ -124,14 +124,35 @@ public enum RecoveryTargetReadback {
 /// Production codec, injected and pure. The root coordinator separately admits each policy.
 /// Uses only the two reviewed fan IDs and their freshly validated limits/metadata.
 public enum SMCProfileWriter {
-    public static func startStopped(fan: Fan, mode: DiscoveredSensor, previous: DiscoveredSensor,
-                                    transport: any SMCStructTransport) throws {
+    /// Observed Mac17,9 targets acknowledge whole RPM. Round upward so quantization
+    /// cannot attenuate either the profile request or the immutable chip guard.
+    public static func normalizedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> [FanTarget] {
+        guard targets.count == fans.count, Set(targets.map(\.fanID)) == Set(fans.map(\.id)),
+              Set(targets.map(\.fanID)).count == targets.count else { throw ControlError.invalidFan }
+        return try targets.map { target in
+            guard let fan = fans.first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
+            try fan.validate()
+            guard fan.minimumRPM.rounded() == fan.minimumRPM, fan.maximumRPM.rounded() == fan.maximumRPM,
+                  target.rpm.isFinite, target.rpm >= fan.minimumRPM, target.rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
+            return FanTarget(fan.id, min(fan.maximumRPM, ceil(target.rpm)))
+        }
+    }
+    /// Mac17,9 automatic preloading does not retain its target. Reviewed production
+    /// admission therefore writes manual once, verifies it, then immediately writes the
+    /// validated target in the helper batch. No alternate sequence or unlock key fallback.
+    public static func startAutomatic(fan: Fan, mode: DiscoveredSensor, previous: DiscoveredSensor,
+                                      transport: any SMCStructTransport) throws {
         try fan.validate()
-        guard [0, 1].contains(fan.id), fan.mode == .automatic, fan.actualRPM == 0, fan.targetRPM == 0,
+        guard [0, 1].contains(fan.id), fan.mode == .automatic,
               mode.key == "F\(fan.id)md", mode.type == "ui8 ", mode.size == 1, mode.attributes == 208,
-              mode.bytes == [0], mode.error == nil else { throw HardwareError.invalidMetadata }
+              mode.bytes == [0], mode.value == 0, mode.error == nil else { throw HardwareError.invalidMetadata }
         try validateTargetMetadata(previous, fan: fan)
         try SMCRecoveryWriter.write(key: mode.key, type: mode.type, attributes: mode.attributes, bytes: [1], transport: transport)
+    }
+    public static func startStopped(fan: Fan, mode: DiscoveredSensor, previous: DiscoveredSensor,
+                                    transport: any SMCStructTransport) throws {
+        guard fan.actualRPM == 0, fan.targetRPM == 0 else { throw HardwareError.invalidMetadata }
+        try startAutomatic(fan: fan, mode: mode, previous: previous, transport: transport)
     }
     public static func target(_ target: FanTarget, fan: Fan, metadata: DiscoveredSensor, transport: any SMCStructTransport) throws {
         try fan.validate()

@@ -2,13 +2,9 @@
 
 A small native Apple Silicon macOS menu-bar fan controller with named profiles and editable temperature curves.
 
-**Current build: real System/Max control on the qualified Mac17,9, real monitoring, editable profiles and shadow previews.** Both fans reached their reported maximum and returned to Apple automatic control. Modest manual operation, heartbeat expiry, disconnect, signed controller SIGKILL and helper restart recovery passed. Temperature-based profiles remain in preview until their required chip/comfort inputs are qualified. See [the checkpoint](docs/DEVELOPMENT_STATUS.md).
+**Current build: real control with all built-in profiles and custom curves on the qualified Mac17,9.** System+, Cool Chassis, Gaming and School use independently read hardware temperatures. System releases control to macOS; Max uses each fan's actual reported maximum. The signed helper, watchdog, crash recovery and native editor are integrated. See [delivery status](docs/DEVELOPMENT_STATUS.md).
 
-The former bounded mechanical-test endpoint is disabled in the production maximum stage. Its qualification results cannot grant authority to temperature profiles. See [remaining sensor coverage](docs/SENSOR_EVIDENCE.md) and [bounded test preparation](docs/MANUAL_QUALIFICATION.md) for the exact blockers and next gate.
-
-See [temperature-profile progress and exact blockers](docs/TEMPERATURE_PROFILE_STATUS.md) and [the development checkpoint](docs/DEVELOPMENT_STATUS.md) for the current milestone and resumption order.
-
-A [conservative chip-envelope alternative](docs/CHIP_ENVELOPE.md) is now implemented and tested, but inactive pending the policy decision and bounded live curve recovery. It keeps CPU/GPU display estimates separate from its control input; it does not claim resolved individual core identities.
+Chip control uses a separately named conservative **Chip envelope** across a fixed 105-key model manifest. CPU/GPU averages remain labelled estimates. Chassis control uses Trackpad, Actuator, Left/Right airflow and an explicitly labelled **Top proximity** input. These are reviewed operational inputs, not a claim that every physical sensor identity is certified. [Sensor evidence and limitations](docs/SENSOR_EVIDENCE.md).
 
 ## Build and run
 
@@ -24,7 +20,7 @@ Open `Fandy.xcodeproj` and use the shared **Fandy** scheme. It has two native ta
 
 The app starts in the menu bar with its editor closed, in **System**, with **real hardware monitoring** enabled. Simulation is an explicit development option in Settings or the `--simulation` launch argument. Click the fan menu icon to select a profile in one click. **Edit Profiles…** opens the compact native editor. Drag a node, select it to edit exact °C/% values, or add/remove nodes. Invalid drafts stay visible but never replace the validated profile. Trackpad, Actuator and Airflow have separate comfort curves because their temperatures use different scales. Built-ins remain available; System and Max are immutable; other built-ins can be reset. Custom profiles support creation, duplication, renaming, deletion and reordering.
 
-Settings includes deterministic comfortable, warm chassis, gaming, GPU hot, sensor failure, stale sensor, disconnected helper and overheating scenarios. Monitoring is the default; readings remain labelled **candidate** until corroborated. Selecting a profile in the editor calculates a shadow demand, labeled as a preview with no fan commands. Unqualified profiles cannot activate from the menu or editor. Preview values never enter a control lease, and stale/missing inputs make the preview unavailable. A System checkmark is withheld if another application is visibly using manual fan mode. Selecting System requests verified automatic restoration. Firmware mode 3 is unqualified on this model and does not receive an Apple-ownership checkmark.
+Settings includes deterministic comfortable, warm chassis, gaming, GPU hot, sensor failure, stale sensor, disconnected helper and overheating scenarios. Real monitoring is the default. Reviewed control inputs are distinguished from informational CPU/GPU estimates and unresolved proximity candidates. Selecting a profile in the editor calculates a shadow demand, labeled as a preview with no fan commands. Unqualified profiles cannot activate from the menu or editor. Preview values never enter a control lease, and stale/missing inputs make the preview unavailable. A System checkmark is withheld if another application is visibly using manual fan mode. Selecting System requests verified automatic restoration. Firmware mode 3 is unqualified on this model and does not receive an Apple-ownership checkmark.
 
 ## Profiles
 
@@ -37,7 +33,7 @@ Settings includes deterministic comfortable, warm chassis, gaming, GPU hot, sens
 | Gaming | Progressively stronger chip cooling around 77–85°C. |
 | School | Gentler comfort demand with automatic mode at idle. |
 
-System and Max are operational on the qualified model. The four temperature profiles and custom curves are editable previews at this checkpoint. These are initial policies, not acoustically or thermally calibrated defaults. The immutable chip guard remains active for every custom profile. Neither System+ nor the comfort profiles multiply Apple's hidden demand. Manual 0% means a fan's reported spinning minimum; stopped fans are possible in Apple automatic mode.
+All six built-ins and eligible custom curves are operational on the qualified model. These are initial policies, not acoustically or thermally calibrated defaults. The immutable chip guard remains active for every custom profile. Neither System+ nor the comfort profiles multiply Apple's hidden demand. Manual 0% means a fan's reported spinning minimum; stopped fans are possible in Apple automatic mode.
 
 ## Read-only discovery
 
@@ -50,7 +46,7 @@ The discovery executable has no SMC write API. It logs temperature keys, metadat
 
 ## Restoration helper and diagnostics
 
-The current helper permits automatic mode 0 and a production Max lease on the observed Mac17,9 topology. An empty sensor requirement means fixed maximum only: the helper rejects any lower target. Temperature profiles require their own verified inputs and a separately qualified control stage. Restoration remains independent of temperatures. Startup and wake are System-first.
+The current helper permits automatic mode 0, fixed maximum leases and qualified temperature-profile leases on Mac17,9. An empty sensor requirement means fixed maximum only: the helper rejects lower targets. Temperature profiles require the compiled policy's complete, fresh operational inputs. Restoration remains independent of temperatures. Startup and wake are System-first.
 
 ```sh
 build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restoration-status
@@ -59,11 +55,11 @@ build/MonitoringDSR/Fandy.app/Contents/MacOS/Fandy --helper-restore
 
 The fixed `--helper-restoration-register` and `--helper-restoration-unregister` flags accept no hardware or payload arguments. Unregister restores first. Background registration uses SMAppService and native macOS approval; no custom root installer is used. The older `--helper-restoration-check` diagnostic is restricted to qualification builds: it performs three automatic-only requests and a 60-second independent observation, distinguishing real manual handback from idempotence. Use the production Max diagnostics below for the current control-capable build.
 
-The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed non-production helper with no active trial it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately. Four comfort roles are reviewed; unresolved chip inputs still block all temperature profiles.
+The signed development app also accepts `--helper-restoration-protocol-check`. Against a confirmed non-production helper with no active trial it sends fixed malformed/unqualified requests, checks reconnection and rejects a deliberately incorrect helper identity. It cannot accept caller-selected payloads or run against a manually qualified service. This is protocol verification, not live manual watchdog qualification. Settings exposes sensor-role, handback and manual/recovery verification separately. Six operational control inputs are reviewed; exact CPU/GPU averaging and three proximity identities remain informational research goals.
 
 Older recovery-stage builds used the signed app's fixed `--helper-recovery-initial`, `--helper-recovery-deadline`, `--helper-recovery-heartbeat`, `--helper-recovery-disconnect` and `--helper-recovery-hold` diagnostics. They accept no hardware/duration parameters and must wait for exclusive ownership. Initial deadline is5 seconds; subsequent mechanical trials are15 seconds with a10-second heartbeat timeout. [Exact admission and actual results](docs/MANUAL_QUALIFICATION.md).
 
-The production app has fixed `--profile-max-check`, `--profile-max-quit-check` and `--profile-max-heartbeat-check` diagnostics. These temporarily run Max, verify actual RPM, and verify System/termination/heartbeat handback. They accept no RPM, fan or duration arguments. They are development tests, not needed for normal use. The temporary own-helper SIGKILL diagnostic was removed after the restart test. Prepared curve diagnostics reject the current maximum-only build; their finite qualification authority remains inactive pending verified chip inputs.
+The production app has fixed `--profile-max-check`, `--profile-max-quit-check` and `--profile-max-heartbeat-check` diagnostics. These temporarily run Max, verify actual RPM, and verify System/termination/heartbeat handback. They accept no RPM, fan or duration arguments. They are development tests, not needed for normal use. The temporary own-helper SIGKILL diagnostic was removed after the restart test. The bounded curve-qualification stage is disabled in production after successful variable-speed recovery acceptance. Fixed `--profiles-live-check` and `--profiles-calibration-check` diagnostics exercise native model activation and ordinary-use logging without touching the user's stored profiles. The calibration records five minutes each of System, System+ and Cool Chassis and ends in System.
 
 The registered bundle is preserved separately from Xcode build output. Do not remove or overwrite it while registered. The original observation service was unregistered before replacement; its old diagnostic flags are retained only for observation builds.
 

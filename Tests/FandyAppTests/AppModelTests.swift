@@ -336,7 +336,7 @@ private actor MaximumClient: PrivilegedFanClient {
 }
 
 @Test @MainActor func curveDiagnosticArgumentsAreFixedAndCannotSelectHardware() throws {
-    for action in [HelperDiagnosticAction.curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold] {
+    for action in [HelperDiagnosticAction.curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold, .curveSpinning, .curveQuit] {
         #expect(try HelperDiagnosticAction.parse(["Fandy", action.rawValue]) == action)
         #expect(throws: (any Error).self) { _ = try HelperDiagnosticAction.parse(["Fandy", action.rawValue, "--rpm", "3000"]) }
         #expect(throws: (any Error).self) { _ = try HelperDiagnosticAction.parse(["Fandy", action.rawValue, "--duration", "9999"]) }

@@ -10,6 +10,7 @@ import FandyHardware
     private var lease: ControlLease?
     private var latest: HelperStatus?
     private var generation: UInt64?
+    private var helperGeneration: UInt64 = 0
     private var operationToken = UUID()
     private let restorationFlight = RestorationFlight()
     private func signingTeam() throws -> String {
@@ -26,7 +27,7 @@ import FandyHardware
         let connection=NSXPCConnection(machServiceName:FandyIdentity.helperIdentifier,options:.privileged)
         connection.setCodeSigningRequirement(try PeerRequirement.make(team:team,identifier:FandyIdentity.helperIdentifier))
         connection.remoteObjectInterface=NSXPCInterface(with:FanHelperXPC.self)
-        let token = UUID(); connectionToken = token
+        let token = UUID(); connectionToken = token; helperGeneration = 0
         connection.invalidationHandler = { [weak self] in Task { @MainActor in
             guard let self, self.connectionToken == token else { return }
             self.connection=nil; self.lease=nil; self.latest=nil; self.generation=nil; self.operationToken=UUID()
@@ -153,24 +154,44 @@ import FandyHardware
         guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).permits(required: required) else { throw ControlError.hardwareUnqualified }
         let token = UUID(); operationToken = token
         if generation != requested || lease == nil {
-            lease = nil; generation = nil
-            try await requestRestore(token: token)
+            var status = try await status()
             try requireCurrent(token)
-            let status = try await status()
-            try requireCurrent(token)
-            guard status.automaticVerified, status.manualQualified, !status.observationOnly, let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
-            try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: required)
-            let request = try Wire.encode(LeaseRequest(generation: requested, required: required))
-            let data = try await dataCall { proxy, reply in proxy.beginLease(request, withReply: reply) }
-            try requireCurrent(token)
-            let received = try Wire.decode(ControlLease.self, from: data)
-            guard received.generation == requested, received.required == required else { throw ControlError.staleSession }
-            lease = received; generation = requested
+            if SensorRegistry.capabilities.stage == .qualifiedControl, let current = lease,
+               LeaseContinuation.permits(current, status: status, required: required, now: ProcessInfo.processInfo.systemUptime) {
+                // Editing or changing a profile with the same required inputs keeps the
+                // valid hardware lease. UI generations still fence stale acknowledgements.
+                generation = requested
+            } else {
+                lease = nil; generation = nil
+                // Fresh verified automatic ownership needs no duplicate release transaction.
+                if !LeaseAdmission.automaticAlreadyVerified(status, now: ProcessInfo.processInfo.systemUptime) {
+                    try await requestRestore(token: token)
+                    try requireCurrent(token)
+                    status = try await self.status()
+                }
+                try requireCurrent(token)
+                guard status.automaticVerified, status.manualQualified, !status.observationOnly, let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
+                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: required)
+                guard helperGeneration < UInt64.max else { throw ControlError.staleSession }
+                helperGeneration += 1
+                let request = try Wire.encode(LeaseRequest(generation: helperGeneration, required: required))
+                let data = try await dataCall { proxy, reply in proxy.beginLease(request, withReply: reply) }
+                try requireCurrent(token)
+                let received = try Wire.decode(ControlLease.self, from: data)
+                guard received.generation == helperGeneration, received.required == required else { throw ControlError.staleSession }
+                lease = received; generation = requested
+            }
         }
-        let status = try await status()
+        let snapshot: HardwareSnapshot
+        if let issued = TargetObservation.snapshot(latest, now: ProcessInfo.processInfo.systemUptime, required: required) {
+            snapshot = issued
+        } else {
+            guard let fresh = try await status().snapshot else { throw ControlError.helperUnavailable }
+            snapshot = fresh
+        }
         try requireCurrent(token)
-        guard let lease, let snapshot = status.snapshot else { throw ControlError.helperUnavailable }
-        let request = try Wire.encode(TargetRequest(leaseID: lease.id, generation: requested, snapshotID: snapshot.id, targets: targets))
+        guard let lease else { throw ControlError.helperUnavailable }
+        let request = try Wire.encode(TargetRequest(leaseID: lease.id, generation: lease.generation, snapshotID: snapshot.id, targets: targets))
         _ = try await dataCall { proxy, reply in proxy.applyTargets(request, withReply: reply) }
         try requireCurrent(token)
     }

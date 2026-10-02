@@ -52,6 +52,10 @@ struct ProfileEditor: View {
                                 Text("Airflow").tag(CurveInput.airflow)
                             }.pickerStyle(.segmented).onAppear { if model.curveInput == .chip { model.curveInput = .trackpad } }
                             CurveSection(profile: profile, input: model.curveInput == .chip ? .trackpad : model.curveInput, model: model)
+                            if !model.simulation && model.capabilities.sensorName(.airflowTop) == "Top proximity" {
+                                Text("Airflow uses the hottest of Left, Right and the Top proximity input.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             HStack {
                                 Text("Minimum airflow")
                                 Slider(value: Binding(get: { profile.floor }, set: { var next = profile; next.floor = $0.rounded(); model.update(next) }), in: 0...100)
@@ -115,7 +119,7 @@ struct SensorStatus: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Current").font(.headline)
             Grid(alignment: .leading, horizontalSpacing: 22, verticalSpacing: 5) {
-                ForEach(primary) { role in GridRow { Text(role.name); Text(value(role)).monospacedDigit().foregroundStyle(.secondary) } }
+                ForEach(primary) { role in GridRow { Text(model.simulation ? role.name : model.capabilities.sensorName(role)); Text(value(role)).monospacedDigit().foregroundStyle(.secondary) } }
                 ForEach(model.snapshot?.fans ?? []) { fan in GridRow { Text("Fan \(fan.id + 1)"); Text("\(Int(fan.actualRPM.rounded())) RPM").monospacedDigit().foregroundStyle(.secondary) } }
             }
             DisclosureGroup("Details") {
@@ -152,7 +156,7 @@ struct SettingsView: View {
                 }
                 Text(model.capabilities.stage == .qualifiedControl ? "Eligible profiles control real fans. System restores Apple automatic control." : model.capabilities.canRestore ? "System and Max are available. Temperature profiles await their required inputs and activation test." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Hardware verification") {
-                    LabeledContent("Sensor roles", value: "\(model.capabilities.verifiedRoles.intersection(HardwareCapabilities.requiredRoles).count) / \(HardwareCapabilities.requiredRoles.count) verified")
+                    LabeledContent("Control inputs", value: "\(model.capabilities.verifiedRoles.intersection(model.capabilities.requiredControlRoles).count) / \(model.capabilities.requiredControlRoles.count) reviewed")
                     LabeledContent("Chip control", value: model.capabilities.chipPolicy == .conservativeEnvelope ? "Conservative envelope" : "CPU/GPU peaks")
                     LabeledContent("Automatic handback", value: model.capabilities.automaticRestoration == .verified ? "Verified" : "Pending")
                     LabeledContent("Manual control and recovery", value: model.capabilities.manualTransaction == .verified ? "Verified" : "Pending")

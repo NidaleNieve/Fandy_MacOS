@@ -2,9 +2,11 @@ import Foundation
 import FandyCore
 import FandyHardware
 import IOKit
+import os
 
 /// Private writer in the helper executable only. No arbitrary keys are accepted over IPC.
 final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
+    private let commandLog = Logger(subsystem: "is.dsr.fandy", category: "fan-transaction")
     private let reader: SMCReader
     private let connection: io_connect_t
     init() throws {
@@ -40,6 +42,9 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     // No independent mode/target primitive is exposed; production writes are validated batches.
     func setManual(fanID: Int) throws { throw ControlError.hardwareUnqualified }
     func setTarget(fanID: Int, rpm: Double) throws { throw ControlError.hardwareUnqualified }
+    func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] {
+        try SMCProfileWriter.normalizedTargets(targets, fans: enumerateFans())
+    }
     func applyValidatedTargets(_ targets: [FanTarget]) throws {
         guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canControl else { throw ControlError.hardwareUnqualified }
         try RecoveryOwnershipProbe.requireNoKnownController()
@@ -52,30 +57,37 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         let deadline = ProcessInfo.processInfo.systemUptime + 2
         for target in targets {
             try requireProfileDeadline(deadline)
-            guard var fan = try enumerateFans().first(where: { $0.id == target.fanID }),
+            guard let fan = try enumerateFans().first(where: { $0.id == target.fanID }),
                   let original = baseline.first(where: { $0.id == target.fanID }),
                   fan.minimumRPM == original.minimumRPM, fan.maximumRPM == original.maximumRPM else { throw ControlError.invalidFan }
             if fan.mode == .automatic {
-                if fan.actualRPM == 0 && fan.targetRPM == 0 {
-                    try SMCProfileWriter.startStopped(fan: fan, mode: reader.read(qualifiedModeKey(fan.id)),
-                        previous: reader.read("F\(fan.id)Tg"), transport: self)
-                } else {
-                    // Spinning automatic admission is target-first; never fall back after rejection.
-                    try SMCProfileWriter.target(target, fan: fan, metadata: reader.read("F\(fan.id)Tg"), transport: self)
-                    try awaitProfileTarget(target, baseline: fan, deadline: deadline, mode: .automatic)
-                    try SMCRecoveryWriter.activate(target: target, mode: reader.read(qualifiedModeKey(fan.id)),
-                        prepared: reader.read("F\(fan.id)Tg"), transport: self)
-                }
+                commandLog.notice("Automatic admission fan \(fan.id): actual \(fan.actualRPM), previous target \(fan.targetRPM ?? -1), requested \(target.rpm)")
+                try SMCProfileWriter.startAutomatic(fan: fan, mode: reader.read(qualifiedModeKey(fan.id)),
+                    previous: profileTargetMetadata(fan), transport: self)
                 guard let fresh = try enumerateFans().first(where: { $0.id == target.fanID }), fresh.mode == .manual else { throw ControlError.restorationUnverified }
-                fan = fresh
             }
+        }
+        // Establish and verify both modes before either target write. This keeps the
+        // mode transition phase separate from the target phase of the reviewed batch.
+        for target in targets {
+            try requireProfileDeadline(deadline)
+            guard let fan = try enumerateFans().first(where: { $0.id == target.fanID }),
+                  let original = baseline.first(where: { $0.id == target.fanID }),
+                  fan.minimumRPM == original.minimumRPM, fan.maximumRPM == original.maximumRPM else { throw ControlError.invalidFan }
             guard fan.mode == .manual else { throw ControlError.invalidFan }
             try requireProfileDeadline(deadline)
-            if fan.targetRPM != target.rpm {
-                try SMCProfileWriter.target(target, fan: fan, metadata: reader.read("F\(fan.id)Tg"), transport: self)
-            }
+            // Each admitted controller update refreshes the actual SMC target command.
+            // A matching register value alone is not evidence of continuing actuation.
+            try SMCProfileWriter.target(target, fan: fan, metadata: profileTargetMetadata(fan), transport: self)
             try awaitProfileTarget(target, baseline: fan, deadline: deadline, mode: .manual)
         }
+    }
+    private func profileTargetMetadata(_ fan: Fan) throws -> DiscoveredSensor {
+        let metadata = try reader.read("F\(fan.id)Tg")
+        if metadata.type != "flt " || metadata.size != 4 || metadata.attributes != 212 || metadata.value != fan.targetRPM {
+            commandLog.error("Target metadata changed for fan \(fan.id): type \(metadata.type, privacy: .public), size \(metadata.size), attributes \(metadata.attributes), sampled target \(fan.targetRPM ?? -1), metadata target \(metadata.value ?? -1)")
+        }
+        return metadata
     }
     private func awaitProfileTarget(_ target: FanTarget, baseline: Fan, deadline: Double, mode: FanMode) throws {
         try RecoveryTargetReadback.awaitTarget(target, baseline: baseline, deadline: deadline,

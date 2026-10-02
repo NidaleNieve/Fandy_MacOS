@@ -10,8 +10,9 @@ public struct SensorEvidence: Codable, Sendable, Equatable {
     public let state: QualificationState
     public let source: String
     public let limitation: String
-    public init(role: SensorRole, keys: [String], state: QualificationState = .pending, source: String, limitation: String) {
-        self.role = role; self.keys = keys; self.state = state; self.source = source; self.limitation = limitation
+    public let displayName: String?
+    public init(role: SensorRole, keys: [String], state: QualificationState = .pending, source: String, limitation: String, displayName: String? = nil) {
+        self.role = role; self.keys = keys; self.state = state; self.source = source; self.limitation = limitation; self.displayName = displayName
     }
 }
 /// Constructed by the signed build, never loaded from preferences or accepted as an XPC command.
@@ -33,6 +34,9 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     }
     public static let requiredRoles = Set([SensorRole.cpuAverage, .gpuAverage, .cpuPeak, .gpuPeak, .trackpad, .actuator,
                                            .airflowLeft, .airflowTop, .airflowRight, .charger, .powerSupply, .wireless])
+    public func sensorName(_ role: SensorRole) -> String {
+        sensors.first { $0.role == role }?.displayName ?? role.name
+    }
     public var verifiedRoles: Set<SensorRole> {
         Set(sensors.filter { evidence in
             evidence.state == .verified && !evidence.keys.isEmpty && !evidence.source.isEmpty &&
@@ -41,6 +45,7 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
         }.map(\.role))
     }
     public var allSensorsVerified: Bool { Self.requiredRoles.isSubset(of: verifiedRoles) }
+    public var requiredControlRoles: Set<SensorRole> { chipPolicy.required.union(SensorRole.comfort) }
     // Release authority is independent of temperature health and identity. The user-approved
     // restoration-first stage cannot enter manual mode, even with fully qualified sensors.
     public var canRestore: Bool { stage != .observation && topology == .verified }
@@ -78,7 +83,8 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     public var blockers: [String] {
         var result: [String] = []
         if stage == .observation { result.append("This build permits monitoring only.") }
-        if !allSensorsVerified { result.append("Sensor identities and chip coverage await qualification.") }
+        let missing = requiredControlRoles.subtracting(verifiedRoles)
+        if !missing.isEmpty { result.append("Control inputs await qualification: " + missing.sorted { $0.rawValue < $1.rawValue }.map(sensorName).joined(separator: ", ")) }
         if topology != .verified { result.append("Fan topology awaits restoration qualification.") }
         if automaticRestoration != .verified { result.append("Physical automatic restoration has not passed.") }
         if manualTransaction != .verified { result.append("Physical manual control and recovery have not passed.") }
