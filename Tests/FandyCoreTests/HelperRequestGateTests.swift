@@ -87,3 +87,16 @@ import Testing
     }
     #expect(gate.isOpen(try gate.admitRestoration(owner: owner)))
 }
+
+@Test func concurrentAdmissionAndCompletionPreserveReservedReleaseCapacity() throws {
+    let gate = HelperRequestGate(), owner = UUID()
+    #expect(gate.connect(owner: owner))
+    DispatchQueue.concurrentPerform(iterations: 64) { _ in
+        if let ticket = try? gate.admit(owner: owner, now: 10) { gate.finish(ticket); gate.finish(ticket) }
+        if let ticket = gate.rejection(owner: owner) { gate.finish(ticket) }
+    }
+    let release = try gate.admitRestoration(owner: owner)
+    #expect(gate.isOpen(release)); gate.finish(release)
+    #expect(gate.close(owner: owner)); gate.disconnected(owner: owner)
+    #expect(gate.connect(owner: UUID()))
+}

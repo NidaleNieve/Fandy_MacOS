@@ -10,27 +10,34 @@ public struct ControlLease: Codable, Sendable, Equatable {
 /// No physical I/O. The helper serializes these decisions with hardware effects.
 public struct HelperSafety: Sendable {
     public private(set) var lease: ControlLease?
-    public private(set) var systemVerified = false
-    public private(set) var restoring = true
+    private enum AutomaticState: Sendable { case unverified, restoring, observed }
+    private var automaticState: AutomaticState = .restoring
+    public var systemVerified: Bool { automaticState == .observed }
+    public var restoring: Bool { automaticState == .restoring }
     public private(set) var generation: UInt64 = 0
     private var previousOwner: UUID?
     public let timeout: Double
     public let chipPolicy: ChipControlPolicy
     public init(timeout: Double = 10, chipPolicy: ChipControlPolicy = .cpuGPU) { self.timeout = timeout; self.chipPolicy = chipPolicy }
-    public mutating func restorationFinished(_ verified: Bool) { systemVerified = verified; restoring = !verified; if verified { lease = nil } }
+    public mutating func restorationFinished(_ verified: Bool) { automaticState = verified ? .observed : .restoring; if verified { lease = nil } }
     /// External ownership loss while idle is a conflict, not a failed release transaction.
     /// Observation must not start an automatic-write loop against another controller.
     public mutating func observeIdleOwnership(_ automatic: Bool) {
         guard lease == nil else { return }
-        systemVerified = automatic && !restoring
+        if !restoring { automaticState = automatic ? .observed : .unverified }
     }
-    public mutating func revoke() { lease = nil; restoring = true; systemVerified = false }
+    /// A failed idle observation invalidates evidence, not an ownership transaction.
+    /// Preserve retries only when a real release was already pending.
+    public mutating func observationFailed() {
+        if !restoring { automaticState = .unverified }
+    }
+    public mutating func revoke() { lease = nil; automaticState = .restoring }
     public mutating func begin(owner: UUID, generation requested: UInt64, required: Set<SensorRole>, snapshot: HardwareSnapshot, now: Double, qualification: Bool = false) throws -> ControlLease {
         guard systemVerified, !restoring, lease == nil, (owner != previousOwner || requested >= generation) else { throw ControlError.staleSession }
         try snapshot.validate(now: now, required: required)
         generation = requested; previousOwner = owner
         let fresh = ControlLease(id: UUID(), owner: owner, generation: requested, renewedAt: now, required: required, expiresAt: qualification ? now + 15 : nil)
-        lease = fresh; systemVerified = false
+        lease = fresh; automaticState = .unverified
         return fresh
     }
     public mutating func validateAndRenew(owner: UUID, leaseID: UUID, generation requested: UInt64, targets: [FanTarget], snapshot: HardwareSnapshot, now: Double) throws -> [FanTarget] {
@@ -55,6 +62,10 @@ public struct HelperSafety: Sendable {
         return safe
     }
     public func expired(at now: Double) -> Bool { lease.map { !now.isFinite || now < $0.renewedAt || now - $0.renewedAt >= timeout || ($0.expiresAt.map { now >= $0 || !$0.isFinite } ?? false) } ?? false }
+    /// Recheck after returning from any potentially blocking hardware adapter.
+    public func requireLiveLease(at now: Double) throws {
+        guard lease != nil, !restoring, !expired(at: now) else { throw ControlError.staleSession }
+    }
     public mutating func disconnect(owner: UUID) -> Bool { guard lease?.owner == owner else { return false }; revoke(); return true }
 }
 public struct MessageRateLimiter: Sendable {
@@ -84,12 +95,29 @@ public enum Wire {
         guard !data.isEmpty, data.count <= maxBytes else { throw ControlError.malformedMessage }
         do { return try JSONDecoder().decode(type, from: data) } catch { throw ControlError.malformedMessage }
     }
+    /// Commands have a closed shape. Responses retain additive-field compatibility.
+    public static func decodeCommand<T: HelperCommand>(_ type: T.Type, from data: Data) throws -> T {
+        guard !data.isEmpty, data.count <= maxBytes,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(object.keys) == T.fields else { throw ControlError.malformedMessage }
+        return try decode(type, from: data)
+    }
     public static func encode<T: Encodable>(_ value: T) throws -> Data {
         let data = try JSONEncoder().encode(value); guard data.count <= maxBytes else { throw ControlError.malformedMessage }; return data
     }
 }
-public struct LeaseRequest: Codable, Sendable { public var version: Int; public var generation: UInt64; public var required: Set<SensorRole>; public init(generation: UInt64, required: Set<SensorRole>) { version = Wire.version; self.generation = generation; self.required = required } }
-public struct TargetRequest: Codable, Sendable {
+public protocol HelperCommand: Decodable { static var fields: Set<String> { get } }
+public struct LeaseRequest: Codable, Sendable, HelperCommand {
+    public static let fields: Set<String> = ["version", "generation", "required"]
+    public var version: Int
+    public var generation: UInt64
+    public var required: Set<SensorRole>
+    public init(generation: UInt64, required: Set<SensorRole>) {
+        version = Wire.version; self.generation = generation; self.required = required
+    }
+}
+public struct TargetRequest: Codable, Sendable, HelperCommand {
+    public static let fields: Set<String> = ["version", "leaseID", "generation", "snapshotID", "targets"]
     public var version: Int; public var leaseID: UUID; public var generation: UInt64; public var snapshotID: UUID; public var targets: [FanTarget]
     public init(leaseID: UUID, generation: UInt64, snapshotID: UUID, targets: [FanTarget]) { version = Wire.version; self.leaseID = leaseID; self.generation = generation; self.snapshotID = snapshotID; self.targets = targets }
 }

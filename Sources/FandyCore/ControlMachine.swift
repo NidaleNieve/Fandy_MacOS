@@ -37,6 +37,14 @@ public struct ControlMachine: Sendable {
         restorationIsFault = true; automaticAtIdle = false; healthyCount = 0; lastHealthySample = nil
         return .restore(generation: generation)
     }
+    /// Idle monitoring does not own fans. Only active control or a failed release
+    /// transaction warrants a hardware handback when a read fails.
+    public mutating func observationFailed(_ error: Error, restoration: RestorationReport? = nil) -> ControlEffect {
+        if selected.kind == .system && state == .system && restoration?.verified != false {
+            return .none
+        }
+        return fail(error)
+    }
     public mutating func sleep() -> ControlEffect { fail(ControlError.invalidProfile("Sleep/wake reset; select a profile to resume.")) }
     public mutating func step(_ snapshot: HardwareSnapshot, now: Double) -> ControlEffect {
         if state == .restoringSystem || state == .fault { return .restore(generation: generation) }

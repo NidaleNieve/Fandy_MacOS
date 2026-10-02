@@ -35,20 +35,27 @@ import ServiceManagement
     private let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "controller")
     private var sleepObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
+    private let powerCenter: NotificationCenter
     private var freshness = SensorFreshnessMonitor()
     private var quitting = false
     private var terminationReady = false
     var canTerminate: Bool { terminationReady }
-    func stop() { loop?.cancel(); loop = nil }
+    func stop() {
+        loop?.cancel(); loop = nil
+        if let sleepObserver { powerCenter.removeObserver(sleepObserver) }
+        if let wakeObserver { powerCenter.removeObserver(wakeObserver) }
+        sleepObserver = nil; wakeObserver = nil
+    }
     init(storeURL: URL? = nil, autoStart: Bool = true, simulation: Bool = false,
          provider: (any TemperatureSensorProvider)? = nil, client: (any PrivilegedFanClient)? = nil,
          capabilities: HardwareCapabilities? = nil, helperAvailable: (@MainActor () -> Bool)? = nil,
+         powerCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
         self.capabilities = capabilities ?? SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel())
         self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : self.capabilities.chipPolicy)
-        self.clock = clock
+        self.clock = clock; self.powerCenter = powerCenter
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         store = ProfileStore(url: storeURL ?? root.appendingPathComponent("Fandy/profiles.json"))
         diagnostics = try? RotatingDiagnostics(directory: (storeURL?.deletingLastPathComponent() ?? root.appendingPathComponent("Fandy")).appendingPathComponent("logs"))
@@ -120,10 +127,9 @@ import ServiceManagement
         return (machine.state == .system || machine.state == .customActive) && machine.selected.id == id
     }
     func start() {
-        guard loop == nil else { return }
-        let center = NSWorkspace.shared.notificationCenter
-        sleepObserver = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
-        wakeObserver = center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
+        guard loop == nil, !quitting else { return }
+        sleepObserver = powerCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
+        wakeObserver = powerCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.tick()
@@ -151,6 +157,7 @@ import ServiceManagement
     }
     func tick() async {
         guard !busy, !quitting else { return }; let token = lifecycleToken; busy = true; defer { busy = false }
+        var restorationReport: RestorationReport?
         do {
             if simulation {
                 await mock.setScenario(scenario)
@@ -166,6 +173,7 @@ import ServiceManagement
                 if helperAvailable() {
                     let status = try await client.status()
                     guard token == lifecycleToken, !quitting else { return }
+                    restorationReport = status.restoration
                     // Automatic-looking telemetry cannot erase a failed release transaction.
                     // An idle external manual mode is a separate ownership conflict; it does
                     // not automatically request another release merely because status was read.
@@ -199,7 +207,12 @@ import ServiceManagement
         } catch {
             guard token == lifecycleToken, !quitting else { return }
             if simulation { await execute(machine.fail(error)) }
-            else { hardwareError = error.localizedDescription; snapshot = nil; helperHealth = .fault; if capabilities.canRestore && helperAvailable() { await execute(machine.fail(error)) } }
+            else {
+                hardwareError = error.localizedDescription; snapshot = nil; helperHealth = .fault
+                if capabilities.canRestore && helperAvailable() {
+                    await execute(machine.observationFailed(error, restoration: restorationReport))
+                }
+            }
         }
     }
     private func execute(_ effect: ControlEffect) async {
@@ -311,7 +324,7 @@ import ServiceManagement
         beginTermination(); await finishTermination()
     }
     private func beginTermination() {
-        lifecycleToken = UUID(); quitting = true; loop?.cancel(); pendingSave?.cancel(); save()
+        lifecycleToken = UUID(); quitting = true; stop(); pendingSave?.cancel(); save()
     }
     private func finishTermination() async {
         if simulation || capabilities.canRestore { await execute(machine.fail(ControlError.invalidProfile("App quit"))) }

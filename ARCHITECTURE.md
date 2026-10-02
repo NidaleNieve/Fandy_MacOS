@@ -85,3 +85,7 @@ Profile edits with unchanged required inputs may retain an existing valid produc
 ## Editor and status presentation
 
 CurveDraft is editor-only value state, separate from both SwiftUI drawing and the control engine. It retains invalid local drafts and returns only validated FanCurve values. Explicit reset revisions clear drafts even when the accepted parent value has not changed. Drag axes stay fixed for the gesture; keyboard point selection and exact decimal input use the same draft boundary. StatusPresentation formats fresh readings and distinguishes acknowledged demand from previews. Its display-only candidate copy never qualifies an input for control.
+
+## Ownership and polling refinement
+
+Automatic observation, unverified ownership and a pending physical release are distinct states. Both process models invalidate failed idle observations without issuing unowned writes; real failed releases retain retries. Lease validity is checked after returning from blocking adapters. FanHardwareIO exposes the validated batch seam, with no misleading default individual-write order. Native polling stop/termination owns notification cleanup. The helper's 100-ms decision timer is separate from 2-Hz full SMC acquisitions; status/target transactions acquire independently. See [the architecture and test review](docs/ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md).

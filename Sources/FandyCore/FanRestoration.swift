@@ -3,8 +3,6 @@ public protocol FanHardwareIO: Sendable {
     func enumerateFans() throws -> [Fan]
     func fanIDsForRestoration() throws -> [Int]
     func setAutomatic(fanID: Int) throws
-    func setManual(fanID: Int) throws
-    func setTarget(fanID: Int, rpm: Double) throws
     func readMode(fanID: Int) throws -> FanMode
     func applyValidatedTargets(_ targets: [FanTarget]) throws
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget]
@@ -12,13 +10,6 @@ public protocol FanHardwareIO: Sendable {
 public extension FanHardwareIO {
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { targets }
     func fanIDsForRestoration() throws -> [Int] { try enumerateFans().map(\.id) }
-    func applyValidatedTargets(_ targets: [FanTarget]) throws {
-        for target in targets {
-            try setManual(fanID: target.fanID)
-            guard try readMode(fanID: target.fanID) == .manual else { throw ControlError.restorationUnverified }
-            try setTarget(fanID: target.fanID, rpm: target.rpm)
-        }
-    }
 }
 public enum FanRestoration {
     /// Attempt every independently known fan. No target clearing or alternate mode/key guesses.

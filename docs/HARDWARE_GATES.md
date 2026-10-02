@@ -46,3 +46,7 @@ Variable-speed qualification observed actual RPM during warm re-entry, target up
 ## Native-polish regression
 
 200 Swift tests and 31 tool tests pass after editor/status improvements. Signed single-job compilation, strict deep signature verification and the refreshed real-profile diagnostic passed, including invalid-draft retention/correction and active numerical editing. System-first startup and independent both-fan automatic observations passed. This pass changed no hardware transaction or authority; earlier recovery evidence is retained, and physical sleep/wake remains unobserved.
+
+## Refreshed production recovery and performance
+
+The architecture/security pass retains production eligibility, command construction and batch order. Post-I/O expiry checks and a separate 2-Hz acquisition budget preserve the 100-ms expiry/release cadence. Final modest spinning-fan trials passed controller SIGKILL (~0.032s), heartbeat (~10.057s), disconnect (~0.268s) and normal termination (~0.017s), independently verifying both modes. Signed production hostile-input/identity checks and 221 Swift/31 tool tests pass, with sanitizer coverage. Previous helper-restart evidence remains; physical active sleep/wake is prepared but pending a coordinated manual wake. [Detailed scope and results](ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md).

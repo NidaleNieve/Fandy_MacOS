@@ -108,12 +108,12 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
     }
     func beginLease(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
         request(bytes: data.count, reply: DataReply(reply)) { [owner] coordinator in
-            try Wire.encode(coordinator.begin(Wire.decode(LeaseRequest.self, from: data), owner: owner))
+            try Wire.encode(coordinator.begin(Wire.decodeCommand(LeaseRequest.self, from: data), owner: owner))
         }
     }
     func applyTargets(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
         request(bytes: data.count, reply: DataReply(reply)) { [owner] coordinator in
-            try coordinator.apply(Wire.decode(TargetRequest.self, from: data), owner: owner)
+            try coordinator.apply(Wire.decodeCommand(TargetRequest.self, from: data), owner: owner)
             return Data()
         }
     }

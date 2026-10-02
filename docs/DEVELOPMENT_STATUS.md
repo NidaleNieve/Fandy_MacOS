@@ -18,6 +18,12 @@ Active profiles show “Calculated demand”, while inactive previews retain “
 
 The refreshed signed live diagnostic passed every temperature profile, active editing, invalid-draft retention/correction, backend round trip, rapid switching and both-fan System handback. The hardware writer, command order, watchdog and authority were not changed in this polish pass. Earlier crash/restart evidence remains applicable; active physical sleep/wake is still a separate follow-up.
 
+## Architecture, security and performance follow-through
+
+The requested skills review fixed idle read failures that could trigger unowned release writes in both GUI and helper, consolidated automatic ownership states, added post-I/O lease-expiry checks, removed misleading individual-write defaults, cleaned up power-observer lifetime and rejected extra privileged command fields. The complete suite passes under Address Sanitizer; five selected concurrency cases pass Thread Sanitizer. Full SMC sampling now runs at most twice per second while expiry/restoration decisions retain their 100-ms timer. A modest steady lease reduced sampled helper CPU from roughly 15% to 5% of one core; memory remains about 12 MiB. Fresh status/target transactions remain independent.
+
+The updated signed helper passed real controller SIGKILL, heartbeat expiry, disconnect and normal termination, with independently verified manual-to-automatic transitions on both spinning fans. Live malformed/authentication probes and measured acquisition/status/engine latency passed. See the [detailed review and explicit remaining checks](ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md). The fixed physical sleep/wake diagnostic requires a coordinated manual wake; it is prepared, not falsely counted as a completed test.
+
 ## Hardware integration fixes
 
 1. Automatic target preloading acknowledged writes but read back zero on this model. The reviewed production batch establishes and verifies both manual modes before validated targets. It never clears targets, uses unlock keys or tries another undocumented sequence.
@@ -67,7 +73,7 @@ System and System+ correctly requested zero custom demand in this idle session. 
 
 ## Verification and installed delivery
 
-**200 Swift tests pass: 28 hardware, 134 core, 38 app. All 31 Python tool tests pass.** Single-job signed native compilation and strict deep signature verification pass. Coverage includes interpolation, validation, aggregation, persistence, chip-envelope completeness, policy-specific eligibility, helper authentication/admission, whole-RPM normalization, partial failures, lifecycle races, lease continuation, bounded deadlines, exact editor values, reset/invalid-draft behavior, node interpolation and stale display values.
+**221 Swift tests pass: 28 hardware, 150 core, 43 app. All 31 Python tool tests pass.** Single-job signed native compilation and strict deep signature verification pass. Coverage includes interpolation, validation, aggregation, persistence, chip-envelope completeness, policy-specific eligibility, helper authentication/admission, whole-RPM normalization, partial failures, lifecycle races, lease continuation, bounded deadlines, exact editor values, reset/invalid-draft behavior, node interpolation and stale display values.
 
 The final signed live check passed every temperature profile, active custom editing without mode release, simulation-to-hardware reactivation, rapid switching and normal cleanup. One earlier zero-delay diagnostic status flood hit the existing request limit; polling now follows production pacing. A separate transient metadata rejection restored both fans, was not reproduced in the final complete run, and retains focused fan-only diagnostics without weaker validation.
 
