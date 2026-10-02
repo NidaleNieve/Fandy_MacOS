@@ -57,6 +57,9 @@ public final class HelperCoordinator {
     private func recordHealthy(_ snapshot: HardwareSnapshot) throws {
         samples.append(snapshot); samples = Array(samples.filter { clock() - $0.sampledAt <= 3 }.suffix(32))
         try snapshot.validate(now: clock(), required: safety.lease?.required ?? [])
+        if capabilities.stage == .curveQualification, safety.lease?.required.isEmpty == false {
+            guard try capabilities.chipPolicy.temperature(in: snapshot, now: clock()) < MeasurementSafety.ceilingC else { throw ControlError.thermalPressure }
+        }
         if safety.lease != nil {
             guard snapshot.fans.count == leaseFans.count, snapshot.fans.allSatisfy({ fan in leaseFans.contains { $0.id == fan.id && $0.minimumRPM == fan.minimumRPM && $0.maximumRPM == fan.maximumRPM } }) else { throw ControlError.invalidFan }
         }
@@ -108,6 +111,9 @@ public final class HelperCoordinator {
         guard snapshot.fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
         targets = []
         let qualifying = capabilities.stage == .curveQualification && !request.required.isEmpty
+        if qualifying {
+            guard try capabilities.chipPolicy.temperature(in: snapshot, now: clock()) < MeasurementSafety.ceilingC else { throw ControlError.thermalPressure }
+        }
         qualificationFloors = [:]
         if qualifying {
             for fan in snapshot.fans {
@@ -134,7 +140,8 @@ public final class HelperCoordinator {
                     qualificationFloors[target.fanID].map { target.rpm >= $0 } ?? false
                 }) else { throw ControlError.invalidFan }
             }
-            let validated = try safety.validateAndRenew(owner: owner, leaseID: request.leaseID, generation: request.generation, targets: request.targets, snapshot: snapshot, now: clock())
+            let requested = try safety.validateAndRenew(owner: owner, leaseID: request.leaseID, generation: request.generation, targets: request.targets, snapshot: snapshot, now: clock())
+            let validated = try normalized(requested, fans: snapshot.fans)
             // Reserve the physical batch's two-second budget inside the nonrenewable trial.
             if let deadline = safety.lease?.expiresAt {
                 guard deadline - clock() >= 2 else { throw ControlError.staleSession }
@@ -153,6 +160,18 @@ public final class HelperCoordinator {
         guard fan.mode == .manual, let observed = fan.targetRPM,
               let requested = targets.first(where: { $0.fanID == fan.id }) else { return false }
         return abs(observed - requested.rpm) <= 0.5
+    }
+    private func normalized(_ requested: [FanTarget], fans: [Fan]) throws -> [FanTarget] {
+        let result = try io.normalizedTargets(requested)
+        guard result.count == requested.count, Set(result.map(\.fanID)) == Set(requested.map(\.fanID)),
+              Set(result.map(\.fanID)).count == result.count else { throw ControlError.invalidFan }
+        for target in result {
+            guard let source = requested.first(where: { $0.fanID == target.fanID }),
+                  let fan = fans.first(where: { $0.id == target.fanID }),
+                  target.rpm.isFinite, target.rpm >= source.rpm, target.rpm >= fan.minimumRPM,
+                  target.rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
+        }
+        return result
     }
     public func disconnected(owner: UUID) { if safety.disconnect(owner: owner) { event("Controller disconnected"); _ = restore() } }
     public func reject(owner: UUID) { if safety.lease?.owner == owner { _ = restore() } }
@@ -179,7 +198,8 @@ public final class HelperCoordinator {
                 guard let fan = snapshot.fans.first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
                 return FanTarget(target.fanID, max(target.rpm, try fan.rpm(percent: percent)))
             }
-            if elevated != targets { try FanRestoration.apply(elevated, using: io); targets = elevated }
+            let final = try normalized(elevated, fans: snapshot.fans)
+            if final != targets { try FanRestoration.apply(final, using: io); targets = final }
         } catch { _ = restore() }
     }
 }

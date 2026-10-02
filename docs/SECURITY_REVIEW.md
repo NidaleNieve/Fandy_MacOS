@@ -1,3 +1,5 @@
+> Current scope: the 2026-10-02 production temperature integration at the end of this document supersedes the earlier observation/maximum-only checkpoints. Real profiles are enabled; no additional privileged API was introduced.
+
 # Hostile-input review
 
 Reviewed current source, 2026-09-30. This is a scoped engineering review, not an independent audit or completed physical qualification.
@@ -79,3 +81,13 @@ Helper restart was physically proved during an owned modest session using a temp
 ## Temperature integration — 2026-10-02
 
 No new privileged methods. The unselected signed curve stage enforces reviewed roles, initial per-fan upward floors and helper-created nonrenewable expiry. Caller-supplied deadline/authority fields cannot extend it. Late transactions reserve their physical I/O budget and fail toward release. Four comfort evidence records cannot bypass missing CPU/GPU roles. Existing lease replies decode without optional expiry. Fixed curve diagnostics reject extra hardware/duration arguments and cannot run in the maximum-only build. Kernel I/O remains uninterruptible; no timer guarantee is claimed while blocked.
+
+## Production temperature acceptance — 2026-10-02
+
+The signed Mac17,9 registry now enables qualifiedControl using the complete fixed chip envelope and five disclosed operational comfort inputs. Informational CPU/GPU estimates and three proximity candidates cannot grant control. The helper independently validates these required inputs and applies its immutable chip guard. No preference, payload or status reply grants qualification. Sensor-free leases remain maximum-only.
+
+Upward whole-RPM normalization preserves per-fan bounds and safety demand; unexpected normalization releases both fans. The reviewed batch verifies both manual modes before target writes. Client caching is limited to an immediately issued observation no older than 250 ms; it does not relax helper-side acquisition, rate or outstanding-message limits. UI edits with the same required inputs can retain only a healthy production lease, never extend a finite qualification deadline. Separate UI/helper generations and operation tokens retain stale-reply protection through backend resets.
+
+189 Swift tests, 31 tool tests, a signed single-job build and strict deep signature verification pass. Actual variable-speed recovery, all profile activations, live editing, simulation round trip, rapid switching, normal cleanup, Max regression and System-first startup passed. A zero-delay diagnostic flood was corrected by pacing the test, not increasing the production rate limit. One separate transient metadata rejection restored both fans; focused fan-only logging was added, validation remained strict, and the final complete rerun passed. No unproved hardware root cause is claimed.
+
+Earlier actual helper restart evidence remains applicable because startup restoration is unchanged. A dead or blocked helper cannot run a timer. Active physical sleep/wake and subjective/game calibration remain follow-ups. Raw measurements, local signing configuration and private handoff reports are excluded from publication.

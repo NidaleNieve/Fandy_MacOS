@@ -108,3 +108,34 @@ private func envelopeCapabilities(stage: HardwareStage = .qualifiedControl) -> H
     var snapshot = envelopeSnapshot(); snapshot.sensors[snapshot.sensors.firstIndex { $0.role == .socPeak }!].health = .unverified
     #expect(try ShadowProfileEngine.evaluate(BuiltInProfiles.gaming, snapshot: snapshot, now: 10, chipPolicy: .conservativeEnvelope).usesCandidates)
 }
+@Test func boundedEnvelopeTrialRejectsDiagnosticCeilingBeforeAndAfterActivation() throws {
+    let spy = FanSpy(); var temperature = 75.0
+    let coordinator = HelperCoordinator(io: spy, capabilities: envelopeCapabilities(stage: .curveQualification), read: {
+        var snapshot = spy.snapshot()
+        snapshot.sensors.removeAll { $0.role == .socPeak }
+        snapshot.sensors.append(SensorReading(.socPeak, temperature, at: spy.now, sequence: UInt64(spy.now * 100)))
+        return snapshot
+    }, clock: { spy.now })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID()
+    #expect(throws: ControlError.thermalPressure) { _ = try coordinator.begin(LeaseRequest(generation: 1, required: [.socPeak]), owner: owner) }
+    #expect(!spy.calls.contains("manual0"))
+    temperature = 40
+    let lease = try coordinator.begin(LeaseRequest(generation: 1, required: [.socPeak]), owner: owner)
+    let snapshot = coordinator.status().snapshot!
+    try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+        targets: snapshot.fans.map { FanTarget($0.id, max($0.minimumRPM, $0.actualRPM) + 200) }), owner: owner)
+    temperature = 75; spy.now += 1; coordinator.watchdog()
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic })
+    #expect(coordinator.lastRestoration?.verified == true)
+}
+
+@Test func olderSensorEvidenceDecodesWithoutDisplayNameAndProxyDoesNotRenameOtherSensors() throws {
+    let evidence = try JSONDecoder().decode(SensorEvidence.self, from: Data("{\"role\":\"airflowTop\",\"keys\":[\"TaTP\"],\"state\":\"pending\",\"source\":\"test\",\"limitation\":\"test\"}".utf8))
+    #expect(evidence.displayName == nil)
+    let proxy = SensorEvidence(role: .airflowTop, keys: ["TaTP"], state: .verified, source: "Operational proxy", limitation: "Exact airflow identity unproved", displayName: "Top proximity")
+    let caps = HardwareCapabilities(model: "Test", sensors: [proxy])
+    #expect(caps.sensorName(.airflowTop) == "Top proximity")
+    #expect(caps.sensorName(.trackpad) == SensorRole.trackpad.name)
+    #expect(!caps.permits(BuiltInProfiles.coolChassis))
+}

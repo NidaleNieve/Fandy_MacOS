@@ -24,6 +24,10 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case curveHeartbeat = "--profile-curve-heartbeat-check"
     case curveDisconnect = "--profile-curve-disconnect-check"
     case curveHold = "--profile-curve-hold-check"
+    case curveSpinning = "--profile-curve-spinning-check"
+    case curveQuit = "--profile-curve-quit-check"
+    case profilesLive = "--profiles-live-check"
+    case profilesCalibration = "--profiles-calibration-check"
     case maximumCheck = "--profile-max-check"
     case maximumQuit = "--profile-max-quit-check"
     case maximumHeartbeat = "--profile-max-heartbeat-check"
@@ -47,7 +51,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
         let client = FanXPCClient()
         do {
             switch action {
-            case .curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold: return await checkCurve(action)
+            case .curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold, .curveQuit: return await checkCurve(action)
+            case .curveSpinning: return await checkSpinningCurve()
+            case .profilesLive, .profilesCalibration: return await ProfileDiagnostics.run(action)
             case .maximumCheck, .maximumQuit, .maximumHeartbeat: return await checkMaximum(action)
             case .register: try HelperManager.installObservation()
             case .unregister: try await HelperManager.uninstallObservation(client: client)
@@ -107,7 +113,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
         do {
             guard SensorRegistry.capabilities.canQualifyCurves, HelperManager.installed else { throw ControlError.hardwareUnqualified }
             let reader = try SMCReader()
-            for _ in 0..<5 { _ = try await client.status(); try await Task.sleep(for: .milliseconds(250)) }
+            // Distinct completed acquisitions; an artificial delay here can let a spinning
+            // automatic baseline stop before the transaction we intend to qualify.
+            for _ in 0..<5 { _ = try await client.status() }
             let status = try await client.status()
             guard status.capabilities?.canQualifyCurves == true, status.automaticVerified,
                   let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
@@ -129,15 +137,21 @@ enum HelperDiagnosticAction: String, CaseIterable {
                     try await client.restoreAutomatic()
                     return 0
                 }
-                if action == .curveCheck && elapsed >= 5 {
-                    guard activated, positiveRPM else { throw ControlError.restorationUnverified }
-                    try await client.restoreAutomatic()
+                if (action == .curveCheck || action == .curveQuit) && elapsed >= (action == .curveQuit ? 12 : 5) {
+                    guard activated else { throw ControlError.restorationUnverified }
+                    guard positiveRPM else { throw ControlError.invalidProfile("Fan spin-up was not observed within the bounded trial.") }
+                    if action == .curveQuit {
+                        let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyCurveQuit-\(UUID().uuidString)")
+                        let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false, client: client)
+                        await model.prepareForTermination()
+                        guard model.canTerminate, model.machine.state == .system else { throw ControlError.restorationUnverified }
+                    } else { try await client.restoreAutomatic() }
                     let restored = try reader.fans()
                     guard restored.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
                     emit(["event": "curveHandback", "elapsed": elapsed, "fans": try encoded(restored)])
                     return 0
                 }
-                let renew = !activated || action == .curveCheck || (action == .curveHold && elapsed < 12)
+                let renew = !activated || action == .curveCheck || action == .curveQuit || (action == .curveHold && elapsed < 12)
                 if renew {
                     let current = try await client.status()
                     guard let currentSnapshot = current.snapshot else { throw ControlError.invalidSnapshot }
@@ -164,8 +178,59 @@ enum HelperDiagnosticAction: String, CaseIterable {
             }
             throw ControlError.restorationUnverified
         } catch {
-            if writeAdmitted { try? await client.restoreAutomatic() }
-            emit(["event": "curveDiagnosticFailed", "error": error.localizedDescription])
+            var report: [String: Any] = ["event": "curveDiagnosticFailed", "error": error.localizedDescription]
+            if writeAdmitted {
+                do {
+                    try await client.restoreAutomatic()
+                    let fans = try SMCReader().fans()
+                    report["automaticRestorationVerified"] = fans.allSatisfy { $0.mode == .automatic }
+                    report["fans"] = try encoded(fans)
+                } catch { report["restorationError"] = error.localizedDescription }
+            }
+            emit(report)
+            return 1
+        }
+    }
+    /// Same authenticated connection throughout, so disconnect cleanup cannot erase the
+    /// spinning automatic baseline between release and the next bounded admission.
+    private static func checkSpinningCurve() async -> Int32 {
+        let client = FanXPCClient()
+        do {
+            guard SensorRegistry.capabilities.canQualifyCurves else { throw ControlError.hardwareUnqualified }
+            let reader = try SMCReader()
+            for _ in 0..<5 { _ = try await client.status() }
+            for generation in 1...2 {
+                let status = try await client.status()
+                guard status.automaticVerified, let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
+                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: SensorRegistry.capabilities.chipPolicy.required)
+                if generation == 2 {
+                    guard snapshot.fans.allSatisfy({ $0.mode == .automatic && $0.actualRPM > 0 }) else { throw ControlError.invalidProfile("No spinning automatic baseline available.") }
+                }
+                emit(["event": "curveAdmissionBaseline", "generation": generation, "fans": try encoded(snapshot.fans)])
+                let targets = try snapshot.fans.map { fan -> FanTarget in
+                    let rpm = max(fan.minimumRPM, fan.actualRPM) + 200
+                    guard rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
+                    return FanTarget(fan.id, rpm)
+                }
+                let started = ProcessInfo.processInfo.systemUptime
+                var reached = false
+                repeat {
+                    try await client.apply(targets, generation: UInt64(generation), required: SensorRegistry.capabilities.chipPolicy.required)
+                    let fans = try reader.fans()
+                    guard fans.allSatisfy({ $0.mode == .manual }) else { throw ControlError.restorationUnverified }
+                    reached = reached || fans.allSatisfy { fan in targets.contains { $0.fanID == fan.id && fan.actualRPM >= $0.rpm - 150 } }
+                    emit(["event": "curveSpinningActive", "generation": generation, "fans": try encoded(fans)])
+                    try await Task.sleep(for: .milliseconds(500))
+                } while ProcessInfo.processInfo.systemUptime - started < (generation == 1 ? 8 : 12)
+                guard reached else { throw ControlError.invalidProfile("Fan spin-up was not observed within the bounded trial.") }
+                try await client.restoreAutomatic()
+                guard try reader.fans().allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+            }
+            emit(["event": "spinningCurvePassed"])
+            return 0
+        } catch {
+            try? await client.restoreAutomatic()
+            emit(["event": "spinningCurveFailed", "error": error.localizedDescription])
             return 1
         }
     }

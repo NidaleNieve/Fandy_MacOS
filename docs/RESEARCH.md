@@ -1,3 +1,5 @@
+> Current implementation and qualification: [production delivery](DEVELOPMENT_STATUS.md). Earlier plan decisions below are retained as research history; the current chip-envelope/Top-proximity policy is explicit and real profiles are enabled.
+
 # Research and implementation decisions
 
 Research preceded implementation. The original manual-control gates remain binding. On2026-10-01 the user approved automatic restoration before sensor qualification. Source inspection is evidence of another program's implementation, not proof of Apple firmware behavior.
@@ -41,7 +43,7 @@ Licenses for every inspected project are recorded in THIRD_PARTY_NOTICES. No GPL
 
 ## Known uncertainties
 
-Unresolved Mac17,9 sensor membership/Top identity, actual writable firmware semantics, target-clear behavior under automatic ownership, independent Apple emergency protections during manual mode, system state3 meaning under load, practical sleep/wake/reboot behavior, blocked I/O latency, helper crash recovery timing and acoustic defaults. These uncertainties are explicit blockers to physical control, not assumptions hidden behind successful compilation.
+Unresolved Mac17,9 sensor membership/Top identity, actual writable firmware semantics, target-clear behavior under automatic ownership, independent Apple emergency protections during manual mode, system state3 meaning under load, practical sleep/wake/reboot behavior, blocked I/O latency, helper crash recovery timing and acoustic defaults. These were blockers in the original research plan. Tested exact-model transactions and recovery now qualify production control; unresolved physical identities are disclosed estimates/proxies, and unobserved lifecycle cases remain explicit limitations. See the current delivery checkpoint.
 
 ## Additional sensor evidence review — 2026-10-01
 
@@ -55,3 +57,9 @@ The [chip coverage audit](SENSOR_EVIDENCE.md) now compares the full published do
 ## Additional source check during recovery preparation
 
 [mactop temperature classification](https://github.com/metaspartan/mactop/blob/8dbfaaed7426cff3bcfbcb7951a2e15dfb6d1667/internal/app/ioreport.m) was inspected after checking its MIT license. It classifies broad key prefixes and labels the Ts family as Super-core temperatures when Super cores exist. That conflicts with the independently discovered chassis candidates and does not establish current-model CPU or chassis identities. No source was copied or runtime dependency introduced. Further narrowly scoped TG Pro diagnostics and filtered thermal IORegistry descriptions yielded no missing identity mappings; they do not change qualification.
+
+## Production transaction review — 2026-10-02
+
+The MIT-licensed [ThermalForge fan-control implementation](https://github.com/ProducerGuy/ThermalForge/blob/main/Sources/ThermalForgeCore/FanControl.swift) was inspected for manual mode/target ordering. No code was copied. On the development Mac, automatic target preloading did not retain a target; the reviewed Fandy production sequence establishes and verifies both manual modes before validated targets. Fixed tests then observed modest upward requests, warm spinning re-entry, variable target changes and recovery. Fractional target acknowledgement required upward whole-RPM normalization. These are current-model measurements, not an Apple API guarantee or permission to guess another machine's sequence.
+
+The operational sensor policy includes the complete fixed 105-key chip-region manifest, retaining disputed Tm regions instead of claiming them as individually identified CPU cores. TaTP is explicitly a Top proximity proxy. Exact physical CPU/GPU averaging and TG Pro Top identity remain unresolved; the UI and registry retain that distinction. No proprietary mapping table or implementation was extracted.
