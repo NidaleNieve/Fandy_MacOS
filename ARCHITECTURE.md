@@ -81,3 +81,7 @@ The reviewed transaction establishes both manual modes before writing validated 
 Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKILL and normal quit passed. Live profile activation, rapid switching and handback passed. Earlier helper-restart evidence remains applicable because startup restoration is unchanged. A dead or blocked helper cannot run its watchdog; active physical sleep/wake still needs an observed test.
 
 Profile edits with unchanged required inputs may retain an existing valid production lease, avoiding an unnecessary release/re-entry. A finite qualification lease can never be extended that way. UI generations fence acknowledgements separately from monotonically increasing helper generations; a simulation round trip cannot reuse an old connection generation. Every retained-lease target is still independently validated by the helper.
+
+## Editor and status presentation
+
+CurveDraft is editor-only value state, separate from both SwiftUI drawing and the control engine. It retains invalid local drafts and returns only validated FanCurve values. Explicit reset revisions clear drafts even when the accepted parent value has not changed. Drag axes stay fixed for the gesture; keyboard point selection and exact decimal input use the same draft boundary. StatusPresentation formats fresh readings and distinguishes acknowledged demand from previews. Its display-only candidate copy never qualifies an input for control.

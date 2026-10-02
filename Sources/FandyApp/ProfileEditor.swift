@@ -20,9 +20,9 @@ struct ProfileEditor: View {
                 }
             }.navigationSplitViewColumnWidth(min: 170, ideal: 185)
             HStack {
-                Button { model.create() } label: { Image(systemName: "plus") }.help("Create profile")
-                Button { model.duplicate() } label: { Image(systemName: "square.on.square") }.help("Duplicate profile")
-                Button { model.delete() } label: { Image(systemName: "minus") }.disabled(model.edited?.bundled != false).help("Delete profile")
+                Button { model.create() } label: { Image(systemName: "plus") }.help("Create profile").accessibilityLabel("Create profile")
+                Button { model.duplicate() } label: { Image(systemName: "square.on.square") }.disabled(model.edited == nil).help("Duplicate profile").accessibilityLabel("Duplicate profile")
+                Button { model.delete() } label: { Image(systemName: "minus") }.disabled(model.edited?.bundled != false).help("Delete profile").accessibilityLabel("Delete profile")
                 Spacer()
             }.padding(10)
         } detail: {
@@ -34,7 +34,8 @@ struct ProfileEditor: View {
                                 .disabled(profile.protected)
                                 .onSubmit { var next = profile; next.name = name; model.update(next) }
                                 .accessibilityIdentifier("profile.name")
-                            Button("Use Profile") { model.select(profile.id) }.disabled(!model.canActivate(profile))
+                            Button(model.isSelected(profile.id) ? "Active" : "Use Profile") { model.select(profile.id) }
+                                .disabled(model.isSelected(profile.id) || !model.canActivate(profile))
                         }
                         if profile.kind == .system { Text(model.simulation ? "macOS controls all fans in simulation." : model.statusText).foregroundStyle(.secondary) }
                         else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
@@ -65,7 +66,7 @@ struct ProfileEditor: View {
                         }
                         if !model.simulation && profile.kind != .system {
                             if let preview = model.preview {
-                                Text("Preview: \(Int(preview.percent.rounded()))% · \(preview.usesCandidates ? "candidate sensors" : "verified sensors") · no fan commands")
+                                Text(StatusPresentation.demand(preview, active: model.isSelected(profile.id)))
                                     .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("profile.shadow-demand")
                             } else { Text("Preview unavailable: required readings are missing or unreliable.").font(.caption).foregroundStyle(.secondary) }
                             if let reason = model.eligibility(profile).reason { Text(reason).font(.caption).foregroundStyle(.secondary) }
@@ -73,7 +74,12 @@ struct ProfileEditor: View {
                         if let error = model.draftError { Text(error).foregroundStyle(.red).font(.caption).accessibilityIdentifier("curve.validation-error") }
                         HStack {
                             if profile.bundled && !profile.protected { Button("Reset to Default") { model.reset() } }
-                            if !profile.bundled { Button { model.move(-1) } label: { Image(systemName: "arrow.up") }; Button { model.move(1) } label: { Image(systemName: "arrow.down") } }
+                            if !profile.bundled {
+                                Button { model.move(-1) } label: { Image(systemName: "arrow.up") }
+                                    .disabled(!model.canMove(-1)).help("Move profile up").accessibilityLabel("Move profile up")
+                                Button { model.move(1) } label: { Image(systemName: "arrow.down") }
+                                    .disabled(!model.canMove(1)).help("Move profile down").accessibilityLabel("Move profile down")
+                            }
                             Spacer()
                         }
                         Divider()
@@ -82,13 +88,14 @@ struct ProfileEditor: View {
                 }.onAppear { name = profile.name }.onChange(of: profile.id) { _, _ in name = profile.name }.onChange(of: profile.name) { _, new in name = new }
             } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
         }.frame(minWidth: 680, minHeight: 560)
-        .toolbar { ToolbarItem { Text(model.simulation ? "Simulation" : "Hardware Monitoring").foregroundStyle(.secondary).font(.caption) } }
+        .toolbar { ToolbarItem { Text(model.simulation ? "Simulation" : "Live").foregroundStyle(.secondary).font(.caption) } }
     }
 }
 struct CurveSection: View {
     let profile: Profile
     let input: CurveInput
     @Bindable var model: AppModel
+    @State private var resetRevision: UInt64 = 0
     var curve: FanCurve { profile.curves.first { $0.input == input } ?? FanCurve(input, input == .chip ? [(45,0),(85,100)] : input == .airflow ? [(33,0),(60,100)] : [(27,0),(42,100)], enabled: false) }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -97,13 +104,13 @@ struct CurveSection: View {
                 Spacer()
                 Button("Reset Curve") { resetCurve() }.font(.caption)
             }
-            CurveEditor(curve: curve, onChange: commit).id(profile.id + input.rawValue).disabled(!curve.enabled).opacity(curve.enabled ? 1 : 0.5)
+            CurveEditor(curve: curve, resetRevision: resetRevision, onChange: commit).id(profile.id + input.rawValue).disabled(!curve.enabled).opacity(curve.enabled ? 1 : 0.5)
         }
     }
     func resetCurve() {
         let original = BuiltInProfiles.all.first { $0.id == profile.id }
         var defaults = original?.curves.first { $0.input == input } ?? [BuiltInProfiles.chip, BuiltInProfiles.trackpad, BuiltInProfiles.actuator, BuiltInProfiles.airflow].first { $0.input == input }!
-        defaults.enabled = curve.enabled; commit(defaults)
+        defaults.enabled = curve.enabled; commit(defaults); resetRevision &+= 1
     }
     func commit(_ curve: FanCurve) {
         var next = profile
@@ -119,21 +126,19 @@ struct SensorStatus: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Current").font(.headline)
             Grid(alignment: .leading, horizontalSpacing: 22, verticalSpacing: 5) {
-                ForEach(primary) { role in GridRow { Text(model.simulation ? role.name : model.capabilities.sensorName(role)); Text(value(role)).monospacedDigit().foregroundStyle(.secondary) } }
+                ForEach(primary) { role in GridRow { Text(model.simulation ? role.name : model.capabilities.sensorName(role)); Text(model.temperatureText(role)).monospacedDigit().foregroundStyle(.secondary) } }
                 ForEach(model.snapshot?.fans ?? []) { fan in GridRow { Text("Fan \(fan.id + 1)"); Text("\(Int(fan.actualRPM.rounded())) RPM").monospacedDigit().foregroundStyle(.secondary) } }
             }
             DisclosureGroup("Details") {
                 Grid(alignment: .leading, horizontalSpacing: 22, verticalSpacing: 5) {
-                    ForEach([SensorRole.actuator,.charger,.powerSupply,.wireless]) { role in GridRow { Text(role.name); Text(value(role)).monospacedDigit() } }
+                    ForEach([SensorRole.actuator,.charger,.powerSupply,.wireless]) { role in GridRow { Text(role.name); Text(model.temperatureText(role)).monospacedDigit() } }
                 }.padding(.top, 5)
             }
             Text(model.statusText).font(.caption).foregroundStyle(.secondary)
-            if let error = model.hardwareError ?? model.machine.fault ?? model.issues.first { Text(error).font(.caption).foregroundStyle(.orange) }
+            if let error = model.hardwareError ?? model.machine.fault ?? model.issues.first, error != model.statusText {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
         }
-    }
-    func value(_ role: SensorRole) -> String {
-        guard let reading = model.snapshot?.sensors.first(where: { $0.role == role }), let value = reading.celsius, value.isFinite else { return "Unavailable" }
-        return String(format: "%.1f°C%@", value, reading.health == .unverified ? " · candidate" : reading.health == .valid ? "" : " · unreliable")
     }
 }
 struct SettingsView: View {
@@ -142,7 +147,7 @@ struct SettingsView: View {
         Form {
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: model.setSimulation))
-                Text("Monitoring uses real readings. Curve previews do not command the fans.").font(.caption).foregroundStyle(.secondary)
+                Text("Live mode reads sensors and runs the selected profile.").font(.caption).foregroundStyle(.secondary)
                 if model.simulation {
                     Picker("Scenario", selection: $model.scenario) { ForEach(MockScenario.allCases) { Text($0.rawValue).tag($0) } }
                     Button("Simulate Helper Restart") { model.simulateRestart() }

@@ -8,6 +8,16 @@ The compiled stage is `qualifiedControl`, with `conservativeEnvelope` chip polic
 
 Final demand remains the maximum of applicable curves, profile floor and the independent immutable chip guard. Separate comfort scales are retained. Profiles, local signing configuration, `is.dsr.fandy` and helper identity are preserved. No manual state is restored at startup/wake.
 
+## Native polish and focused regression
+
+The curve editor now has a native point selector for keyboard/numerical editing, preserves exact fractional values, accepts locale decimal commas, and holds its axis range fixed during a drag. Graph endpoint segments match the engine's clamped interpolation. Closely spaced nodes stay ordered during dragging; adding a midpoint preserves the existing interpolated policy.
+
+Editor draft state is tested independently of SwiftUI drawing. Invalid numbers/nodes stay local and show “Not applied”; only validated curves reach AppModel. Reset explicitly clears an unpublished invalid draft even when the parent retained its original value, and refreshes selected fields when node identity stays unchanged. Removing a node keeps the next useful selection. Profile reordering disables unavailable directions and protects built-in positions.
+
+Active profiles show “Calculated demand”, while inactive previews retain “no fan commands”. CPU/GPU candidates are labelled estimates; stale, corrupt or nonfinite temperatures display Unavailable. Fan/session errors use readable messages and duplicate fault lines are omitted. Native icon controls have explicit accessibility labels. Visual review remains human-only; no screenshots or automated GUI navigation were used.
+
+The refreshed signed live diagnostic passed every temperature profile, active editing, invalid-draft retention/correction, backend round trip, rapid switching and both-fan System handback. The hardware writer, command order, watchdog and authority were not changed in this polish pass. Earlier crash/restart evidence remains applicable; active physical sleep/wake is still a separate follow-up.
+
 ## Hardware integration fixes
 
 1. Automatic target preloading acknowledged writes but read back zero on this model. The reviewed production batch establishes and verifies both manual modes before validated targets. It never clears targets, uses unlock keys or tries another undocumented sequence.
@@ -57,7 +67,7 @@ System and System+ correctly requested zero custom demand in this idle session. 
 
 ## Verification and installed delivery
 
-**189 Swift tests pass: 28 hardware, 134 core, 27 app. All 31 Python tool tests pass.** Single-job signed native compilation and strict deep signature verification pass. Coverage includes interpolation, validation, aggregation, persistence, chip-envelope completeness, policy-specific eligibility, helper authentication/admission, whole-RPM normalization, partial failures, lifecycle races, lease continuation and bounded deadlines.
+**200 Swift tests pass: 28 hardware, 134 core, 38 app. All 31 Python tool tests pass.** Single-job signed native compilation and strict deep signature verification pass. Coverage includes interpolation, validation, aggregation, persistence, chip-envelope completeness, policy-specific eligibility, helper authentication/admission, whole-RPM normalization, partial failures, lifecycle races, lease continuation, bounded deadlines, exact editor values, reset/invalid-draft behavior, node interpolation and stale display values.
 
 The final signed live check passed every temperature profile, active custom editing without mode release, simulation-to-hardware reactivation, rapid switching and normal cleanup. One earlier zero-delay diagnostic status flood hit the existing request limit; polling now follows production pacing. A separate transient metadata rejection restored both fans, was not reproduced in the final complete run, and retains focused fan-only diagnostics without weaker validation.
 
@@ -81,4 +91,4 @@ python3 -m unittest discover -s Tests/ToolTests -v
 Scripts/build.sh -jobs 1
 ```
 
-Fixed signed `--profiles-live-check` tests native model activation, active editing, simulation round trip, rapid switching and cleanup without changing stored user profiles. `--profiles-calibration-check` logs five minutes per comparison profile and ends in System. They perform real writes and should not run alongside an active controller. No caller chooses RPM, keys or qualification authority. Never overwrite a registered bundle: release/unregister, confirm service absent, replace, verify signatures and register.
+Fixed signed `--profiles-live-check` tests native model activation, active editing and its draft validation boundary, simulation round trip, rapid switching and cleanup without changing stored user profiles. `--profiles-calibration-check` logs five minutes per comparison profile and ends in System. They perform real writes and should not run alongside an active controller. No caller chooses RPM, keys or qualification authority. Never overwrite a registered bundle: release/unregister, confirm service absent, replace, verify signatures and register.

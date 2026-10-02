@@ -70,6 +70,16 @@ import ServiceManagement
         guard let edited, let snapshot, edited.kind != .system else { return nil }
         return try? ShadowProfileEngine.evaluate(edited, snapshot: snapshot, now: simulation ? snapshot.sampledAt : clock(), chipPolicy: machine.chipPolicy)
     }
+    func temperatureText(_ role: SensorRole) -> String {
+        let estimate = !simulation && capabilities.chipPolicy == .conservativeEnvelope && [.cpuAverage, .gpuAverage].contains(role)
+        return StatusPresentation.temperature(snapshot?.sensors.first { $0.role == role },
+            now: simulation ? snapshot?.sampledAt ?? clock() : clock(), estimate: estimate)
+    }
+    func canMove(_ direction: Int) -> Bool {
+        guard let index = profiles.firstIndex(where: { $0.id == editorSelection }), !profiles[index].bundled else { return false }
+        let next = index + direction
+        return profiles.indices.contains(next) && !profiles[next].bundled
+    }
     func eligibility(_ profile: Profile) -> ProfileEligibility {
         ProfileEligibility.evaluate(profile, capabilities: capabilities, helper: helperHealth, snapshot: snapshot, now: clock())
     }
@@ -258,9 +268,8 @@ import ServiceManagement
         guard let original = BuiltInProfiles.all.first(where: { $0.id == editorSelection }), !original.protected else { return }; update(original)
     }
     func move(_ direction: Int) {
-        guard let index = profiles.firstIndex(where: { $0.id == editorSelection }), !profiles[index].bundled else { return }
+        guard canMove(direction), let index = profiles.firstIndex(where: { $0.id == editorSelection }) else { return }
         let next = index + direction
-        guard profiles.indices.contains(next), !profiles[next].bundled else { return }
         profiles.swapAt(index,next); save()
     }
     func setSimulation(_ enabled: Bool) {

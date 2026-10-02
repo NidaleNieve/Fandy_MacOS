@@ -112,7 +112,15 @@ public enum ControlError: Error, Equatable, Sendable, LocalizedError {
         case .invalidCurve(let reason), .invalidProfile(let reason): reason
         case .hardwareUnqualified: "Real fan control is disabled until hardware safety verification is complete."
         case .restorationUnverified: "Fan control state unknown; automatic restoration could not be verified."
-        default: String(describing: self)
+        case .invalidNumber: "Invalid numerical value."
+        case .invalidFan: "Fan readings or the requested speed are invalid."
+        case .invalidSnapshot: "Hardware readings are unavailable or out of date."
+        case .thermalPressure: "Custom control stopped: thermal pressure is elevated or unavailable."
+        case .helperUnavailable: "The fan helper is unavailable."
+        case .unauthorized: "The app could not authenticate with the fan helper."
+        case .malformedMessage: "The fan helper rejected an invalid request."
+        case .staleSession: "The fan control session expired or changed."
+        case .excessiveMessages: "The fan helper received too many requests. Try selecting the profile again."
         }
     }
 }

@@ -10,6 +10,12 @@
 			"path" = "Sources/FandyApp/AppModel.swift";
 			"sourceTree" = "<group>";
 		};
+		"1F639B204FFCC92863C8A7D0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/CurveDraft.swift";
+			"sourceTree" = "<group>";
+		};
 		"9A6ECCAA56620715A84F6DCC" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -56,6 +62,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyApp/RestorationFlight.swift";
+			"sourceTree" = "<group>";
+		};
+		"3217C5AE4A415B73290ADFE6" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/StatusPresentation.swift";
 			"sourceTree" = "<group>";
 		};
 		"D2CEB122BCF9ECDC6BB42176" = {
@@ -281,6 +293,7 @@
 			"isa" = "PBXGroup";
 			"children" = (
 				3B4B7C88C79578697F216634,
+				1F639B204FFCC92863C8A7D0,
 				9A6ECCAA56620715A84F6DCC,
 				8E639CEF8DDAE615620B8426,
 				51D0B8FD680608BAF5020BFE,
@@ -289,6 +302,7 @@
 				B3934EDA49FBAD13B2EB4FB3,
 				08B98D48D2BD80C8DFEDFFCD,
 				83A58823F659CAEA7AE2A932,
+				3217C5AE4A415B73290ADFE6,
 				D2CEB122BCF9ECDC6BB42176,
 				FE86A99A33849697E1E79465,
 				5F3F4CF63DA77EBEC5901461,
@@ -399,6 +413,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 3B4B7C88C79578697F216634;
 		};
+		"C896C6982894C685DED1534F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 1F639B204FFCC92863C8A7D0;
+		};
 		"54E08E461525A4E404448A81" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = 9A6ECCAA56620715A84F6DCC;
@@ -431,11 +449,16 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 83A58823F659CAEA7AE2A932;
 		};
+		"8C817E85958EF70C743F350C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 3217C5AE4A415B73290ADFE6;
+		};
 		"7099A060F81C0382F95DD211" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = 2147483647;
 			"files" = (
 				43FFA59EE5B6860410079F34,
+				C896C6982894C685DED1534F,
 				54E08E461525A4E404448A81,
 				59F320D3FCD95443EF12DCEE,
 				B542E6D429544F89E6775EC5,
@@ -444,6 +467,7 @@
 				84C4FB7FE594032EF8AE8A80,
 				F27392CE31ED39B2CCC72F65,
 				9C01BA543BDAA76EEFA4A02A,
+				8C817E85958EF70C743F350C,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};

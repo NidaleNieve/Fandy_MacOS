@@ -43,7 +43,7 @@ struct FandyApp: App {
             }
             Divider()
             Text(model.statusText).font(.caption)
-            if let fault = model.machine.fault { Text(fault).font(.caption) }
+            if let fault = model.machine.fault, fault != model.statusText { Text(fault).font(.caption) }
             Divider()
             OpenEditorButton()
             SettingsLink { Text("Settings…") }

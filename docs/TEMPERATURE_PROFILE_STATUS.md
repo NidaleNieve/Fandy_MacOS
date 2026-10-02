@@ -23,7 +23,7 @@ Spinning re-entry and subsequent target updates passed with actual RPM, followed
 
 The original modest five-second trial and System/Max mechanical qualification remain valid. The former qualification authority is disabled in the production stage; callers cannot choose trial duration or unlock production by preferences/XPC. A dead or blocked helper still cannot execute its own watchdog.
 
-Software verification: 189 Swift tests (28 hardware, 134 core, 27 app), 31 Python tool tests, a single-job signed build and strict nested signature verification. Active curve editing preserved manual ownership; simulation-to-hardware reactivation and paced rapid-switch/System checks also passed. Actual production profile and calibration results are recorded in [delivery status](DEVELOPMENT_STATUS.md).
+Initial temperature-delivery verification: 189 Swift tests (28 hardware, 134 core, 27 app), 31 Python tool tests, a single-job signed build and strict nested signature verification. Active curve editing preserved manual ownership; simulation-to-hardware reactivation and paced rapid-switch/System checks also passed. Actual production profile and calibration results are recorded in [delivery status](DEVELOPMENT_STATUS.md).
 
 ## Follow-ups
 
@@ -61,3 +61,5 @@ The reference CSV contained no contemporaneous rows for this session. Its earlie
 | Charger, Power Supply, Wireless | Pending informational mappings. They do not gate profiles that do not use them. |
 
 Published naming references: [VirtualSMC keys](https://github.com/acidanthera/VirtualSMC/blob/master/Docs/SMCSensorKeys.txt), [Stats sensor definitions](https://github.com/exelban/stats/blob/master/Modules/Sensors/values.swift), [iSMC descriptors](https://github.com/dkorunic/iSMC/blob/master/smc/sensors.go). Existing license notices remain; no implementation or proprietary mapping table was copied.
+
+The later native-polish pass passed 200 Swift tests and 31 tool tests, plus a refreshed signed live profile/editor check. Invalid draft retention/correction, active editing, backend switching and System handback passed; the physical writer and watchdog were unchanged. See [delivery status](DEVELOPMENT_STATUS.md).

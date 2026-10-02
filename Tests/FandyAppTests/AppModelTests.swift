@@ -32,6 +32,20 @@ import FandyCore
     try await Task.sleep(for:.milliseconds(400))
     #expect(ProfileStore(url:url).load().profiles.first{$0.id=="school"}?.floor==20)
 }
+@MainActor @Test func customReorderingCannotDisplaceBuiltinsAndReportsBoundaries() {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
+    model.create(); let first = model.editorSelection
+    #expect(!model.canMove(-1)); #expect(!model.canMove(1))
+    model.create(); let second = model.editorSelection
+    #expect(model.canMove(-1)); model.move(-1)
+    #expect(model.profiles.suffix(2).map(\.id) == [second, first])
+    #expect(!model.canMove(-1)); #expect(model.canMove(1))
+    model.editorSelection = "gaming"
+    #expect(!model.canMove(-1)); #expect(!model.canMove(1))
+    #expect(model.profiles.prefix(6).map(\.id) == BuiltInProfiles.all.map(\.id))
+}
 @MainActor @Test func powerResetPreservesGenerationAndFailedRestorationIsNotSystem() async throws {
     let directory=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at:directory) }
