@@ -23,10 +23,13 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     public let topology: QualificationState
     public let automaticRestoration: QualificationState
     public let manualTransaction: QualificationState
+    public let chipControl: ChipControlPolicy?
+    public var chipPolicy: ChipControlPolicy { chipControl ?? .cpuGPU }
     public init(model: String, stage: HardwareStage = .observation, sensors: [SensorEvidence] = [], topology: QualificationState = .pending,
-                automaticRestoration: QualificationState = .pending, manualTransaction: QualificationState = .pending) {
+                automaticRestoration: QualificationState = .pending, manualTransaction: QualificationState = .pending, chipControl: ChipControlPolicy? = nil) {
         self.model = model; self.stage = stage; self.sensors = sensors; self.topology = topology
         self.automaticRestoration = automaticRestoration; self.manualTransaction = manualTransaction
+        self.chipControl = chipControl
     }
     public static let requiredRoles = Set([SensorRole.cpuAverage, .gpuAverage, .cpuPeak, .gpuPeak, .trackpad, .actuator,
                                            .airflowLeft, .airflowTop, .airflowRight, .charger, .powerSupply, .wireless])
@@ -47,12 +50,12 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     public func permits(_ profile: Profile) -> Bool {
         guard canControl else { return false }
         if profile.kind == .maximum { return true }
-        return stage == .qualifiedControl && profile.requiredSensors.isSubset(of: verifiedRoles)
+        return stage == .qualifiedControl && profile.requiredSensors(chipPolicy: chipPolicy).isSubset(of: verifiedRoles)
     }
     public func permits(required: Set<SensorRole>) -> Bool {
-        canControl && (required.isEmpty || ([.curveQualification, .qualifiedControl].contains(stage) && SensorRole.safety.isSubset(of: required) && required.isSubset(of: verifiedRoles)))
+        canControl && (required.isEmpty || ([.curveQualification, .qualifiedControl].contains(stage) && chipPolicy.required.isSubset(of: required) && required.isSubset(of: verifiedRoles)))
     }
-    public var canQualifyCurves: Bool { stage == .curveQualification && canControl && SensorRole.safety.isSubset(of: verifiedRoles) }
+    public var canQualifyCurves: Bool { stage == .curveQualification && canControl && chipPolicy.required.isSubset(of: verifiedRoles) }
     /// Separate, signed-build authority for bounded qualification; never admits profile leases.
     /// The current restoration build cannot obtain it through preferences or XPC data.
     public var canQualifyManual: Bool {
@@ -67,7 +70,7 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
         actual == model ? self : Self(model: actual)
     }
     public func reasonUnavailable(_ profile: Profile) -> String {
-        let missing = profile.requiredSensors.subtracting(verifiedRoles).sorted { $0.rawValue < $1.rawValue }
+        let missing = profile.requiredSensors(chipPolicy: chipPolicy).subtracting(verifiedRoles).sorted { $0.rawValue < $1.rawValue }
         if !missing.isEmpty { return "Awaiting sensor verification: " + missing.map(\.name).joined(separator: ", ") }
         if stage == .curveQualification && profile.kind == .custom { return "Variable-speed handback testing is not finished." }
         return blockers.first ?? "This profile is not qualified for this hardware."
@@ -101,7 +104,7 @@ public struct ProfileEligibility: Sendable {
             guard capabilities.permits(profile) else { return Self(allowed: false, reason: capabilities.reasonUnavailable(profile)) }
             guard helper == .controlReady else { throw ControlError.helperUnavailable }
             guard let snapshot else { throw ControlError.invalidSnapshot }
-            try snapshot.validate(now: now, required: profile.requiredSensors)
+            try snapshot.validate(now: now, required: profile.requiredSensors(chipPolicy: capabilities.chipPolicy))
             return Self(allowed: true, reason: nil)
         } catch { return Self(allowed: false, reason: error.localizedDescription) }
     }

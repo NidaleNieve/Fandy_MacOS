@@ -18,7 +18,8 @@ public struct ControlMachine: Sendable {
     private var zeroSince: Double?
     private var demandSince: Double?
     private var restorationIsFault = false
-    public init() {}
+    public let chipPolicy: ChipControlPolicy
+    public init(chipPolicy: ChipControlPolicy = .cpuGPU) { self.chipPolicy = chipPolicy }
     public mutating func select(_ profile: Profile) throws -> ControlEffect {
         try profile.validate() // Invalid edits never replace the running configuration.
         guard generation < UInt64.max else { throw ControlError.staleSession }
@@ -41,7 +42,7 @@ public struct ControlMachine: Sendable {
         if state == .restoringSystem || state == .fault { return .restore(generation: generation) }
         guard selected.kind != .system else { return .none }
         do {
-            let demand = try ProfileEngine().evaluate(selected, snapshot: snapshot, now: now)
+            let demand = try ProfileEngine().evaluate(selected, snapshot: snapshot, now: now, chipPolicy: chipPolicy)
             if snapshot.id != lastHealthySample { healthyCount += 1; lastHealthySample = snapshot.id }
             if state == .initializingCustom && healthyCount < (selected.kind == .maximum ? 1 : 5) { return .none }
             if state == .initializingCustom && selected.automaticAtIdle && demand.percent == 0 {
@@ -64,7 +65,7 @@ public struct ControlMachine: Sendable {
             // An independent safety request may never be attenuated by the acoustic governor.
             percent = max(percent, demand.safetyPercent)
             let targets = try snapshot.fans.map { FanTarget($0.id, try $0.rpm(percent: percent)) }
-            return .apply(targets: targets, generation: generation, snapshotID: snapshot.id, required: selected.requiredSensors)
+            return .apply(targets: targets, generation: generation, snapshotID: snapshot.id, required: selected.requiredSensors(chipPolicy: chipPolicy))
         } catch { return fail(error) }
     }
     public mutating func applied(generation reply: UInt64) {

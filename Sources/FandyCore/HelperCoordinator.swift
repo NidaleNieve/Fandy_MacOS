@@ -27,6 +27,7 @@ public final class HelperCoordinator {
                 clock: @escaping () -> Double, event: @escaping (String) -> Void = { _ in }, requireExclusive: @escaping () throws -> Void = {}) {
         self.requireExclusive = requireExclusive; self.capabilities = capabilities; self.io = io; self.qualified = capabilities.canControl
         self.writesPermitted = capabilities.canRestore; self.read = read; self.clock = clock; self.event = event
+        self.safety = HelperSafety(chipPolicy: capabilities.chipPolicy)
     }
     @discardableResult public func startup() -> Bool {
         let result = restore(); startupRestoration = restoration; return result
@@ -173,7 +174,7 @@ public final class HelperCoordinator {
             }
             if safety.lease?.required.isEmpty == true { return } // Maximum needs no thermal identities.
             // Independent thermal escalation does not renew the GUI heartbeat.
-            let percent = try BuiltInProfiles.guardCurve.evaluate(BuiltInProfiles.guardCurve.temperature(in: snapshot, now: clock()))
+            let percent = try BuiltInProfiles.guardCurve.evaluate(BuiltInProfiles.guardCurve.temperature(in: snapshot, now: clock(), chipPolicy: capabilities.chipPolicy))
             let elevated = try targets.map { target -> FanTarget in
                 guard let fan = snapshot.fans.first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
                 return FanTarget(target.fanID, max(target.rpm, try fan.rpm(percent: percent)))

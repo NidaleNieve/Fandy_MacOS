@@ -9,8 +9,10 @@ public enum MeasurementSafety {
               snapshot.thermalPressure == .nominal || snapshot.thermalPressure == .fair else { throw ControlError.restorationUnverified }
         // Candidate labels are deliberately still unqualified. Require a complete, fresh
         // documented chip domain for this conservative measurement ceiling.
-        for role in [SensorRole.cpuPeak, .gpuPeak] {
-            guard let reading = snapshot.sensors.first(where: { $0.role == role }),
+        let roles = SensorRole.safety.union(snapshot.sensors.contains { $0.role == .socPeak } ? [.socPeak] : [])
+        for role in roles {
+            let matches = snapshot.sensors.filter { $0.role == role }
+            guard matches.count == 1, let reading = matches.first,
                   reading.health == .valid || reading.health == .unverified,
                   let value = reading.celsius, value.isFinite, value > 0, value < ceilingC,
                   reading.sampledAt <= now, now - reading.sampledAt <= 2 else { throw ControlError.invalidSnapshot }

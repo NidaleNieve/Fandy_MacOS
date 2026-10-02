@@ -40,6 +40,10 @@ struct ProfileEditor: View {
                         else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
                         else {
                             CurveSection(profile: profile, input: .chip, model: model)
+                            if !model.simulation && model.capabilities.chipPolicy == .conservativeEnvelope {
+                                Text("Chip uses the hottest reading in the reviewed chip-region envelope. CPU/GPU averages are estimates.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             Divider()
                             Text("Chassis").font(.headline)
                             Picker("Sensor", selection: $model.curveInput) {
@@ -106,7 +110,7 @@ struct CurveSection: View {
 }
 struct SensorStatus: View {
     @Bindable var model: AppModel
-    private let primary: [SensorRole] = [.cpuAverage,.gpuAverage,.trackpad,.airflowLeft,.airflowTop,.airflowRight]
+    private var primary: [SensorRole] { [.cpuAverage,.gpuAverage] + (model.capabilities.chipPolicy == .conservativeEnvelope && !model.simulation ? [.socPeak] : []) + [.trackpad,.airflowLeft,.airflowTop,.airflowRight] }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Current").font(.headline)
@@ -149,6 +153,7 @@ struct SettingsView: View {
                 Text(model.capabilities.stage == .qualifiedControl ? "Eligible profiles control real fans. System restores Apple automatic control." : model.capabilities.canRestore ? "System and Max are available. Temperature profiles await their required inputs and activation test." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Hardware verification") {
                     LabeledContent("Sensor roles", value: "\(model.capabilities.verifiedRoles.intersection(HardwareCapabilities.requiredRoles).count) / \(HardwareCapabilities.requiredRoles.count) verified")
+                    LabeledContent("Chip control", value: model.capabilities.chipPolicy == .conservativeEnvelope ? "Conservative envelope" : "CPU/GPU peaks")
                     LabeledContent("Automatic handback", value: model.capabilities.automaticRestoration == .verified ? "Verified" : "Pending")
                     LabeledContent("Manual control and recovery", value: model.capabilities.manualTransaction == .verified ? "Verified" : "Pending")
                 }.accessibilityIdentifier("settings.hardwareVerification")

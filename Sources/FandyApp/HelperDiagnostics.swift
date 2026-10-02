@@ -111,7 +111,8 @@ enum HelperDiagnosticAction: String, CaseIterable {
             let status = try await client.status()
             guard status.capabilities?.canQualifyCurves == true, status.automaticVerified,
                   let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
-            try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: SensorRole.safety)
+            let policy = SensorRegistry.capabilities.chipPolicy
+            try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: policy.required)
             let floors = try snapshot.fans.map { fan -> FanTarget in
                 let rpm = max(fan.minimumRPM, fan.actualRPM) + 200
                 guard rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
@@ -140,7 +141,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 if renew {
                     let current = try await client.status()
                     guard let currentSnapshot = current.snapshot else { throw ControlError.invalidSnapshot }
-                    let demand = try ProfileEngine().evaluate(BuiltInProfiles.systemPlus, snapshot: currentSnapshot, now: ProcessInfo.processInfo.systemUptime)
+                    let demand = try ProfileEngine().evaluate(BuiltInProfiles.systemPlus, snapshot: currentSnapshot, now: ProcessInfo.processInfo.systemUptime, chipPolicy: policy)
                     let targets = try currentSnapshot.fans.map { fan -> FanTarget in
                         guard let floor = floors.first(where: { $0.fanID == fan.id }) else { throw ControlError.invalidFan }
                         // A small upward-only target change also exercises repeated target acknowledgement.
@@ -148,7 +149,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                         return FanTarget(fan.id, max(try fan.rpm(percent: demand.percent), min(fan.maximumRPM, floor.rpm + step)))
                     }
                     writeAdmitted = true
-                    try await client.apply(targets, generation: 1, required: SensorRole.safety)
+                    try await client.apply(targets, generation: 1, required: policy.required)
                     activated = true
                 }
                 let observed = try reader.fans()

@@ -14,6 +14,13 @@ def record(phase, gpu=40):
 
 
 class TargetedReportTests(unittest.TestCase):
+    def test_render_session_uses_its_own_baseline(self):
+        rows = [record(p, 45 if p == 'gpu' else 40) for p in ['baseline', 'gpu', 'gpuCooldown'] for _ in range(10)]
+        result = report.analyze(rows)
+        self.assertTrue(result['domains']['Tg candidates']['independentVariationObserved'])
+        self.assertFalse(result['qualificationChanged'])
+        self.assertEqual(result['domains']['Tg candidates']['pulseRiseC'], 5)
+        self.assertNotIn('did not provide contemporaneous', report.render(result))
     def test_insufficient_gpu_does_not_pass_variation_filter(self):
         rows = [record(p, 40.5 if p == 'gpu' else 40) for p in ['baseline', 'cpu', 'cpuCooldown', 'gpu'] for _ in range(10)]
         result = report.analyze(rows)

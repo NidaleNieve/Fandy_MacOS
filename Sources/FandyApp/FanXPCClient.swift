@@ -147,7 +147,7 @@ import FandyHardware
         guard rejected else { throw ControlError.unauthorized }
     }
     func apply(_ targets: [FanTarget], generation: UInt64) async throws {
-        try await apply(targets,generation:generation,required:SensorRole.safety)
+        try await apply(targets,generation:generation,required:SensorRegistry.capabilities.chipPolicy.required)
     }
     func apply(_ targets: [FanTarget], generation requested: UInt64, required: Set<SensorRole>) async throws {
         guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).permits(required: required) else { throw ControlError.hardwareUnqualified }
