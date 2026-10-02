@@ -342,3 +342,45 @@ private actor MaximumClient: PrivilegedFanClient {
         #expect(throws: (any Error).self) { _ = try HelperDiagnosticAction.parse(["Fandy", action.rawValue, "--duration", "9999"]) }
     }
 }
+
+private actor EnvelopeClient: PrivilegedFanClient {
+    var sequence: UInt64 = 0
+    var missing = false
+    var requests: [Set<SensorRole>] = []
+    var restores = 0
+    func loseEnvelope() { missing = true }
+    func counts() -> (Int, Int) { (requests.count, restores) }
+    func roles() -> [Set<SensorRole>] { requests }
+    func status() -> HelperStatus {
+        sequence += 1
+        var snapshot = monitoringFixture()
+        snapshot.sensors[snapshot.sensors.firstIndex { $0.role == .socPeak }!] = SensorReading(.socPeak, missing ? nil : 65,
+            at: 10, sequence: sequence, health: missing ? .missing : .valid)
+        return HelperStatus(automaticVerified: requests.isEmpty, manualQualified: true, snapshot: snapshot)
+    }
+    func apply(_ targets: [FanTarget], generation: UInt64) throws { throw ControlError.malformedMessage }
+    func apply(_ targets: [FanTarget], generation: UInt64, required: Set<SensorRole>) throws {
+        guard required == [.socPeak] else { throw ControlError.hardwareUnqualified }; requests.append(required)
+    }
+    func restoreAutomatic() { restores += 1 }
+}
+@MainActor @Test func appEnvelopePolicyKeepsDisplayEstimatesSeparateAndLossReturnsSystem() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let client = EnvelopeClient()
+    let caps = HardwareCapabilities(model: "Test", stage: .qualifiedControl,
+        sensors: [SensorEvidence(role: .socPeak, keys: ["Tp00", "Tm00", "Tg0U"], state: .verified, source: "Test", limitation: "")],
+        topology: .verified, automaticRestoration: .verified, manualTransaction: .verified, chipControl: .conservativeEnvelope)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+                         client: client, capabilities: caps, helperAvailable: { true }, clock: { 10 })
+    await model.tick()
+    #expect(model.machine.chipPolicy == .conservativeEnvelope)
+    #expect(model.canActivate(BuiltInProfiles.gaming)); #expect(!model.canActivate(BuiltInProfiles.coolChassis))
+    model.editorSelection = "gaming"; #expect(model.preview?.usesCandidates == false)
+    model.select("gaming"); #expect(!model.isSelected("gaming"))
+    for _ in 0..<5 { await model.tick() }
+    #expect(model.isSelected("gaming")); #expect(await client.roles() == [[.socPeak]])
+    await client.loseEnvelope(); await model.tick()
+    #expect(model.machine.selected.kind == .system); #expect(!model.isSelected("gaming"))
+    #expect(await client.counts().1 > 0)
+}

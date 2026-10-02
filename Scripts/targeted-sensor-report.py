@@ -39,6 +39,8 @@ def analyze(records):
         members = sorted(k for k in keys if k.startswith(prefix))
         if not members:
             continue
+        if phase == 'gpu' and not any(r['phase'] == baseline for r in records):
+            baseline = 'baseline'
         prior = [r for r in records if r['phase'] == baseline][-10:]
         active = [r for r in records if r['phase'] == phase]
         peaks = lambda rows: [max(values(r)[key] for key in members) for r in rows]
@@ -65,7 +67,7 @@ def render(result):
         lines.append(f'| {name} | {len(domain["members"])} | {number(domain["baselinePeakMedianC"])} | {number(domain["pulsePeakMaxC"])} | {number(domain["pulseRiseC"])} | {domain["independentVariationObserved"]} |')
     lines += ['', 'The GPU pulse must show independent variation before it can resolve regional coverage. '
               'Low-duty success or common heat movement alone does not prove that coverage. No qualification was changed.', '',
-              'TG Pro did not provide contemporaneous reference rows for this session. Earlier paired recordings remain separate evidence. '
+              'Reference matching must be reported separately using contemporaneous CSV rows. '
               'Named PMU temperature events are supplementary die readings, not substitutes for identified CPU/GPU groups.', '',
               '| Comfort candidate | Key | Minimum | Maximum |', '| --- | --- | ---: | ---: |']
     for name, reading in result['comfort'].items():

@@ -15,7 +15,8 @@ public struct HelperSafety: Sendable {
     public private(set) var generation: UInt64 = 0
     private var previousOwner: UUID?
     public let timeout: Double
-    public init(timeout: Double = 10) { self.timeout = timeout }
+    public let chipPolicy: ChipControlPolicy
+    public init(timeout: Double = 10, chipPolicy: ChipControlPolicy = .cpuGPU) { self.timeout = timeout; self.chipPolicy = chipPolicy }
     public mutating func restorationFinished(_ verified: Bool) { systemVerified = verified; restoring = !verified; if verified { lease = nil } }
     /// External ownership loss while idle is a conflict, not a failed release transaction.
     /// Observation must not start an automatic-write loop against another controller.
@@ -40,7 +41,7 @@ public struct HelperSafety: Sendable {
         try snapshot.validate(now: now, required: current.required)
         guard targets.count == snapshot.fans.count, Set(targets.map(\.fanID)).count == targets.count,
               Set(targets.map(\.fanID)) == Set(snapshot.fans.map(\.id)) else { throw ControlError.invalidFan }
-        let safety = current.required.isEmpty ? 0 : try BuiltInProfiles.guardCurve.evaluate(BuiltInProfiles.guardCurve.temperature(in: snapshot, now: now))
+        let safety = current.required.isEmpty ? 0 : try BuiltInProfiles.guardCurve.evaluate(BuiltInProfiles.guardCurve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy))
         var safe: [FanTarget] = []
         for target in targets {
             guard let fan = snapshot.fans.first(where: { $0.id == target.fanID }), target.rpm.isFinite,

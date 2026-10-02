@@ -47,6 +47,7 @@ import ServiceManagement
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
         self.capabilities = capabilities ?? SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel())
+        self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : self.capabilities.chipPolicy)
         self.clock = clock
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         store = ProfileStore(url: storeURL ?? root.appendingPathComponent("Fandy/profiles.json"))
@@ -67,7 +68,7 @@ import ServiceManagement
     var ownership: FanOwnership { FanOwnership.observe(snapshot, now: clock()) }
     var preview: ProfilePreview? {
         guard let edited, let snapshot, edited.kind != .system else { return nil }
-        return try? ShadowProfileEngine.evaluate(edited, snapshot: snapshot, now: simulation ? snapshot.sampledAt : clock())
+        return try? ShadowProfileEngine.evaluate(edited, snapshot: snapshot, now: simulation ? snapshot.sampledAt : clock(), chipPolicy: machine.chipPolicy)
     }
     func eligibility(_ profile: Profile) -> ProfileEligibility {
         ProfileEligibility.evaluate(profile, capabilities: capabilities, helper: helperHealth, snapshot: snapshot, now: clock())
@@ -75,7 +76,7 @@ import ServiceManagement
     func canActivate(_ profile: Profile) -> Bool {
         if simulation || profile.kind == .system { return true }
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
-           (try? snapshot.validate(now: clock(), required: profile.requiredSensors)) != nil { return true }
+           (try? snapshot.validate(now: clock(), required: profile.requiredSensors(chipPolicy: capabilities.chipPolicy))) != nil { return true }
         return eligibility(profile).allowed
     }
     var statusText: String {
@@ -146,7 +147,7 @@ import ServiceManagement
                 let reading = try await mock.snapshot()
                 guard token == lifecycleToken, !quitting else { return }; snapshot = reading
                 if let snapshot {
-                    if machine.selected.kind != .system { try freshness.check(snapshot, required: machine.selected.requiredSensors, now: snapshot.sampledAt) }
+                    if machine.selected.kind != .system { try freshness.check(snapshot, required: machine.selected.requiredSensors(chipPolicy: machine.chipPolicy), now: snapshot.sampledAt) }
                     await execute(machine.step(snapshot, now: snapshot.sampledAt))
                 }
             } else {
@@ -177,7 +178,7 @@ import ServiceManagement
                 if capabilities.canRestore {
                     if machine.selected.kind != .system {
                         guard capabilities.canControl, helperHealth == .controlReady else { throw ControlError.helperUnavailable }
-                        try freshness.check(reading, required: machine.selected.requiredSensors, now: clock())
+                        try freshness.check(reading, required: machine.selected.requiredSensors(chipPolicy: machine.chipPolicy), now: clock())
                     }
                     await execute(machine.step(reading, now: clock()))
                 }
@@ -275,7 +276,7 @@ import ServiceManagement
                 await execute(machine.fail(ControlError.invalidProfile("Backend changed; System selected.")))
                 guard token == lifecycleToken else { return }
             }
-            machine = ControlMachine()
+            machine = ControlMachine(chipPolicy: enabled ? .cpuGPU : capabilities.chipPolicy)
             simulation = enabled; snapshot = nil; hardware = injectedProvider
             freshness = SensorFreshnessMonitor(); hardwareError = nil; helperHealth = .unavailable
             await tick()
@@ -288,7 +289,7 @@ import ServiceManagement
         if simulation || capabilities.canRestore {
             let effect = machine.sleep()
             Task { guard token == lifecycleToken else { return }; await execute(effect) }
-        } else { machine = ControlMachine(); hardwareError = nil }
+        } else { machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : capabilities.chipPolicy); hardwareError = nil }
     }
     func simulateRestart() { Task { await mock.helperRestart(); await execute(machine.fail(ControlError.helperUnavailable)) } }
     func quit() {

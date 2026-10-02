@@ -1,5 +1,6 @@
 import Foundation
 import Metal
+import CoreImage
 import FandyCore
 import FandyHardware
 
@@ -100,10 +101,57 @@ func emit<T: Encodable>(_ value: T) throws {
     let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
     var data = try encoder.encode(value); data.append(10); FileHandle.standardOutput.write(data)
 }
-guard CommandLine.arguments == [CommandLine.arguments[0], "--bounded-cycle"] else {
-    FileHandle.standardError.write(Data("Usage: fandy-measure --bounded-cycle\nFixed 11-minute read-only cycle; two low-duty 30-second stimuli under verified automatic fan mode.\n".utf8)); exit(2)
+let renderCycle = CommandLine.arguments == [CommandLine.arguments[0], "--gpu-render-cycle"]
+guard renderCycle || CommandLine.arguments == [CommandLine.arguments[0], "--bounded-cycle"] else {
+    FileHandle.standardError.write(Data("Usage: fandy-measure --bounded-cycle | --gpu-render-cycle\nFixed read-only cycles under verified automatic fan mode. GPU render: 30s baseline, 30s 4K image processing, 120s cooldown.\n".utf8)); exit(2)
+}
+/// A finite ordinary Core Image video-processing workload, not the earlier sine compute pulse.
+/// Each submitted frame must finish within 250ms; admission is rechecked every frame.
+func captureRenderCycle() throws {
+    guard HardwareSnapshotReader.machineModel() == SensorRegistry.model,
+          let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { throw ControlError.hardwareUnqualified }
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 3840, height: 2160, mipmapped: false)
+    descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
+    guard let texture = device.makeTexture(descriptor: descriptor) else { throw ControlError.invalidSnapshot }
+    let context = CIContext(mtlDevice: device, options: [.cacheIntermediates: false])
+    let rectangle = CGRect(x: 0, y: 0, width: 3840, height: 2160)
+    guard let source = CIFilter(name: "CICheckerboardGenerator", parameters: ["inputWidth": 24.0])?.outputImage else { throw ControlError.invalidSnapshot }
+    let reader = try SMCReader(), sampler = try HardwareSnapshotReader()
+    let keys = Array(Set(SensorRegistry.chipEnvelopeKeys + SensorRegistry.mappings.flatMap(\.keys))).sorted()
+    let start = ProcessInfo.processInfo.systemUptime
+    var nextSample = start
+    while ProcessInfo.processInfo.systemUptime - start < 180 {
+        let now = ProcessInfo.processInfo.systemUptime, elapsed = now - start
+        let phase: MeasurementPhase = elapsed < 30 ? .baseline : elapsed < 60 ? .gpu : .gpuCooldown
+        let fresh = try sampler.snapshot()
+        try MeasurementSafety.validate(fresh, now: ProcessInfo.processInfo.systemUptime)
+        if now >= nextSample {
+            let samples = try keys.map { try reader.read($0) }
+            guard samples.allSatisfy({ $0.type == "flt " && $0.size == 4 && $0.error == nil &&
+                $0.value.map { $0.isFinite && $0 > 0 && $0 < MeasurementSafety.ceilingC } == true }) else { throw ControlError.invalidSnapshot }
+            let owned = try sampler.snapshot()
+            try MeasurementSafety.validate(owned, now: ProcessInfo.processInfo.systemUptime)
+            try emit(Record(timestamp: ISO8601DateFormatter().string(from: Date()), model: SensorRegistry.model,
+                            os: ProcessInfo.processInfo.operatingSystemVersionString, phase: phase,
+                            elapsed: elapsed, fans: owned.fans, keys: samples, hid: HIDTemperatureReader.read()))
+            nextSample = ProcessInfo.processInfo.systemUptime + 1
+        }
+        if phase == .gpu && ProcessInfo.processInfo.systemUptime - start < 60 {
+            let image = source.transformed(by: CGAffineTransform(translationX: elapsed * 12, y: elapsed * 6))
+                .cropped(to: rectangle).clampedToExtent().applyingFilter("CIGaussianBlur", parameters: ["inputRadius": 12.0]).cropped(to: rectangle)
+                .applyingFilter("CIColorControls", parameters: ["inputSaturation": 0.8, "inputBrightness": 0.02])
+            guard let command = queue.makeCommandBuffer() else { throw ControlError.invalidSnapshot }
+            context.render(image, to: texture, commandBuffer: command, bounds: rectangle, colorSpace: CGColorSpaceCreateDeviceRGB())
+            let finished = DispatchSemaphore(value: 0)
+            command.addCompletedHandler { _ in finished.signal() }; command.commit()
+            guard finished.wait(timeout: .now() + .milliseconds(250)) == .success, command.status == .completed else { throw ControlError.invalidSnapshot }
+            Thread.sleep(forTimeInterval: max(0, 1.0 / 24 - (ProcessInfo.processInfo.systemUptime - now)))
+        } else { Thread.sleep(forTimeInterval: 0.1) }
+    }
+    FileHandle.standardError.write(Data("GPU render capture completed: 180 seconds, no fan writes.\n".utf8))
 }
 do {
+    if renderCycle { try captureRenderCycle(); exit(0) }
     guard HardwareSnapshotReader.machineModel() == SensorRegistry.model else { throw ControlError.hardwareUnqualified }
     let reader = try SMCReader(), sampler = try HardwareSnapshotReader()
     // Enumerate once, before the timed baseline. This catalog is discovery evidence only;

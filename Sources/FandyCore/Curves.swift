@@ -34,9 +34,9 @@ public struct FanCurve: Codable, Sendable, Equatable {
         }
         return last.percent
     }
-    public func temperature(in snapshot: HardwareSnapshot, now: TimeInterval) throws -> Double {
+    public func temperature(in snapshot: HardwareSnapshot, now: TimeInterval, chipPolicy: ChipControlPolicy = .cpuGPU) throws -> Double {
         switch input {
-        case .chip: return max(try snapshot.value(.cpuPeak, now: now), try snapshot.value(.gpuPeak, now: now))
+        case .chip: return try chipPolicy.temperature(in: snapshot, now: now)
         case .trackpad: return try snapshot.value(.trackpad, now: now)
         case .actuator: return try snapshot.value(.actuator, now: now)
         case .airflow: return try [SensorRole.airflowLeft, .airflowTop, .airflowRight].map { try snapshot.value($0, now: now) }.max()!

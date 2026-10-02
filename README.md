@@ -8,6 +8,8 @@ The former bounded mechanical-test endpoint is disabled in the production maximu
 
 See [temperature-profile progress and exact blockers](docs/TEMPERATURE_PROFILE_STATUS.md) and [the development checkpoint](docs/DEVELOPMENT_STATUS.md) for the current milestone and resumption order.
 
+A [conservative chip-envelope alternative](docs/CHIP_ENVELOPE.md) is now implemented and tested, but inactive pending the policy decision and bounded live curve recovery. It keeps CPU/GPU display estimates separate from its control input; it does not claim resolved individual core identities.
+
 ## Build and run
 
 Requires Apple Silicon, macOS 15+, Xcode 16+ with Swift 6. Tested here with Xcode 27 / Swift 6.4 on Mac17,9 (M5 Pro).

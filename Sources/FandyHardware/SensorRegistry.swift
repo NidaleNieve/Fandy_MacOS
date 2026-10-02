@@ -41,6 +41,10 @@ public enum SensorRegistry {
     // Both Tp and Tm responded during the separate CPU pulse. Physical membership still needs review,
     // so this wider informational envelope cannot enter a temperature-control lease.
     public static let cpuRegionCandidates = ["Tm00","Tm04","Tm08","Tm0C","Tm0G","Tm0K","Tm0O","Tm0R","Tm0U","Tm0X","Tm0a","Tm0d","Tm0g","Tm0j","Tm0m","Tm0p","Tm0u","Tm0y","Tm1E","Tm1I","Tm1M","Tm1Q","Tm1U","Tm1Y","Tm1c","Tm1g","Tm1k","Tm1o","Tm1s","Tm1x","Tm21","Tm25","Tm29","Tm2D","Tm2H","Tm2L","Tm2P","Tm2T","Tm2j","Tm2n","Tp00","Tp04","Tp08","Tp0C","Tp0G","Tp0K","Tp0O","Tp0R","Tp0U","Tp0X","Tp0a","Tp0d","Tp0g","Tp0j","Tp0m","Tp0p","Tp0u","Tp0y","Tp1E","Tp1I","Tp1Q","Tp1U","Tp1g"]
+    // Exact Mac17,9 catalog membership, including hotter regions outside the published subset.
+    // These are not core numbers. Missing Tg1g is model metadata, not a sampling-time omission.
+    public static let gpuRegionCandidates = ["Tg08","Tg0C","Tg0O","Tg0R","Tg0U","Tg0X","Tg0a","Tg0d","Tg0g","Tg0j","Tg12","Tg16","Tg1I","Tg1M","Tg1Q","Tg1U","Tg1Y","Tg1c","Tg1k","Tg1o","Tg1x","Tg29","Tg2D","Tg2P","Tg2T","Tg2X","Tg2b","Tg2f","Tg2j","Tg2n","Tg2r","Tg3B","Tg3F","Tg3R","Tg3V","Tg3Z","Tg3d","Tg3h","Tg3l","Tg3t","Tg3x","Tg43"]
+    public static let chipEnvelopeKeys = (cpuRegionCandidates + gpuRegionCandidates).sorted()
     /// Candidates were observed read-only. TG Pro corroboration is still required.
     public static let mappings: [SensorMapping] = [
         SensorMapping(role: .cpuAverage, keys: cpuRegionCandidates),
@@ -59,7 +63,7 @@ public enum SensorRegistry {
                                            keys: mapping.keys, reduction: .maximum)]
         }
         return [mapping]
-    }
+    } + [SensorMapping(role: .socPeak, keys: chipEnvelopeKeys, reduction: .maximum)]
     // Reviewed from independent published names, 1156 contemporaneous reference pairs,
     // competing-candidate analysis and the separate chassis temperature response.
     // Top ambient/airflow semantics and chip coverage remain pending; this grants no curve lease.
@@ -71,15 +75,18 @@ public enum SensorRegistry {
         let source: String = switch mapping.role {
         case .cpuAverage, .cpuPeak: "Stats Tp anchors; Mac17,9 thermal Tp/Tm labels; typed candidate manifest and CPU pulse; earlier TG Pro recordings"
         case .gpuAverage, .gpuPeak: "Stats M5 table; contemporaneous TG Pro recordings"
+        case .socPeak: "Mac17,9 typed catalog, full Tp/Tm/Tg region manifest; published chip anchors and bounded response recordings"
         case .airflowLeft, .airflowRight, .wireless: "Stats names; contemporaneous TG Pro recordings"
         case .trackpad, .actuator, .charger: "Historical VirtualSMC names; TG Pro recordings"
         case .airflowTop: "iSMC Apple Ambient Top Proximity candidate; TG Pro Airflow Top recordings"
         case .powerSupply: "iSMC Power Supply Proximity candidate; TG Pro recordings"
         default: "Contemporaneous TG Pro recordings"
         }
-        let limitation = [SensorRole.cpuAverage, .cpuPeak, .gpuAverage, .gpuPeak].contains(mapping.role)
-            ? "Individual identities, aggregation and peak coverage remain unproved on Mac17,9."
-            : "Historical or broad-platform names plus rounded reference agreement need Mac17,9 identity review."
+        let limitation: String = switch mapping.role {
+        case .socPeak: "Alternative operational envelope pending policy decision and live qualification; not a hottest-core identity certificate."
+        case .cpuAverage, .cpuPeak, .gpuAverage, .gpuPeak: "Individual identities, aggregation and peak coverage remain unproved on Mac17,9."
+        default: "Historical or broad-platform names plus rounded reference agreement need Mac17,9 identity review."
+        }
         let reviewed = reviewedComfortRoles.contains(mapping.role)
         return SensorEvidence(role: mapping.role, keys: mapping.keys, state: reviewed ? .verified : .pending,
                               source: source + (reviewed ? "; Mac17,9 composite review 2026-10-01, TEMPERATURE_PROFILE_STATUS" : ""),

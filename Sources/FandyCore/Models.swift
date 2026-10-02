@@ -1,5 +1,14 @@
 import Foundation
 
+/// A hardware-build decision, not a profile preference or caller-selected XPC field.
+public enum ChipControlPolicy: String, Codable, Sendable {
+    case cpuGPU, conservativeEnvelope
+    public var required: Set<SensorRole> { self == .cpuGPU ? SensorRole.safety : [.socPeak] }
+    public func temperature(in snapshot: HardwareSnapshot, now: Double) throws -> Double {
+        try required.map { try snapshot.value($0, now: now) }.max()!
+    }
+}
+
 public enum SensorRole: String, Codable, CaseIterable, Sendable, Identifiable {
     case cpuAverage, gpuAverage, cpuPeak, gpuPeak, socPeak
     case trackpad, actuator, airflowLeft, airflowTop, airflowRight, charger, powerSupply, wireless
@@ -10,7 +19,7 @@ public enum SensorRole: String, Codable, CaseIterable, Sendable, Identifiable {
         case .gpuAverage: "GPU Average"
         case .cpuPeak: "Hottest CPU"
         case .gpuPeak: "Hottest GPU"
-        case .socPeak: "SoC"
+        case .socPeak: "Chip envelope"
         case .trackpad: "Trackpad"
         case .actuator: "Trackpad Actuator"
         case .airflowLeft: "Airflow Left"
@@ -123,4 +132,5 @@ public enum CurveInput: String, Codable, CaseIterable, Sendable {
     public var required: Set<SensorRole> {
         switch self { case .chip: [.cpuPeak, .gpuPeak]; case .trackpad: [.trackpad]; case .actuator: [.actuator]; case .airflow: [.airflowLeft, .airflowTop, .airflowRight] }
     }
+    public func required(chipPolicy: ChipControlPolicy) -> Set<SensorRole> { self == .chip ? chipPolicy.required : required }
 }

@@ -1,5 +1,7 @@
 # Temperature-profile checkpoint — 2026-10-02
 
+Latest continuation: [a separate conservative chip-envelope path](CHIP_ENVELOPE.md) is implemented and tested but inactive, pending the user's policy decision. A new 180-second render recording has 146 contemporaneous TG Pro pairs; GPU variation remained insufficient to qualify individual regions. The current build still grants only System/Max. This supersedes the earlier statement that the reference log has no new rows; that statement remains true for the earlier 660-second session.
+
 System and Max remain operational. Temperature profiles are **not enabled**: the bounded measurement did not resolve CPU membership and GPU coverage sufficiently. No temperature-control experiment or simulated success was used to bypass that result. A final regression of the already-qualified Max/System path passed actual maximum RPM and both-fan automatic handback.
 
 ## Implemented

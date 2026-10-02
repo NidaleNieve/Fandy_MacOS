@@ -1,4 +1,4 @@
-> Latest checkpoint: [temperature-profile integration](TEMPERATURE_PROFILE_STATUS.md), 2026-10-02. Four comfort roles reviewed; CPU/GPU coverage and Top semantics remain pending. 169 Swift tests and 30 tool tests pass. System/Max remain enabled; the bounded curve stage is implemented but inactive. The single targeted measurement completed without fan writes.
+> Latest checkpoint: [chip-envelope integration](CHIP_ENVELOPE.md), 2026-10-02. The alternative policy is implemented but inactive pending the user's decision and live curve recovery acceptance. Exact CPU/GPU identities and Top semantics remain pending; System/Max remain enabled. A separate bounded render measurement matched fresh reference rows but did not resolve GPU identities.
 
 # Development checkpoint — 2026-10-01
 

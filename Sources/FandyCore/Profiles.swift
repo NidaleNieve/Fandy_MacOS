@@ -13,7 +13,11 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
         self.id = id; self.name = name; self.kind = kind; self.bundled = bundled; defaultRevision = 1; self.curves = curves; self.floor = floor; self.automaticAtIdle = automaticAtIdle
     }
     public var protected: Bool { id == "system" || id == "max" }
-    public var requiredSensors: Set<SensorRole> { if kind == .system || kind == .maximum { return [] }; return curves.filter(\.enabled).reduce(SensorRole.safety) { $0.union($1.input.required) } }
+    public var requiredSensors: Set<SensorRole> { requiredSensors(chipPolicy: .cpuGPU) }
+    public func requiredSensors(chipPolicy: ChipControlPolicy) -> Set<SensorRole> {
+        if kind == .system || kind == .maximum { return [] }
+        return curves.filter(\.enabled).reduce(chipPolicy.required) { $0.union($1.input.required(chipPolicy: chipPolicy)) }
+    }
     public func validate() throws {
         guard !id.isEmpty, id.utf8.count <= 128, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 80,
               floor.isFinite, (0...100).contains(floor), curves.count <= 4,
@@ -54,15 +58,15 @@ public struct Demand: Sendable, Equatable {
 }
 public struct ProfileEngine: Sendable {
     public init() {}
-    public func evaluate(_ profile: Profile, snapshot: HardwareSnapshot, now: Double) throws -> Demand {
+    public func evaluate(_ profile: Profile, snapshot: HardwareSnapshot, now: Double, chipPolicy: ChipControlPolicy = .cpuGPU) throws -> Demand {
         try profile.validate()
         if profile.kind == .system { return Demand(percent: 0, safetyPercent: 0, byCurve: [:]) }
-        try snapshot.validate(now: now, required: profile.requiredSensors)
+        try snapshot.validate(now: now, required: profile.requiredSensors(chipPolicy: chipPolicy))
         if profile.kind == .maximum { return Demand(percent: 100, safetyPercent: 0, byCurve: [:]) }
         let guardCurve = BuiltInProfiles.guardCurve
-        let safety = try guardCurve.evaluate(guardCurve.temperature(in: snapshot, now: now))
+        let safety = try guardCurve.evaluate(guardCurve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy))
         var byCurve: [CurveInput: Double] = [:]
-        for curve in profile.curves where curve.enabled { byCurve[curve.input] = try curve.evaluate(curve.temperature(in: snapshot, now: now)) }
+        for curve in profile.curves where curve.enabled { byCurve[curve.input] = try curve.evaluate(curve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy)) }
         return Demand(percent: profile.kind == .maximum ? 100 : max(profile.floor, byCurve.values.max() ?? 0, safety), safetyPercent: safety, byCurve: byCurve)
     }
 }

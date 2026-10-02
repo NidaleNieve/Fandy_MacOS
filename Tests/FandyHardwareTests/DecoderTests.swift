@@ -23,6 +23,35 @@ import FandyCore
     #expect(SensorRegistry.mappings.first{$0.role == .airflowTop}?.keys==["TaTP"])
 }
 
+@Test func envelopeManifestIsFixedCompleteAndDoesNotQualifyItself() throws {
+    #expect(SensorRegistry.gpuRegionCandidates.count == 42)
+    #expect(SensorRegistry.chipEnvelopeKeys.count == 105)
+    #expect(Set(SensorRegistry.chipEnvelopeKeys).count == 105)
+    #expect(!SensorRegistry.chipEnvelopeKeys.contains("Tg1g"))
+    let mapping = SensorRegistry.mappings.first { $0.role == .socPeak }!
+    #expect(mapping.reduction == .maximum)
+    #expect(mapping.keys == SensorRegistry.chipEnvelopeKeys)
+    #expect(!SensorRegistry.capabilities.verifiedRoles.contains(.socPeak))
+    let sample: (String) throws -> DiscoveredSensor = { key in
+        DiscoveredSensor(key: key, type: "flt ", size: 4, attributes: 0, bytes: [0,0,0,0],
+                         value: key == "Tg3x" ? 85 : key == "Tm04" ? 80 : 40, error: nil, sampledAt: 10.1)
+    }
+    #expect(mapping.reading(sequence: 1, qualified: false, now: 10, read: sample).celsius == 85)
+    #expect(mapping.reading(sequence: 1, qualified: false, now: 10, read: sample).health == .unverified)
+    let missing = mapping.reading(sequence: 1, qualified: true, now: 10) { key in
+        if key == "Tm04" { throw HardwareError.invalidMetadata }; return try sample(key)
+    }
+    #expect(missing.celsius == nil); #expect(missing.health == .missing)
+}
+
+@Test func expandedRegistryStatusFitsTheNarrowWireLimit() throws {
+    let snapshot = HardwareSnapshot(at: 10, sensors: SensorRegistry.mappings.map {
+        SensorReading($0.role, 40, at: 10, sequence: 1, health: .unverified)
+    }, fans: [Fan(id: 0, min: 2300, max: 7800, actual: 0), Fan(id: 1, min: 2300, max: 7800, actual: 0)])
+    let status = HelperStatus(automaticVerified: true, manualQualified: true, snapshot: snapshot, capabilities: SensorRegistry.capabilities)
+    #expect(try Wire.encode(status).count < Wire.maxBytes)
+}
+
 @Test func fanModeDecoderRejectsUnqualifiedTypesAndStates() {
     #expect(SMCDecoder.fanMode(type:"ui8 ",bytes:[0]) == .automatic)
     #expect(SMCDecoder.fanMode(type:"ui8 ",bytes:[1]) == .manual)
