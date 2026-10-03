@@ -55,14 +55,16 @@ public struct AppPreferences: Codable, Sendable, Equatable {
     public var launchAtLogin: Bool = true
     public var use24HourTime: Bool = true
     public var showClock: Bool = false
+    public var showHelperProcesses: Bool = false
     public var menuSensors: [String] = []
     public init() {}
-    private enum CodingKeys: String, CodingKey { case launchAtLogin, use24HourTime, showClock, menuSensors }
+    private enum CodingKeys: String, CodingKey { case launchAtLogin, use24HourTime, showClock, showHelperProcesses, menuSensors }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
         use24HourTime = try c.decodeIfPresent(Bool.self, forKey: .use24HourTime) ?? true
         showClock = try c.decodeIfPresent(Bool.self, forKey: .showClock) ?? false
+        showHelperProcesses = try c.decodeIfPresent(Bool.self, forKey: .showHelperProcesses) ?? false
         menuSensors = try c.decodeIfPresent([String].self, forKey: .menuSensors) ?? []
     }
 }

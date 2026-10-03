@@ -116,7 +116,7 @@ enum ImportValidation {
         let object = try fields(value, allowed: ["periods", "pauses", "preferences"], path: "automation")
         if let value = object["periods"] { try periods(value) }
         if let value = object["pauses"] { try pauses(value) }
-        if let value = object["preferences"] { _ = try fields(value, allowed: ["launchAtLogin", "use24HourTime", "showClock", "menuSensors"], path: "preferences") }
+        if let value = object["preferences"] { _ = try fields(value, allowed: ["launchAtLogin", "use24HourTime", "showClock", "showHelperProcesses", "menuSensors"], path: "preferences") }
     }
     static func root(_ data: Data) throws -> [String: Any] {
         guard !data.isEmpty, data.count <= 1_048_576 else { throw ScheduleError("Import must be between 1 byte and 1 MiB.") }

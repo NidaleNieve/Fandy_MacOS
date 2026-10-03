@@ -121,13 +121,13 @@ struct ProcessPicker: View {
     @Bindable var model: AppModel
     let close: () -> Void
     @State private var search = ""
-    @State private var helpers = false
+    private var helpers: Bool { model.automation.preferences.showHelperProcesses }
     @State private var processes: [RunningProcess] = []
     private var filtered: [RunningProcess] { processes.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) } }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Search running apps", text: $search).textFieldStyle(.roundedBorder)
-            Toggle("Show helper apps and processes", isOn: $helpers)
+            Toggle("Show helper apps and processes", isOn: Binding(get: { helpers }, set: { enabled in model.setPreferences { $0.showHelperProcesses = enabled } }))
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(filtered) { process in

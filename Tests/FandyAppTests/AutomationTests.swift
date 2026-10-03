@@ -290,3 +290,15 @@ private actor DelayedAutomationClient: PrivilegedFanClient {
     #expect(model.scheduledPeriodID == model.automation.periods.first?.id)
     #expect(model.machine.selected.id == "system")
 }
+@MainActor @Test func aNewManualSelectionDuringConfigurationSaveOutranksImportedSchedules() async throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let model = makeAutomationModel(dir.appendingPathComponent("profiles.json"))
+    var automation = AutomationConfiguration()
+    automation.periods = [WeeklyPeriod(profileID: "gaming", weekday: 1, startMinute: 0, endMinute: 1440)]
+    model.importConfiguration(try ConfigurationInterchange.encode(.init(profiles: BuiltInProfiles.all, automation: automation)))
+    model.select("max")
+    await model.waitForCollection(); for _ in 0..<5 { await model.tick() }
+    #expect(model.manualIntent?.profileID == "max"); #expect(model.machine.selected.id == "max")
+    #expect(model.scheduledPeriodID == nil)
+}

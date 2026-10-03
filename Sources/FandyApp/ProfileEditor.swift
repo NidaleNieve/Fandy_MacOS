@@ -221,6 +221,7 @@ struct SettingsView: View {
             }
         }.formStyle(.grouped).padding() }.frame(width: 500, height: 640)
         .onAppear { refreshRegistration() }
+        .task { if !model.simulation { await model.sensorMenu.discover() } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refreshRegistration() } }
     }
     private func refreshRegistration() { loginStatus = SMAppService.mainApp.status; helperStatus = HelperManager.service.status }

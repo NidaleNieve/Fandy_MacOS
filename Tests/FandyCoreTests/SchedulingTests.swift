@@ -86,7 +86,7 @@ private func date(_ value: String) -> Date { ISO8601DateFormatter().date(from: v
     for value in ["24:00", "12:60", "-1:20", " 12:20", "1:20", "nan", "∞", "１２:１０"] { #expect(throws: ScheduleError.self) { try ScheduleEngine.parseTime(value) } }
 }
 @Test func fullConfigurationRoundTripExcludesRuntimeAuthorityAndProtectsBuiltins() throws {
-    var automation = AutomationConfiguration(); automation.periods = [period()]; automation.preferences.menuSensors = ["role:cpuAverage"]
+    var automation = AutomationConfiguration(); automation.periods = [period()]; automation.preferences.menuSensors = ["role:cpuAverage"]; automation.preferences.showHelperProcesses = true
     let original = PortableConfiguration(profiles: BuiltInProfiles.all, automation: automation)
     let data = try ConfigurationInterchange.encode(original)
     #expect(try ConfigurationInterchange.decode(data) == original)

@@ -412,12 +412,15 @@ import ServiceManagement
         catch { draftError = error.localizedDescription; return }
         failedCollection = nil; failedConfiguration = nil
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
-        let revision = saveRevision
+        let revision = saveRevision, admittedToken = lifecycleToken
         collectionTask = Task {
             defer { savingCollection = false; collectionTask = nil }
             do {
                 try await persistence.save(next, selection: "system", revision: revision, automation: nextAutomation)
-                if restore { clearActivation(); blockedScheduleID = nil; select("system", manual: false) }
+                if restore && lifecycleToken == admittedToken { clearActivation(); blockedScheduleID = nil; select("system", manual: false) }
+                else if !next.contains(where: { $0.id == machine.selected.id }) {
+                    clearActivation(); select("system")
+                }
                 else if let replacement = next.first(where: { $0.id == machine.selected.id }), replacement != machine.selected {
                     // Definition replacement follows the existing live-edit path. Scheduling
                     // must not cancel a manual duration/process watch for the same profile.

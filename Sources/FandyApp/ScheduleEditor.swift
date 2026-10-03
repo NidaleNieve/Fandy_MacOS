@@ -12,6 +12,8 @@ struct ScheduleEditor: View {
     @State private var pauseEnd = Date().addingTimeInterval(86400)
     @State private var importing = false
     @State private var editing: WeeklyPeriod?
+    @State private var pendingPeriods: [WeeklyPeriod]?
+    @State private var pendingPauses: [SchedulePause] = []
     var body: some View {
         DisclosureGroup("Schedule") {
             VStack(alignment: .leading, spacing: 12) {
@@ -64,8 +66,17 @@ struct ScheduleEditor: View {
                 }
             }.padding(.top, 8)
         }.accessibilityIdentifier("profile.schedule")
-        .sheet(isPresented: $importing) { ScheduleTextSheet(model: model) }
-        .sheet(item: $editing) { period in WeeklyPeriodEditor(model: model, period: period) }
+        .sheet(isPresented: $importing, onDismiss: finishPendingReview) {
+            ScheduleTextSheet(model: model, onImport: { periods, pauses in pendingPeriods = periods; pendingPauses = pauses })
+        }
+        .sheet(item: $editing, onDismiss: finishPendingReview) { period in
+            WeeklyPeriodEditor(model: model, period: period, onSave: { pendingPeriods = [$0]; pendingPauses = [] })
+        }
+    }
+    private func finishPendingReview() {
+        guard let incoming = pendingPeriods else { return }
+        let pauses = pendingPauses; pendingPeriods = nil; pendingPauses = []
+        model.reviewPeriods(incoming, pauses: pauses)
     }
     private struct Row {
         let period: WeeklyPeriod; let start: Int; let end: Int; let spill: Bool
@@ -90,13 +101,14 @@ struct ScheduleEditor: View {
 struct WeeklyPeriodEditor: View {
     @Bindable var model: AppModel
     let period: WeeklyPeriod
+    let onSave: (WeeklyPeriod) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var day: Int
     @State private var start: String
     @State private var end: String
     @State private var error: String?
-    init(model: AppModel, period: WeeklyPeriod) {
-        self.model = model; self.period = period
+    init(model: AppModel, period: WeeklyPeriod, onSave: @escaping (WeeklyPeriod) -> Void) {
+        self.model = model; self.period = period; self.onSave = onSave
         _day = State(initialValue: period.weekday)
         _start = State(initialValue: ScheduleEngine.time(period.startMinute))
         _end = State(initialValue: ScheduleEngine.time(period.endMinute))
@@ -115,8 +127,7 @@ struct WeeklyPeriodEditor: View {
                         next.startMinute = try ScheduleEngine.parseTime(start)
                         next.endMinute = try ScheduleEngine.parseTime(end, allowEndOfDay: true)
                         try next.validate(profileIDs: Set(model.profiles.map(\.id)))
-                        dismiss()
-                        Task { @MainActor in await Task.yield(); model.reviewPeriods([next]) }
+                        onSave(next); dismiss()
                     } catch { self.error = error.localizedDescription }
                 }
             }
@@ -125,6 +136,7 @@ struct WeeklyPeriodEditor: View {
 }
 struct ScheduleTextSheet: View {
     @Bindable var model: AppModel
+    let onImport: ([WeeklyPeriod], [SchedulePause]) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var error: String?
@@ -145,11 +157,8 @@ struct ScheduleTextSheet: View {
                         let incoming = try ScheduleTextImport.decode(text, profiles: model.profiles)
                         var config = model.automation; config.periods += incoming.periods; config.pauses += incoming.pauses
                         try config.validate(profileIDs: Set(model.profiles.map(\.id)), allowConflicts: true)
-                        // Dismiss the text sheet before presenting the shared conflict sheet.
-                        dismiss()
-                        Task { @MainActor in
-                            await Task.yield(); model.reviewPeriods(incoming.periods, pauses: incoming.pauses)
-                        }
+                        // The parent's onDismiss presents review only after this sheet is gone.
+                        onImport(incoming.periods, incoming.pauses); dismiss()
                     } catch { self.error = error.localizedDescription }
                 }.buttonStyle(.borderedProminent)
             }
