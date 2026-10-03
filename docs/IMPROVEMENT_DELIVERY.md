@@ -10,7 +10,7 @@
 - Native JSON import/export carries profile definitions only. Entire imports validate before committing, become custom profiles with fresh IDs and never activate themselves. Protected/reserved identities, authority fields, duplicate IDs, invalid curves, excessive nesting/count/bytes and unsupported versions are rejected. Duplicate names are allowed. Exporting a built-in produces a custom definition.
 - Diagnostic export uses an allowlist of version/model/state/health/stage/ownership and fixed failure categories. Arbitrary error messages, custom profile names, paths, signing identity, sensor recordings and previous selections are excluded. Export is local through a native file panel.
 - Rotating diagnostic writes run on a utility queue with at most one outstanding record. Backpressure drops diagnostic records instead of delaying control. Mutable admission and file operations have separate locks. Required sensor reads are unchanged; immutable key membership is computed once instead of sorted on every acquisition.
-- Software-only CI runs Swift/tool tests and a separate sanitizer job. It never registers a helper, launches fan diagnostics or contains signing credentials. Hosted CI execution is not yet verified by a remote run.
+- Software-only CI runs Swift/tool tests and a separate sanitizer job. It never registers a helper, launches fan diagnostics or contains signing credentials. Hosted software and sanitizer jobs subsequently passed on the delivered code; see the portability results below.
 
 ## Interfaces and reproducibility
 
@@ -53,4 +53,10 @@ The final paced short check separately passed acquisition p95 **30.82 ms**, help
 
 Most active-session samples held approximately 3,420 RPM. Late in the session the real chip envelope rose to approximately 86.9°C while thermal pressure remained nominal; the independent chip guard demanded maximum cooling and actual RPM rose toward the reported maximum. The diagnostic created no CPU/GPU stimulus. This demonstrates real escalation during ordinary external activity, not a sustained gaming calibration or proof of individual CPU/GPU sensor identity. Final independent mode readback was **0/0**, with Apple still requesting cooling; automatic ownership does not imply stopped fans. The normal signed GUI was then launched in System.
 
-The actual coordinated sleep/wake test, editor-open/human UI review, subjective typing acoustics and real-game calibration remain pending. The hosted workflow is configured but its remote execution must be verified after publication.
+The actual coordinated sleep/wake test, editor-open/human UI review, subjective typing acoustics and real-game calibration remain pending. The hosted workflow has now passed on the delivered implementation.
+
+## Hosted portability verification
+
+The macOS runner used Xcode 26.6 / Swift 6.3.3 / macOS SDK 26.5. An initial compiler IR-generation crash adapting actor-isolated bound callbacks in ProfileEditor was resolved by explicit closure forwarding, preserving behavior. A subsequent runner exposed a test that assumed disk acknowledgement within 400 ms; it now checks initial deferred/unsaved state, awaits the actual acknowledgement with a bounded timeout, and verifies durable values.
+
+Both software and sanitizer jobs passed on implementation commit `e85f84f`: [verified workflow run](https://github.com/NidaleNieve/Fandy_MacOS/actions/runs/37084632535). The installed native build includes the callback fix and passed five real System-first monitoring ticks with independently observed automatic ownership. These portability changes do not alter the helper, sensor policy, command sequence or physical recovery paths. Raw CI/native logs remain outside public source.
