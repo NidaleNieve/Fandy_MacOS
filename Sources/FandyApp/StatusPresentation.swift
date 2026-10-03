@@ -16,4 +16,12 @@ enum StatusPresentation {
         let provenance = preview.usesCandidates ? " · candidate inputs" : ""
         return "\(title): \(Int(preview.percent.rounded()))%\(provenance)\(active ? "" : " · no fan commands")"
     }
+    static func breakdown(_ preview: ProfilePreview, floor: Double) -> String {
+        let curves = CurveInput.allCases.compactMap { input -> String? in
+            guard let demand = preview.byCurve[input] else { return nil }
+            return "\(input.label): \(Int(demand.rounded()))%"
+        }
+        return (curves + ["Floor: \(Int(floor.rounded()))%", "Chip guard: \(Int(preview.safetyPercent.rounded()))%"] ).joined(separator: " · ")
+    }
+
 }

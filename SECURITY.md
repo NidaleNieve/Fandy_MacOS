@@ -77,3 +77,7 @@ Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKIL
 ## Refreshed production verification
 
 Lease and target commands now reject unknown/missing top-level fields before typed decoding; response compatibility remains additive. Idle read failure removes ownership evidence without acquiring control. Returning hardware calls are followed by canonical lease-expiry checks. The five-method XPC surface is unchanged. Updated production malformed-request, actual ad-hoc/wrong-identifier rejection, mutual-identity, signature/entitlement and sanitizer results are recorded in [the current review](docs/ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md). No source review or sanitizer run proves recovery while the helper is dead or blocked in kernel I/O.
+
+## Profile interchange and local exports
+
+Native file panels are user-initiated operations in the normal GUI process. The helper receives no paths or files. Imported JSON is bounded to one MiB, 128 total stored profiles and 32 nesting levels, validates every profile, rejects authority/reserved identities and assigns fresh custom IDs. An import never starts fan control. Diagnostic export is an allowlisted state summary and excludes arbitrary errors, paths, custom names, raw readings and signing identity. CI has read-only repository permissions, contains no signing credentials and runs no hardware actions.

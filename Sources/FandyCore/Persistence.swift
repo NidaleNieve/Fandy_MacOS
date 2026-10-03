@@ -17,7 +17,7 @@ public struct ProfileStore: Sendable {
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             guard (attributes[.size] as? NSNumber)?.intValue ?? Int.max <= 1_048_576 else { throw ControlError.malformedMessage }
-            let data = try Data(contentsOf: url)
+            let data = try Self.readBounded(url)
             guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any], object["version"] as? Int == 1,
                   let entries = object["profiles"] as? [[String: Any]], entries.count <= 128 else { throw ControlError.malformedMessage }
             var profiles: [Profile] = [], issues: [String] = [], ids = Set<String>()
@@ -32,6 +32,12 @@ public struct ProfileStore: Sendable {
                 } catch { issues.append("A damaged profile was excluded: \(error.localizedDescription)") }
             }
             for original in BuiltInProfiles.all where !ids.contains(original.id) { profiles.append(original) }
+            if profiles.count > 128 {
+                for index in profiles.indices.reversed() where profiles.count > 128 && !profiles[index].bundled {
+                    profiles.remove(at: index)
+                }
+                issues.append("Excess custom profiles were excluded to preserve built-ins and the storage limit.")
+            }
             return ProfileLoadResult(profiles: profiles, issues: issues)
         } catch {
             return ProfileLoadResult(profiles: BuiltInProfiles.all, issues: ["Profile storage could not be decoded. Original file preserved; System selected."])
@@ -55,4 +61,78 @@ public struct ProfileStore: Sendable {
         }
         try bytes.write(to: url, options: .atomic)
     }
+}
+
+public extension ProfileStore {
+    static func readBounded(_ url: URL) throws -> Data {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var data = Data()
+        while data.count <= 1_048_576 {
+            let chunk = try handle.read(upToCount: min(65_536, 1_048_577 - data.count)) ?? Data()
+            if chunk.isEmpty { return data }
+            data.append(chunk)
+        }
+        throw ControlError.malformedMessage
+    }
+}
+
+/// Serial disk writes; older revisions cannot overwrite newer requests.
+public actor ProfilePersistence {
+    private let store: ProfileStore
+    private var newest: UInt64 = 0
+    public init(store: ProfileStore) { self.store = store }
+    public func save(_ profiles: [Profile], selection: String?, revision: UInt64) throws {
+        guard revision >= newest else { return }
+        newest = revision
+        try store.save(profiles, previousSelection: selection)
+    }
+}
+
+/// Interchange carries only validated custom profile definitions, never control authority.
+public enum ProfileInterchange {
+    private struct Archive: Codable { let version: Int; let profiles: [Profile] }
+    public static func encode(_ profiles: [Profile]) throws -> Data {
+        guard !profiles.isEmpty, profiles.count <= 128 else { throw ControlError.malformedMessage }
+        let customs = profiles.map { profile -> Profile in
+            var copy = profile.duplicated(); copy.name = profile.name; return copy
+        }
+        try customs.forEach { try $0.validate() }
+        let data = try JSONEncoder().encode(Archive(version: 1, profiles: customs))
+        guard data.count <= 1_048_576 else { throw ControlError.malformedMessage }
+        return data
+    }
+    public static func decode(_ data: Data, existingCount: Int) throws -> [Profile] {
+        guard data.count <= 1_048_576, jsonDepthIsBounded(data),
+              let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(root.keys) == ["version", "profiles"],
+              let entries = root["profiles"] as? [[String: Any]], entries.count <= 128 else { throw ControlError.malformedMessage }
+        let allowed: Set<String> = ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle"]
+        guard entries.allSatisfy({ Set($0.keys).isSubset(of: allowed) }) else { throw ControlError.malformedMessage }
+        let archive = try JSONDecoder().decode(Archive.self, from: data)
+        guard archive.version == 1, !archive.profiles.isEmpty, existingCount >= 0,
+              archive.profiles.count <= 128, archive.profiles.count <= 128 - min(existingCount, 128),
+              Set(archive.profiles.map(\.id)).count == archive.profiles.count else { throw ControlError.malformedMessage }
+        return try archive.profiles.map { profile in
+            guard !profile.protected, !profile.bundled, profile.kind == .custom,
+                  !BuiltInProfiles.all.contains(where: { $0.id == profile.id }) else { throw ControlError.malformedMessage }
+            try profile.validate()
+            var copy = profile.duplicated(); copy.name = profile.name
+            return copy
+        }
+    }
+    private static func jsonDepthIsBounded(_ data: Data) -> Bool {
+        var depth = 0, quoted = false, escaped = false
+        for byte in data {
+            if quoted {
+                if escaped { escaped = false }
+                else if byte == 92 { escaped = true }
+                else if byte == 34 { quoted = false }
+            } else if byte == 34 { quoted = true }
+            else if byte == 91 || byte == 123 { depth += 1; if depth > 32 { return false } }
+            else if byte == 93 || byte == 125 { depth -= 1; if depth < 0 { return false } }
+        }
+        return depth == 0 && !quoted
+    }
+
 }

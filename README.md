@@ -72,3 +72,9 @@ Profiles and rotating diagnostic logs are local in `~/Library/Application Suppor
 Verification: [hardware gates](docs/HARDWARE_GATES.md). Detailed local test/build recordings remain private; the public repository includes reproducible tests and their commands.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md), [SAFETY.md](SAFETY.md), [SECURITY.md](SECURITY.md) and [hardware gates](docs/HARDWARE_GATES.md) before enabling any hardware-control code. Human visual review remains pending; no screenshot or automated GUI testing was used.
+
+## Profile files and editor shortcuts
+
+The sidebar menu imports profiles or exports the selected profile as a custom JSON definition. Imported profiles are validated, saved and never automatically selected for control. Arrow keys edit the selected graph node; Shift uses finer increments. Undo/Redo reverses valid profile edits and groups a drag into one operation. Storage failures retain an explicit unsaved/error state with Retry.
+
+Settings provide optional launch at login and a local sanitized diagnostic export. Login still starts in System; enabling login does not install or approve the privileged helper. No networking or automatic uploads are introduced. See [improvement delivery](docs/IMPROVEMENT_DELIVERY.md) for verification and remaining calibration.

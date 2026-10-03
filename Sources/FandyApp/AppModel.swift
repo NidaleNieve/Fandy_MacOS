@@ -21,6 +21,7 @@ import ServiceManagement
     var curveInput: CurveInput = .chip
     var hardwareError: String?
     var tickCount = 0
+    private(set) var powerTransitionCount: UInt64 = 0
     private let mock = MockBackend()
     private let client: any PrivilegedFanClient
     private let helperAvailable: @MainActor () -> Bool
@@ -31,6 +32,18 @@ import ServiceManagement
     private var loop: Task<Void, Never>?
     private var pendingSave: Task<Void, Never>?
     private let store: ProfileStore
+    private let persistence: ProfilePersistence
+    private var saveRevision: UInt64 = 0
+    private var collectionTask: Task<Void, Never>?
+    private(set) var savingCollection = false
+    private(set) var unsavedChanges = false
+    private(set) var saveError: String?
+    let editorHistory = UndoManager()
+    private var groupedOriginal: Profile?
+    private var failedCollection: (profiles: [Profile], selection: String, release: Bool)?
+    private var historyRevision: UInt64 = 0
+    var canUndo: Bool { _ = historyRevision; return editorHistory.canUndo }
+    var canRedo: Bool { _ = historyRevision; return editorHistory.canRedo }
     private let diagnostics: RotatingDiagnostics?
     private let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "controller")
     private var sleepObserver: NSObjectProtocol?
@@ -58,6 +71,7 @@ import ServiceManagement
         self.clock = clock; self.powerCenter = powerCenter
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         store = ProfileStore(url: storeURL ?? root.appendingPathComponent("Fandy/profiles.json"))
+        persistence = ProfilePersistence(store: store)
         diagnostics = try? RotatingDiagnostics(directory: (storeURL?.deletingLastPathComponent() ?? root.appendingPathComponent("Fandy")).appendingPathComponent("logs"))
         let loaded = store.load(); profiles = loaded.profiles; issues = loaded.issues
         // Lifecycle begins from System regardless of persisted selection.
@@ -81,6 +95,22 @@ import ServiceManagement
         let estimate = !simulation && capabilities.chipPolicy == .conservativeEnvelope && [.cpuAverage, .gpuAverage].contains(role)
         return StatusPresentation.temperature(snapshot?.sensors.first { $0.role == role },
             now: simulation ? snapshot?.sampledAt ?? clock() : clock(), estimate: estimate)
+    }
+    func curveTemperature(_ curve: FanCurve) -> Double? {
+        guard let snapshot else { return nil }
+        return try? curve.temperature(in: snapshot, now: simulation ? snapshot.sampledAt : clock(), chipPolicy: machine.chipPolicy)
+    }
+    func sanitizedDiagnostics() throws -> Data {
+        // Allowlist-only export: no arbitrary messages, names, paths or signing identity.
+        let object: [String: Any] = [
+            "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",
+            "model": HardwareSnapshotReader.machineModel(),
+            "controllerState": machine.state.rawValue, "helperHealth": helperHealth.rawValue,
+            "hardwareStage": capabilities.stage.rawValue, "ownership": ownership.rawValue,
+            "simulation": simulation, "unsavedChanges": unsavedChanges,
+            "failureCodes": [hardwareError == nil ? nil : "monitoring_or_control_error", saveError == nil ? nil : "persistence_error"].compactMap { $0 }
+        ]
+        return try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
     }
     func canMove(_ direction: Int) -> Bool {
         guard let index = profiles.firstIndex(where: { $0.id == editorSelection }), !profiles[index].bundled else { return false }
@@ -126,13 +156,21 @@ import ServiceManagement
         }
         return (machine.state == .system || machine.state == .customActive) && machine.selected.id == id
     }
+    func observePower() {
+        guard !quitting else { return }
+        if sleepObserver == nil {
+            sleepObserver = powerCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
+        }
+        if wakeObserver == nil {
+            wakeObserver = powerCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
+        }
+    }
     func start() {
         guard loop == nil, !quitting else { return }
-        sleepObserver = powerCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
-        wakeObserver = powerCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
+        observePower()
         loop = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.tick()
+                guard self != nil else { break }; await self?.tick()
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
         }
@@ -203,7 +241,7 @@ import ServiceManagement
                 hardwareError = observedBlocker
             }
             tickCount += 1
-            if let snapshot, tickCount % 5 == 0 { try? diagnostics?.record(profile:machine.selected.name,snapshot:snapshot) }
+            if let snapshot, tickCount % 5 == 0 { diagnostics?.enqueue(profile:machine.selected.name,snapshot:snapshot) }
         } catch {
             guard token == lifecycleToken, !quitting else { return }
             if simulation { await execute(machine.fail(error)) }
@@ -258,32 +296,77 @@ import ServiceManagement
             catch { guard token == lifecycleToken else { return }; await execute(machine.fail(error)) }
         }
     }
+    func beginEditGroup() {
+        guard groupedOriginal == nil, let edited, !edited.protected else { return }
+        groupedOriginal = edited; editorHistory.beginUndoGrouping()
+    }
+    func endEditGroup() {
+        guard let original = groupedOriginal else { return }
+        if let current = profiles.first(where: { $0.id == original.id }), original != current { registerUndo(original) }
+        groupedOriginal = nil; editorHistory.endUndoGrouping(); historyRevision &+= 1
+    }
+    func resetEditorHistory() {
+        if groupedOriginal != nil { groupedOriginal = nil; editorHistory.endUndoGrouping() }
+        editorHistory.removeAllActions(); historyRevision &+= 1
+    }
+    private func registerUndo(_ previous: Profile) {
+        editorHistory.registerUndo(withTarget: self) { target in
+            MainActor.assumeIsolated { target.update(previous) }
+        }
+        editorHistory.setActionName("Edit Profile"); historyRevision &+= 1
+    }
     func update(_ profile: Profile) {
+        guard !savingCollection, !quitting else { return }
         do {
             try profile.validate()
             guard let index = profiles.firstIndex(where: { $0.id == profile.id }), !profiles[index].protected else { return }
+            guard profiles[index] != profile else { return }
+            failedCollection = nil
+            if groupedOriginal == nil { registerUndo(profiles[index]) }
             // The existing validated profile is retained if a draft is invalid.
             if machine.selected.id == profile.id { lifecycleToken = UUID(); let effect = try machine.select(profile); Task { await execute(effect) } }
             profiles[index] = profile; draftError = nil; scheduleSave()
         } catch { draftError = error.localizedDescription }
     }
+    private func commitCollection(_ next: [Profile], selection: String, releaseDeleted: Bool = false) {
+        guard !savingCollection, !quitting else { return }
+        savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
+        let revision = saveRevision, active = machine.selected.id
+        collectionTask = Task {
+            defer { savingCollection = false; collectionTask = nil }
+            do {
+                try await persistence.save(next, selection: active, revision: revision)
+                profiles = next; editorSelection = selection; resetEditorHistory()
+                unsavedChanges = false; saveError = nil; failedCollection = nil
+                if releaseDeleted && !quitting { select("system") }
+            } catch { failedCollection = (next, selection, releaseDeleted); saveError = "Profile changes could not be saved." }
+        }
+    }
     func create() {
         var profile = BuiltInProfiles.systemPlus.duplicated(); profile.name = "Custom Profile"
-        profiles.append(profile); editorSelection = profile.id; save()
+        commitCollection(profiles + [profile], selection: profile.id)
     }
-    func duplicate() { guard let profile = edited else { return }; let copy = profile.duplicated(); profiles.append(copy); editorSelection = copy.id; save() }
+    func duplicate() {
+        guard let profile = edited else { return }; let copy = profile.duplicated()
+        commitCollection(profiles + [copy], selection: copy.id)
+    }
     func delete() {
         guard let profile = edited, !profile.bundled else { return }
-        if machine.selected.id == profile.id { select("system") }
-        profiles.removeAll { $0.id == profile.id }; editorSelection = "system-plus"; save()
+        commitCollection(profiles.filter { $0.id != profile.id }, selection: "system-plus", releaseDeleted: machine.selected.id == profile.id)
     }
     func reset() {
         guard let original = BuiltInProfiles.all.first(where: { $0.id == editorSelection }), !original.protected else { return }; update(original)
     }
     func move(_ direction: Int) {
         guard canMove(direction), let index = profiles.firstIndex(where: { $0.id == editorSelection }) else { return }
-        let next = index + direction
-        profiles.swapAt(index,next); save()
+        var next = profiles; next.swapAt(index, index + direction)
+        commitCollection(next, selection: editorSelection)
+    }
+    func importProfiles(_ data: Data) {
+        do {
+            let imported = try ProfileInterchange.decode(data, existingCount: profiles.count)
+            commitCollection(profiles + imported, selection: imported[0].id)
+        } catch { saveError = "Import rejected: invalid profiles or storage limit exceeded." }
     }
     func setSimulation(_ enabled: Bool) {
         guard enabled != requestedSimulation, !quitting else { return }
@@ -305,6 +388,7 @@ import ServiceManagement
         }
     }
     func powerTransition() {
+        powerTransitionCount &+= 1
         requestedSimulation = simulation
         lifecycleToken = UUID(); let token = lifecycleToken
         snapshot = nil; hardware = injectedProvider; freshness = SensorFreshnessMonitor(); helperHealth = .unavailable
@@ -324,19 +408,38 @@ import ServiceManagement
         beginTermination(); await finishTermination()
     }
     private func beginTermination() {
-        lifecycleToken = UUID(); quitting = true; stop(); pendingSave?.cancel(); save()
+        lifecycleToken = UUID(); quitting = true; stop(); pendingSave?.cancel()
     }
+    func waitForCollection() async { await collectionTask?.value }
     private func finishTermination() async {
         if simulation || capabilities.canRestore { await execute(machine.fail(ControlError.invalidProfile("App quit"))) }
+        await waitForCollection()
+        await saveLatest()
         // Observation never owned a lease; control failures still rely on the helper watchdog.
         terminationReady = true
     }
     private func scheduleSave() {
-        pendingSave?.cancel()
+        unsavedChanges = true; pendingSave?.cancel()
         pendingSave = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
-            self?.save()
+            await self?.saveLatest()
         }
     }
-    func save() { do { try store.save(profiles, previousSelection: machine.selected.id) } catch { issues = [error.localizedDescription] } }
+    func save() {
+        if let failed = failedCollection { commitCollection(failed.profiles, selection: failed.selection, releaseDeleted: failed.release) }
+        else { Task { await saveLatest() } }
+    }
+    private func saveLatest() async {
+        guard !savingCollection else { return }
+        saveRevision &+= 1
+        let revision = saveRevision, current = profiles, selection = machine.selected.id
+        do {
+            try await persistence.save(current, selection: selection, revision: revision)
+            guard revision == saveRevision, current == profiles else { return }
+            unsavedChanges = false; saveError = nil
+        } catch {
+            guard revision == saveRevision else { return }
+            unsavedChanges = true; saveError = "Changes not saved. Retry when storage is available."
+        }
+    }
 }

@@ -55,6 +55,12 @@ struct CurveDraft {
         refreshFields()
         return validated()
     }
+    mutating func nudge(temperature: Double = 0, percent: Double = 0) -> FanCurve? {
+        guard let point = selectedPoint else { return nil }
+        temperatureText = Self.text(point.temperature + temperature)
+        percentText = Self.text(point.percent + percent)
+        return applyNumbers()
+    }
     mutating func add() -> FanCurve? {
         guard canAdd, let index = (1..<curve.points.count).max(by: {
             curve.points[$0].temperature - curve.points[$0 - 1].temperature < curve.points[$1].temperature - curve.points[$1 - 1].temperature

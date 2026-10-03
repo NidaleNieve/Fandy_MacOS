@@ -8,11 +8,11 @@ import FandyCore
     defer { try? FileManager.default.removeItem(at:directory) }
     let model=AppModel(storeURL:directory.appendingPathComponent("profiles.json"),autoStart:false,simulation:true)
     #expect(model.machine.selected.id == "system");#expect(model.simulation)
-    model.editorSelection="system";model.delete();#expect(model.profiles.count==6)
-    model.create();let id=model.editorSelection;#expect(model.profiles.count==7)
+    model.editorSelection="system";model.delete(); await model.waitForCollection();#expect(model.profiles.count==6)
+    model.create(); await model.waitForCollection();let id=model.editorSelection;#expect(model.profiles.count==7)
     var profile=model.edited!;profile.name="Typing";model.update(profile);#expect(model.edited?.name=="Typing")
-    model.duplicate();#expect(model.profiles.count==8);model.delete();#expect(model.profiles.count==7)
-    model.editorSelection=id;model.delete();#expect(model.profiles.count==6)
+    model.duplicate(); await model.waitForCollection();#expect(model.profiles.count==8);model.delete(); await model.waitForCollection();#expect(model.profiles.count==7)
+    model.editorSelection=id;model.delete(); await model.waitForCollection();#expect(model.profiles.count==6)
     model.editorSelection="cool-chassis";profile=model.edited!;profile.floor=35;model.update(profile);model.reset();#expect(model.edited?.floor==20)
 }
 @MainActor @Test func invalidDraftRetainsValidatedProfileAndScenarioFaultRestores() async throws {
@@ -33,14 +33,14 @@ import FandyCore
     try await Task.sleep(for:.milliseconds(400))
     #expect(ProfileStore(url:url).load().profiles.first{$0.id=="school"}?.floor==20)
 }
-@MainActor @Test func customReorderingCannotDisplaceBuiltinsAndReportsBoundaries() {
+@MainActor @Test func customReorderingCannotDisplaceBuiltinsAndReportsBoundaries() async {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
-    model.create(); let first = model.editorSelection
+    model.create(); await model.waitForCollection(); let first = model.editorSelection
     #expect(!model.canMove(-1)); #expect(!model.canMove(1))
-    model.create(); let second = model.editorSelection
-    #expect(model.canMove(-1)); model.move(-1)
+    model.create(); await model.waitForCollection(); let second = model.editorSelection
+    #expect(model.canMove(-1)); model.move(-1); await model.waitForCollection()
     #expect(model.profiles.suffix(2).map(\.id) == [second, first])
     #expect(!model.canMove(-1)); #expect(model.canMove(1))
     model.editorSelection = "gaming"

@@ -78,3 +78,9 @@ Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKIL
 ## Timer versus acquisition timing
 
 Expiry and restoration retries are evaluated on the existing 100-ms helper timer. Full sensor, ownership, conflict and stall observations are paced at two per second during a lease; GUI status and target transactions still independently sample. Independent thermal escalation therefore occurs on the next scheduled acquisition, with I/O/scheduling latency, while heartbeat expiry is not delayed by that sampling budget. Canonical expiry checks run again after hardware calls return. Idle monitoring read errors never schedule unowned fan writes; failed Fandy handbacks remain pending and retry. Physical active sleep/wake still requires a coordinated manual wake and is not represented as passed by model tests. See [measured results](docs/ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md).
+
+## Editor/persistence improvements and current evidence
+
+Valid live edits remain independent of disk acknowledgement; invalid drafts/imports never activate. Startup, login and wake remain System-first, regardless of stored selection. Quit requests automatic release before waiting for profile persistence. Diagnostic file buffering cannot delay control or grow without bound. No watchdog deadline, sampling rate, required sensor membership or reviewed SMC command sequence was relaxed by this cycle.
+
+Exclusive thirty-minute System and Cool Chassis controller sessions completed with both fans independently verified automatic afterward. Late real chip-envelope heating triggered maximum cooling through the existing guard; no stimulus was generated. Physical active sleep/wake remains untested pending coordinated wake, and a dead/blocked helper still cannot execute its watchdog. See [delivery results and measurement limits](docs/IMPROVEMENT_DELIVERY.md).

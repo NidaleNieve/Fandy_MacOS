@@ -1,5 +1,10 @@
 # Development checkpoint — 2026-10-02
 
+## Latest improvement delivery
+
+Transactional background profile persistence, grouped native Undo/Redo, keyboard curve adjustments, fresh temperature markers, demand breakdown, local profile interchange, sanitized diagnostic export and native launch-at-login settings are implemented. The stored archive and privileged protocol remain compatible. See [delivery behavior, verification and remaining checks](IMPROVEMENT_DELIVERY.md). 235 Swift tests, 33 tool tests, full ASan and six selected TSan checks pass. Exclusive thirty-minute System/Cool Chassis sessions completed with verified handback; active full-tick p95 was 358 ms and remains an optimization opportunity. Physical active sleep/wake and subjective calibration remain pending; older checkpoints below retain their historical context.
+
+
 ## Working production milestone
 
 **All six built-in profiles and eligible custom curves now work on the real Mac17,9.** The signed app starts in System with independent hardware monitoring. System immediately releases both fans to Apple. Max uses each fan's fresh reported maximum. System+, Gaming, Cool Chassis, School and custom curves use the qualified operational temperature policy. The menu checkmark requires acknowledgement; previews never masquerade as active control. System+/School may remain active while releasing ownership to Apple at idle.

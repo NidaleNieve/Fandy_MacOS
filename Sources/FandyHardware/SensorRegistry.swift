@@ -99,6 +99,8 @@ public enum SensorRegistry {
     }, topology: .verified, automaticRestoration: .verified, manualTransaction: .verified, chipControl: .conservativeEnvelope)
 }
 public final class HardwareSnapshotReader: @unchecked Sendable {
+    // Immutable membership: every acquisition still reads every required key.
+    private static let acquisitionKeys = Set(SensorRegistry.mappings.flatMap(\.keys)).sorted()
     private let lock = NSLock()
     private let reader: SMCReader
     private var sequence: UInt64 = 0
@@ -110,7 +112,7 @@ public final class HardwareSnapshotReader: @unchecked Sendable {
         let started = ProcessInfo.processInfo.systemUptime
         // Cache each key once per acquisition; averages and maxima can have independent groups.
         var samples: [String: DiscoveredSensor] = [:]
-        for key in Set(SensorRegistry.mappings.flatMap(\.keys)).sorted() {
+        for key in Self.acquisitionKeys {
             samples[key] = try? reader.read(key)
         }
         let sensors = SensorRegistry.mappings.map { mapping in
