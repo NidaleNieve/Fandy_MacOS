@@ -34,36 +34,37 @@ struct FandyApp: App {
         }
     }
     var body: some Scene {
-        MenuBarExtra("Fandy", systemImage: "fan") {
-            ForEach(model.profiles) { profile in
-                Button { model.select(profile.id) } label: {
-                    if model.isSelected(profile.id) { Label(profile.name, systemImage: "checkmark") }
-                    else { Text(profile.name) }
-                }.disabled(!model.canActivate(profile)).accessibilityIdentifier("profile.\(profile.id)")
-            }
-            Divider()
-            Text(model.statusText).font(.caption)
-            if let fault = model.machine.fault, fault != model.statusText { Text(fault).font(.caption) }
-            Divider()
-            OpenEditorButton()
-            SettingsLink { Text("Settings…") }
-            Button("Quit") { model.quit() }.keyboardShortcut("q")
-        }.menuBarExtraStyle(.menu)
-        Window("Fandy Profiles", id: "profiles") {
-            ProfileEditor(model: model)
-                .task { delegate.model = model; model.start() }
-        }.defaultSize(width: 760, height: 660).defaultLaunchBehavior(.suppressed)
-        Settings { SettingsView(model: model).task { delegate.model = model; model.start() } }
+        Settings { SettingsView(model: model) }
+
     }
-}
-struct OpenEditorButton: View {
-    @Environment(\.openWindow) private var openWindow
-    var body: some View { Button("Edit Profiles…") { openWindow(id: "profiles"); NSApp.activate(ignoringOtherApps: true) } }
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
+    private var menu: StatusMenu?
+    private var profilesWindow: NSWindow?
+    private var settingsWindow: NSWindow?
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        guard let model else { return }
+        let status = StatusMenu(model: model)
+        status.openProfiles = { [weak self] in self?.showProfiles() }
+        status.openSettings = { [weak self] in self?.showSettings() }
+        menu = status
+    }
+    private func window<V: View>(_ title: String, size: NSSize, view: V) -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = title; window.isReleasedWhenClosed = false
+        window.contentViewController = NSHostingController(rootView: view); window.center(); return window
+    }
+    func showProfiles() {
+        guard let model else { return }
+        if profilesWindow == nil { profilesWindow = window("Fandy Profiles", size: NSSize(width: 760, height: 720), view: ProfileEditor(model: model)) }
+        profilesWindow?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+    }
+    func showSettings() {
+        guard let model else { return }
+        if settingsWindow == nil { settingsWindow = window("Fandy Settings", size: NSSize(width: 500, height: 640), view: SettingsView(model: model)) }
+        settingsWindow?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model else { return .terminateNow }

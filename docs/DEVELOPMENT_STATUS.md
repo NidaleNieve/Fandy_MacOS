@@ -1,3 +1,13 @@
+# Current checkpoint — 2026-10-03: timers and scheduling
+
+Timers (minutes/hours/custom until/process instance), weekly ranges/overnight continuation, pauses, conflict subtraction/review, chatbot text import, complete configuration interchange, scheduled profile interchange, default-on login and configurable menu temperature/clock readouts are implemented. Manual intent takes precedence and expires through System; timers/process watches never resume from disk. The five-method helper and qualified fan engine are unchanged.
+
+275 Swift / 33 tool tests pass; ASan 275 and six selected TSan tests pass. Signed build and real bounded timer/process-exit handback pass. Independent modes are 0/0. Read-only menu discovery exposes 300 choices, with physical-core/cluster aggregates still labelled regions/estimates rather than certified identities. See [full delivery](SCHEDULING_DELIVERY.md) for formats, limitations and results.
+
+Resume with human testing of embedded menu text/search controls and native layout. Actual active sleep/wake needs coordinated wake; typing comfort, acoustics and sustained gaming calibration remain separate. New schedules use local wall time, while temporary intent is cancelled by sleep/restart. No pending physical fan-control gate was relaxed for these features.
+
+---
+
 # Development checkpoint — 2026-10-02
 
 ## Latest improvement delivery

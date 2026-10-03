@@ -75,6 +75,12 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md), [SAFETY.md](SAFETY.md), [SECURITY.md](S
 
 ## Profile files and editor shortcuts
 
-The sidebar menu imports profiles or exports the selected profile as a custom JSON definition. Imported profiles are validated, saved and never automatically selected for control. Arrow keys edit the selected graph node; Shift uses finer increments. Undo/Redo reverses valid profile edits and groups a drag into one operation. Storage failures retain an explicit unsaved/error state with Retry.
+The sidebar menu imports/exports individual profiles with schedules. Built-ins retain their identities and protected definitions; custom imports receive fresh identifiers. Imports validate and save before publication, with conflict review for schedules. Arrow keys edit the selected graph node; Shift uses finer increments. Undo/Redo reverses valid profile edits and groups a drag into one operation. Storage failures retain an explicit unsaved/error state with Retry.
 
-Settings provide optional launch at login and a local sanitized diagnostic export. Login still starts in System; enabling login does not install or approve the privileged helper. No networking or automatic uploads are introduced. See [improvement delivery](docs/IMPROVEMENT_DELIVERY.md) for verification and remaining calibration.
+Settings provide launch at login (enabled by default, with an explicit disable option), portable configuration files, configurable temperature/clock readouts and a local sanitized diagnostic export. Login starts in System; eligible configured schedules can run after fresh checks. Enabling login does not install or approve the privileged helper. No networking or automatic uploads are introduced. See [improvement delivery](docs/IMPROVEMENT_DELIVERY.md) for verification and remaining calibration.
+
+## Timers and weekly schedules
+
+Select a profile normally to use it until changed. **Activate for/until** adds a duration, next clock time or running-application condition to the active profile. **Resume Schedule** ends that override and returns to weekly automation through System.
+
+Each profile's Schedule section supports multiple daily ranges, overnight continuation, pauses and conflict review. Import Schedule from Text includes a copyable chatbot format prompt and errors. Settings export/import replaces profiles, schedules and preferences; individual exports include their schedules. Runtime timers and hardware qualification are never transferred. See [scheduling delivery and format](docs/SCHEDULING_DELIVERY.md).

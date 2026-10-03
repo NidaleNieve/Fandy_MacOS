@@ -93,3 +93,9 @@ Automatic observation, unverified ownership and a pending physical release are d
 ## Profile editing and persistence
 
 Collection operations commit through a serialized revision-aware persistence actor before publishing. Valid live edits update control independently of disk acknowledgement, with a visible unsaved state and debounced background persistence. UndoManager stores profile-level edits and groups direct-manipulation gestures; invalid local CurveDraft values never enter history/control. Native file panels use the profile-only interchange codec. Quit requests automatic restoration before waiting for persistence. Diagnostic file writes use a bounded utility queue; no storage work is added to the root IPC boundary.
+
+## Automation layer — 2026-10-03
+
+`Scheduling.swift` models half-open ISO-week ranges, pauses, interval subtraction and ephemeral activation intent. `AutomationModel` chooses manual intent before a scheduled occurrence; neither edits controller safety nor supplies helper authority. Expiry checks surround acquisition/dispatch, and transitions restore System before schedule handoff. Faulted occurrences are blocked until an explicit retry or later occurrence. Native `NSStatusItem`/`NSMenu` supports hierarchical menus and embedded SwiftUI duration/application pickers; the existing SwiftUI editor remains separate.
+
+Version-two `ProfileArchive` includes `AutomationConfiguration`. Revisioned actor saves and collection transactions persist complete configurations before publication. Strict bounded interchange separates portable configuration, scheduled profile bundles and human-readable schedule text. Runtime intent and hardware/signing authority are absent. `SensorMenuModel` uses independent, coalesced display acquisition, complete groups and explicit estimate labels; display keys never enter the profile engine. See [delivery](docs/SCHEDULING_DELIVERY.md).

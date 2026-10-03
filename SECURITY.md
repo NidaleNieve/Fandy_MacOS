@@ -80,4 +80,12 @@ Lease and target commands now reject unknown/missing top-level fields before typ
 
 ## Profile interchange and local exports
 
-Native file panels are user-initiated operations in the normal GUI process. The helper receives no paths or files. Imported JSON is bounded to one MiB, 128 total stored profiles and 32 nesting levels, validates every profile, rejects authority/reserved identities and assigns fresh custom IDs. An import never starts fan control. Diagnostic export is an allowlisted state summary and excludes arbitrary errors, paths, custom names, raw readings and signing identity. CI has read-only repository permissions, contains no signing credentials and runs no hardware actions.
+Native file panels are user-initiated operations in the normal GUI process. The helper receives no paths or files. Imported JSON is bounded to one MiB, 128 total stored profiles and 32 nesting levels, validates every profile, rejects authority/reserved identities and assigns fresh custom IDs. Profile-only imports do not select control; user-imported schedules can activate only through normal fresh eligibility. Configuration replacement clears runtime intent and requests System. Diagnostic export is an allowlisted state summary and excludes arbitrary errors, paths, custom names, raw readings and signing identity. CI has read-only repository permissions, contains no signing credentials and runs no hardware actions.
+
+## Automation/import boundary — 2026-10-03
+
+The five-method privileged interface is unchanged. Timers, process enumeration, configuration files and text parsing live in the normal GUI. Process watches compare PID plus kernel start time and treat exited/zombie/reused processes as ended; no arguments or application contents are inspected. No process-list, file, shell or network capability was added to the helper.
+
+Portable formats reject unknown fields, excessive nesting/bytes/items, invalid curves, duplicate IDs, protected-definition changes and unreviewed schedule conflicts. Limits are one MiB, 128 profiles, 1,024 weekly ranges, 256 pauses, 16 readouts and 32 JSON nesting levels. Built-ins retain reviewed identities; custom imports remap IDs. Temporary conditions, live leases, signing metadata and model qualification cannot be imported. Configuration replacement requires a local native confirmation. User-exported names and schedules are private configuration, not part of source publishing.
+
+Launch-at-login preference uses ServiceManagement in the genuine normal app only; diagnostics do not register it. Independent SMC/HID display discovery and raw values are read-only and cannot modify the compiled control policy. See [delivery](docs/SCHEDULING_DELIVERY.md).

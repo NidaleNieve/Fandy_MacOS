@@ -7,6 +7,17 @@ import ServiceManagement
 
 @MainActor @Observable final class AppModel {
     var profiles: [Profile]
+    var automation: AutomationConfiguration
+    var manualIntent: ActivationIntent?
+    var activationDeadline: Double?
+    var watchedProcessName: String?
+    var scheduledPeriodID: UUID?
+    var blockedScheduleID: UUID?
+    var scheduleReview: ScheduleReview?
+    var sensorMenu = SensorMenuModel()
+    let wallClock: @Sendable () -> Date
+    var isQuitting: Bool { quitting }
+    func clockNow() -> Double { clock() }
     var editorSelection = "system-plus"
     var machine = ControlMachine()
     var snapshot: HardwareSnapshot?
@@ -40,6 +51,7 @@ import ServiceManagement
     private(set) var saveError: String?
     let editorHistory = UndoManager()
     private var groupedOriginal: Profile?
+    private var failedConfiguration: (profiles: [Profile], automation: AutomationConfiguration, selection: String, restore: Bool)?
     private var failedCollection: (profiles: [Profile], selection: String, release: Bool)?
     private var historyRevision: UInt64 = 0
     var canUndo: Bool { _ = historyRevision; return editorHistory.canUndo }
@@ -63,17 +75,18 @@ import ServiceManagement
          provider: (any TemperatureSensorProvider)? = nil, client: (any PrivilegedFanClient)? = nil,
          capabilities: HardwareCapabilities? = nil, helperAvailable: (@MainActor () -> Bool)? = nil,
          powerCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
+         wallClock: @escaping @Sendable () -> Date = { Date() },
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
         self.capabilities = capabilities ?? SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel())
         self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : self.capabilities.chipPolicy)
-        self.clock = clock; self.powerCenter = powerCenter
+        self.clock = clock; self.wallClock = wallClock; self.powerCenter = powerCenter
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         store = ProfileStore(url: storeURL ?? root.appendingPathComponent("Fandy/profiles.json"))
         persistence = ProfilePersistence(store: store)
         diagnostics = try? RotatingDiagnostics(directory: (storeURL?.deletingLastPathComponent() ?? root.appendingPathComponent("Fandy")).appendingPathComponent("logs"))
-        let loaded = store.load(); profiles = loaded.profiles; issues = loaded.issues
+        let loaded = store.load(); profiles = loaded.profiles; issues = loaded.issues; automation = loaded.automation
         // Lifecycle begins from System regardless of persisted selection.
         if autoStart { Task { [weak self] in self?.start() } }
     }
@@ -167,7 +180,7 @@ import ServiceManagement
     }
     func start() {
         guard loop == nil, !quitting else { return }
-        observePower()
+        observePower(); configureLogin()
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 guard self != nil else { break }; await self?.tick()
@@ -175,9 +188,10 @@ import ServiceManagement
             }
         }
     }
-    func select(_ id: String) {
+    func select(_ id: String, manual: Bool = true) {
         guard let profile = profiles.first(where: { $0.id == id }) else { return }
         if !canActivate(profile) { hardwareError = eligibility(profile).reason; return }
+        if manual && profile == machine.selected && machine.state == .customActive { activateForever(); return }
         lifecycleToken = UUID(); requestedSimulation = simulation
         do {
             if !simulation && profile.kind != .system && !helperAvailable() {
@@ -188,22 +202,27 @@ import ServiceManagement
                 }
             }
             let effect = try machine.select(profile)
+            if manual {
+                manualIntent = ActivationIntent(profileID: id)
+                activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
+            }
             logger.notice("Profile changed to \(profile.name, privacy: .public)")
             Task { await execute(effect) }
             save()
         } catch { draftError = error.localizedDescription }
     }
     func tick() async {
-        guard !busy, !quitting else { return }; let token = lifecycleToken; busy = true; defer { busy = false }
+        guard !busy, !quitting else { return }; expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
         var restorationReport: RestorationReport?
         do {
             if simulation {
                 await mock.setScenario(scenario)
                 let reading = try await mock.snapshot()
-                guard token == lifecycleToken, !quitting else { return }; snapshot = reading
+                guard token == lifecycleToken, !quitting else { return }; expireActivation(); expireScheduledOccurrence()
+                guard token == lifecycleToken else { return }; snapshot = reading
                 if let snapshot {
                     if machine.selected.kind != .system { try freshness.check(snapshot, required: machine.selected.requiredSensors(chipPolicy: machine.chipPolicy), now: snapshot.sampledAt) }
-                    await execute(machine.step(snapshot, now: snapshot.sampledAt))
+                    await stepController(snapshot, now: snapshot.sampledAt)
                 }
             } else {
                 let reading: HardwareSnapshot
@@ -229,6 +248,8 @@ import ServiceManagement
                     guard token == lifecycleToken, !quitting else { return }
                     helperHealth = .unavailable
                 }
+                expireActivation(); expireScheduledOccurrence()
+                guard token == lifecycleToken else { return }
                 try reading.validateFans(now: clock())
                 snapshot = reading
                 if capabilities.canRestore {
@@ -236,14 +257,18 @@ import ServiceManagement
                         guard capabilities.canControl, helperHealth == .controlReady else { throw ControlError.helperUnavailable }
                         try freshness.check(reading, required: machine.selected.requiredSensors(chipPolicy: machine.chipPolicy), now: clock())
                     }
-                    await execute(machine.step(reading, now: clock()))
+                    await stepController(reading, now: clock())
                 }
                 hardwareError = observedBlocker
             }
             tickCount += 1
+            evaluateSchedule()
+            sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: snapshot)
             if let snapshot, tickCount % 5 == 0 { diagnostics?.enqueue(profile:machine.selected.name,snapshot:snapshot) }
         } catch {
             guard token == lifecycleToken, !quitting else { return }
+            automationFailed()
+            sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: nil)
             if simulation { await execute(machine.fail(error)) }
             else {
                 hardwareError = error.localizedDescription; snapshot = nil; helperHealth = .fault
@@ -253,7 +278,14 @@ import ServiceManagement
             }
         }
     }
+    private func stepController(_ reading: HardwareSnapshot, now: Double) async {
+        let wasCustom = machine.selected.kind != .system
+        let effect = machine.step(reading, now: now)
+        if wasCustom && machine.selected.kind == .system && machine.fault != nil { automationFailed() }
+        await execute(effect)
+    }
     private func execute(_ effect: ControlEffect) async {
+        if case .apply = effect { expireActivation(); expireScheduledOccurrence() }
         let token = lifecycleToken
         switch effect {
         case .restore(let generation), .apply(_, let generation, _, _): guard generation == machine.generation else { return }
@@ -280,7 +312,7 @@ import ServiceManagement
             case .apply(let targets,let generation,_,let required):
                 guard generation == machine.generation else { return }
                 do { try await client.apply(targets,generation:generation,required:required); guard token == lifecycleToken else { return }; machine.applied(generation:generation) }
-                catch { guard token == lifecycleToken else { return }; await execute(machine.fail(error));hardwareError=error.localizedDescription }
+                catch { guard token == lifecycleToken else { return }; automationFailed(); await execute(machine.fail(error));hardwareError=error.localizedDescription }
             case .none: break
             }
             return
@@ -321,7 +353,7 @@ import ServiceManagement
             try profile.validate()
             guard let index = profiles.firstIndex(where: { $0.id == profile.id }), !profiles[index].protected else { return }
             guard profiles[index] != profile else { return }
-            failedCollection = nil
+            failedCollection = nil; failedConfiguration = nil
             if groupedOriginal == nil { registerUndo(profiles[index]) }
             // The existing validated profile is retained if a draft is invalid.
             if machine.selected.id == profile.id { lifecycleToken = UUID(); let effect = try machine.select(profile); Task { await execute(effect) } }
@@ -330,12 +362,18 @@ import ServiceManagement
     }
     private func commitCollection(_ next: [Profile], selection: String, releaseDeleted: Bool = false) {
         guard !savingCollection, !quitting else { return }
+        failedConfiguration = nil
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
         let revision = saveRevision, active = machine.selected.id
         collectionTask = Task {
             defer { savingCollection = false; collectionTask = nil }
             do {
-                try await persistence.save(next, selection: active, revision: revision)
+                var nextAutomation = automation
+                let ids = Set(next.map(\.id))
+                nextAutomation.periods.removeAll { !ids.contains($0.profileID) }
+                nextAutomation.pauses.removeAll { $0.profileID.map { !ids.contains($0) } ?? false }
+                try await persistence.save(next, selection: active, revision: revision, automation: nextAutomation)
+                automation = nextAutomation
                 profiles = next; editorSelection = selection; resetEditorHistory()
                 unsavedChanges = false; saveError = nil; failedCollection = nil
                 if releaseDeleted && !quitting { select("system") }
@@ -364,12 +402,40 @@ import ServiceManagement
     }
     func importProfiles(_ data: Data) {
         do {
-            let imported = try ProfileInterchange.decode(data, existingCount: profiles.count)
-            commitCollection(profiles + imported, selection: imported[0].id)
-        } catch { saveError = "Import rejected: invalid profiles or storage limit exceeded." }
+            let imported = try ScheduledProfileInterchange.decode(data, existingCount: profiles.count)
+            reviewPeriods(imported.periods, pauses: imported.pauses, profiles: imported.profiles, replacing: imported.replacements)
+        } catch { draftError = "Import rejected: \(error.localizedDescription)" }
+    }
+    func commitConfiguration(profiles next: [Profile], automation nextAutomation: AutomationConfiguration, selection: String, restore: Bool = false) {
+        guard !savingCollection, !quitting else { return }
+        do { try PortableConfiguration(profiles: next, automation: nextAutomation).validate() }
+        catch { draftError = error.localizedDescription; return }
+        failedCollection = nil; failedConfiguration = nil
+        savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
+        let revision = saveRevision
+        collectionTask = Task {
+            defer { savingCollection = false; collectionTask = nil }
+            do {
+                try await persistence.save(next, selection: "system", revision: revision, automation: nextAutomation)
+                if restore { clearActivation(); blockedScheduleID = nil; select("system", manual: false) }
+                else if let replacement = next.first(where: { $0.id == machine.selected.id }), replacement != machine.selected {
+                    // Definition replacement follows the existing live-edit path. Scheduling
+                    // must not cancel a manual duration/process watch for the same profile.
+                    lifecycleToken = UUID()
+                    do { let effect = try machine.select(replacement); Task { await execute(effect) } }
+                    catch { automationFailed(); await execute(machine.fail(error)) }
+                }
+                profiles = next; automation = nextAutomation; editorSelection = selection; resetEditorHistory()
+                unsavedChanges = false; saveError = nil; configureLogin()
+            } catch {
+                failedConfiguration = (next, nextAutomation, selection, restore)
+                saveError = "Configuration was not changed: storage failed. Retry when storage is available."
+            }
+        }
     }
     func setSimulation(_ enabled: Bool) {
         guard enabled != requestedSimulation, !quitting else { return }
+        clearActivation(); blockedScheduleID = nil
         requestedSimulation = enabled; lifecycleToken = UUID(); let token = lifecycleToken
         Task {
             guard token == lifecycleToken, enabled != simulation else { return }
@@ -388,6 +454,7 @@ import ServiceManagement
         }
     }
     func powerTransition() {
+        clearActivation(); blockedScheduleID = nil
         powerTransitionCount &+= 1
         requestedSimulation = simulation
         lifecycleToken = UUID(); let token = lifecycleToken
@@ -408,7 +475,7 @@ import ServiceManagement
         beginTermination(); await finishTermination()
     }
     private func beginTermination() {
-        lifecycleToken = UUID(); quitting = true; stop(); pendingSave?.cancel()
+        clearActivation(); lifecycleToken = UUID(); quitting = true; stop(); pendingSave?.cancel()
     }
     func waitForCollection() async { await collectionTask?.value }
     private func finishTermination() async {
@@ -418,6 +485,7 @@ import ServiceManagement
         // Observation never owned a lease; control failures still rely on the helper watchdog.
         terminationReady = true
     }
+    func discardFailedConfiguration() { failedConfiguration = nil }
     private func scheduleSave() {
         unsavedChanges = true; pendingSave?.cancel()
         pendingSave = Task { [weak self] in
@@ -426,16 +494,17 @@ import ServiceManagement
         }
     }
     func save() {
-        if let failed = failedCollection { commitCollection(failed.profiles, selection: failed.selection, releaseDeleted: failed.release) }
+        if let failed = failedConfiguration { commitConfiguration(profiles: failed.profiles, automation: failed.automation, selection: failed.selection, restore: failed.restore) }
+        else if let failed = failedCollection { commitCollection(failed.profiles, selection: failed.selection, releaseDeleted: failed.release) }
         else { Task { await saveLatest() } }
     }
     private func saveLatest() async {
         guard !savingCollection else { return }
         saveRevision &+= 1
-        let revision = saveRevision, current = profiles, selection = machine.selected.id
+        let revision = saveRevision, current = profiles, selection = machine.selected.id, config = automation
         do {
-            try await persistence.save(current, selection: selection, revision: revision)
-            guard revision == saveRevision, current == profiles else { return }
+            try await persistence.save(current, selection: selection, revision: revision, automation: config)
+            guard revision == saveRevision, current == profiles, config == automation else { return }
             unsavedChanges = false; saveError = nil
         } catch {
             guard revision == saveRevision else { return }

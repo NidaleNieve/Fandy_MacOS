@@ -1,13 +1,23 @@
 import Foundation
 public struct ProfileArchive: Codable, Sendable {
-    public var version: Int = 1
+    public var version: Int = 2
     public var profiles: [Profile]
     public var previousSelection: String?
-    public init(profiles: [Profile], previousSelection: String? = nil) { self.profiles = profiles; self.previousSelection = previousSelection }
+    public var automation: AutomationConfiguration
+    private enum CodingKeys: String, CodingKey { case version, profiles, previousSelection, automation }
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        profiles = try c.decode([Profile].self, forKey: .profiles)
+        previousSelection = try c.decodeIfPresent(String.self, forKey: .previousSelection)
+        automation = try c.decodeIfPresent(AutomationConfiguration.self, forKey: .automation) ?? .init()
+    }
+    public init(profiles: [Profile], previousSelection: String? = nil, automation: AutomationConfiguration = .init()) { self.profiles = profiles; self.previousSelection = previousSelection; self.automation = automation }
 }
 public struct ProfileLoadResult: Sendable {
     public var profiles: [Profile]
     public var issues: [String]
+    public var automation: AutomationConfiguration = .init()
 }
 public struct ProfileStore: Sendable {
     public let url: URL
@@ -18,7 +28,7 @@ public struct ProfileStore: Sendable {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             guard (attributes[.size] as? NSNumber)?.intValue ?? Int.max <= 1_048_576 else { throw ControlError.malformedMessage }
             let data = try Self.readBounded(url)
-            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any], object["version"] as? Int == 1,
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any], [1, 2].contains(object["version"] as? Int ?? 0),
                   let entries = object["profiles"] as? [[String: Any]], entries.count <= 128 else { throw ControlError.malformedMessage }
             var profiles: [Profile] = [], issues: [String] = [], ids = Set<String>()
             for entry in entries {
@@ -38,17 +48,25 @@ public struct ProfileStore: Sendable {
                 }
                 issues.append("Excess custom profiles were excluded to preserve built-ins and the storage limit.")
             }
-            return ProfileLoadResult(profiles: profiles, issues: issues)
+            var automation = AutomationConfiguration()
+            if let stored = object["automation"] {
+                do {
+                    automation = try JSONDecoder().decode(AutomationConfiguration.self, from: JSONSerialization.data(withJSONObject: stored))
+                    try automation.validate(profileIDs: Set(profiles.map(\.id)))
+                } catch { automation = .init(); issues.append("Damaged automation settings excluded; schedules disabled.") }
+            }
+            return ProfileLoadResult(profiles: profiles, issues: issues, automation: automation)
         } catch {
             return ProfileLoadResult(profiles: BuiltInProfiles.all, issues: ["Profile storage could not be decoded. Original file preserved; System selected."])
         }
     }
-    public func save(_ profiles: [Profile], previousSelection: String?) throws {
+    public func save(_ profiles: [Profile], previousSelection: String?, automation: AutomationConfiguration = .init()) throws {
         guard profiles.count <= 128, Set(profiles.map(\.id)).count == profiles.count,
               Set(BuiltInProfiles.all.map(\.id)).isSubset(of: Set(profiles.map(\.id))) else { throw ControlError.invalidProfile("Profile set must retain all built-ins.") }
         try profiles.forEach { try $0.validate() }
+        try automation.validate(profileIDs: Set(profiles.map(\.id)))
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let bytes = try encoder.encode(ProfileArchive(profiles: profiles, previousSelection: previousSelection))
+        let bytes = try encoder.encode(ProfileArchive(profiles: profiles, previousSelection: previousSelection, automation: automation))
         guard bytes.count <= 1_048_576 else { throw ControlError.malformedMessage }
         let fm = FileManager.default
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -82,10 +100,10 @@ public actor ProfilePersistence {
     private let store: ProfileStore
     private var newest: UInt64 = 0
     public init(store: ProfileStore) { self.store = store }
-    public func save(_ profiles: [Profile], selection: String?, revision: UInt64) throws {
+    public func save(_ profiles: [Profile], selection: String?, revision: UInt64, automation: AutomationConfiguration = .init()) throws {
         guard revision >= newest else { return }
         newest = revision
-        try store.save(profiles, previousSelection: selection)
+        try store.save(profiles, previousSelection: selection, automation: automation)
     }
 }
 

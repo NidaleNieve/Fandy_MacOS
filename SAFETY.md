@@ -30,7 +30,7 @@ Custom mode uses manual ownership and temporarily replaces Apple's ordinary dema
 | RPM transaction failure | Attempt automatic restoration on all fans, including a fan whose write may have partially applied. Never claim the profile is active. |
 | Rapid profile switching / invalid edit | Generations and lifecycle tokens discard old success/failure acknowledgements and in-flight readings after backend changes, profile switching, sleep/wake or quit; invalid drafts preserve the previous validated profile. |
 | Sleep | GUI resets selection; root helper separately receives IOPM will-sleep, revokes and restores before acknowledging. |
-| Wake | Helper restores again. GUI starts System and reacquires sensors. No automatic custom resume. Actual sleep/wake test pending. |
+| Wake | Helper restores again. GUI starts System and reacquires sensors. Runtime manual intent is cancelled. Eligible configured schedules may activate only after fresh checks; saved manual selections never resume. Actual sleep/wake test pending. |
 | Logout/reboot/shutdown | No deliberate persistence of manual fan state. launchd startup assumes restoration, not old demand. An unscheduled reboot cannot provide a guaranteed userspace cleanup opportunity. |
 | Profile corruption | Preserve original bytes, salvage individually valid records, restore all built-ins, start System. |
 | Severe thermal pressure | ProcessInfo serious/critical/unknown causes restoration to Apple. No invented hardware critical threshold. |
@@ -84,3 +84,9 @@ Expiry and restoration retries are evaluated on the existing 100-ms helper timer
 Valid live edits remain independent of disk acknowledgement; invalid drafts/imports never activate. Startup, login and wake remain System-first, regardless of stored selection. Quit requests automatic release before waiting for profile persistence. Diagnostic file buffering cannot delay control or grow without bound. No watchdog deadline, sampling rate, required sensor membership or reviewed SMC command sequence was relaxed by this cycle.
 
 Exclusive thirty-minute System and Cool Chassis controller sessions completed with both fans independently verified automatic afterward. Late real chip-envelope heating triggered maximum cooling through the existing guard; no stimulus was generated. Physical active sleep/wake remains untested pending coordinated wake, and a dead/blocked helper still cannot execute its watchdog. See [delivery results and measurement limits](docs/IMPROVEMENT_DELIVERY.md).
+
+## Timer/schedule behavior — 2026-10-03
+
+Manual menu selections outrank schedules. Timed/process-bound intent expires toward System, followed by fresh admission of an eligible current schedule. Sleep, restart and backend changes discard runtime intent. Schedules are user-configured fresh policy, not recovered manual RPM state. The existing engine's fan/sensor gates, immutable guard, authenticated leases and helper heartbeat remain unchanged. A failed active occurrence is blocked from automatic retry.
+
+Expiry checks run before/after acquisition and before dispatch, but ordinary timer precision includes polling/I/O latency. The helper heartbeat remains the independent crash/freeze fallback, with its documented ten-second timeout and dead/blocked-helper limitation. No new privileged deadline or command is introduced. Native import replacement cancels control intent; portable files cannot qualify another model. Raw display readings never become control inputs. See [timing limits and actual results](docs/SCHEDULING_DELIVERY.md).

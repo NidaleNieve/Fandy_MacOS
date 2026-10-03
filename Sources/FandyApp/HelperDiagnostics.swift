@@ -31,6 +31,8 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case productionQuit = "--profiles-recovery-quit"
     case productionHold = "--profiles-recovery-hold"
     case productionSecurity = "--helper-security-check"
+    case sensorMenu = "--sensor-menu-check"
+    case automation = "--automation-check"
     case performance = "--performance-check"
     case performanceMonitoring = "--performance-monitoring-long"
     case performanceComfort = "--performance-comfort-long"
@@ -63,6 +65,8 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .curveCheck, .curveHeartbeat, .curveDisconnect, .curveHold, .curveQuit: return await checkCurve(action)
             case .curveSpinning: return await checkSpinningCurve()
             case .productionHeartbeat, .productionDisconnect, .productionQuit, .productionHold: return await ProductionRecoveryDiagnostics.run(action)
+            case .sensorMenu: return await SensorMenuDiagnostics.run()
+            case .automation: return await AutomationDiagnostics.run()
             case .performance: return await PerformanceDiagnostics.run()
             case .performanceMonitoring, .performanceComfort: return await PerformanceDiagnostics.runLong(comfort: action == .performanceComfort)
             case .profilesSleep: return await SleepDiagnostics.run()
@@ -87,7 +91,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 return await RecoveryDiagnostics.run(action, client: client)
             }
             let state = HelperManager.service.status
-            var report: [String: Any] = ["action": action.rawValue, "registration": name(state),
+            var report: [String: Any] = ["action": action.rawValue, "registration": name(state), "loginRegistration": name(SMAppService.mainApp.status),
                 "physicalWritesEnabled": SensorRegistry.capabilities.canRestore,
                 "manualWritesEnabled": SensorRegistry.capabilities.canControl]
             report["recoveryTrialsEnabled"] = SensorRegistry.capabilities.canQualifyRecovery

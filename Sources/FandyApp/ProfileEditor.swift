@@ -96,11 +96,14 @@ struct ProfileEditor: View {
                             Spacer()
                         }
                         Divider()
+                        ScheduleEditor(model: model, profile: profile).id(profile.id)
+                        Divider()
                         SensorStatus(model: model)
                     }.padding(20)
                 }.onAppear { name = profile.name }.onChange(of: profile.id) { _, _ in name = profile.name }.onChange(of: profile.name) { _, new in name = new }
             } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
         }.frame(minWidth: 680, minHeight: 560)
+        .sheet(item: $model.scheduleReview) { _ in ScheduleConflictSheet(model: model) }
         .disabled(model.savingCollection)
         .onChange(of: model.editorSelection) { _, _ in model.resetEditorHistory() }
         .toolbar { ToolbarItem { Text(model.simulation ? "Simulation" : "Live").foregroundStyle(.secondary).font(.caption) } }
@@ -120,8 +123,9 @@ struct ProfileEditor: View {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Profile.json"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
+            let config = model.automation
             Task {
-                do { try await Task.detached { try ProfileInterchange.encode([profile]).write(to: url, options: .atomic) }.value }
+                do { try await Task.detached { try ScheduledProfileInterchange.encode(profile, automation: config).write(to: url, options: .atomic) }.value }
                 catch { model.draftError = "Profile file could not be exported." }
             }
         }
@@ -183,19 +187,15 @@ struct SettingsView: View {
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var helperStatus = HelperManager.service.status
     var body: some View {
-        Form {
+        ScrollView { Form {
             Section("General") {
-                Toggle("Launch at login", isOn: Binding(get: { loginStatus == .enabled }, set: { enabled in
-                    do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; refreshRegistration() }
-                    catch { model.draftError = "Login setting could not be changed." }
-                }))
                 Button("Export Diagnostics…") { exportDiagnostics() }
                 if loginStatus == .requiresApproval {
                     Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                 }
-                Text("Login starts in System.").font(.caption).foregroundStyle(.secondary)
                 if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
             }
+            ConfigurationSettings(model: model)
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: { model.setSimulation($0) }))
                 Text("Live mode reads sensors and runs the selected profile.").font(.caption).foregroundStyle(.secondary)
@@ -219,7 +219,7 @@ struct SettingsView: View {
                 }.accessibilityIdentifier("settings.hardwareVerification")
                 Text("Startup and wake begin in System. No telemetry or networking.").font(.caption).foregroundStyle(.secondary)
             }
-        }.formStyle(.grouped).padding().frame(width: 440)
+        }.formStyle(.grouped).padding() }.frame(width: 500, height: 640)
         .onAppear { refreshRegistration() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refreshRegistration() } }
     }
