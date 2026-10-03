@@ -32,6 +32,8 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case productionHold = "--profiles-recovery-hold"
     case productionSecurity = "--helper-security-check"
     case performance = "--performance-check"
+    case performanceMonitoring = "--performance-monitoring-long"
+    case performanceComfort = "--performance-comfort-long"
     case profilesSleep = "--profiles-sleep-check"
     case profilesLive = "--profiles-live-check"
     case profilesCalibration = "--profiles-calibration-check"
@@ -62,6 +64,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .curveSpinning: return await checkSpinningCurve()
             case .productionHeartbeat, .productionDisconnect, .productionQuit, .productionHold: return await ProductionRecoveryDiagnostics.run(action)
             case .performance: return await PerformanceDiagnostics.run()
+            case .performanceMonitoring, .performanceComfort: return await PerformanceDiagnostics.runLong(comfort: action == .performanceComfort)
             case .profilesSleep: return await SleepDiagnostics.run()
             case .profilesLive, .profilesCalibration: return await ProfileDiagnostics.run(action)
             case .maximumCheck, .maximumQuit, .maximumHeartbeat: return await checkMaximum(action)

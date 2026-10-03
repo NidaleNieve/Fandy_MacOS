@@ -89,3 +89,7 @@ CurveDraft is editor-only value state, separate from both SwiftUI drawing and th
 ## Ownership and polling refinement
 
 Automatic observation, unverified ownership and a pending physical release are distinct states. Both process models invalidate failed idle observations without issuing unowned writes; real failed releases retain retries. Lease validity is checked after returning from blocking adapters. FanHardwareIO exposes the validated batch seam, with no misleading default individual-write order. Native polling stop/termination owns notification cleanup. The helper's 100-ms decision timer is separate from 2-Hz full SMC acquisitions; status/target transactions acquire independently. See [the architecture and test review](docs/ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md).
+
+## Profile editing and persistence
+
+Collection operations commit through a serialized revision-aware persistence actor before publishing. Valid live edits update control independently of disk acknowledgement, with a visible unsaved state and debounced background persistence. UndoManager stores profile-level edits and groups direct-manipulation gestures; invalid local CurveDraft values never enter history/control. Native file panels use the profile-only interchange codec. Quit requests automatic restoration before waiting for persistence. Diagnostic file writes use a bounded utility queue; no storage work is added to the root IPC boundary.

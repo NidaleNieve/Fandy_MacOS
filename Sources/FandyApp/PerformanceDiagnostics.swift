@@ -19,6 +19,50 @@ struct LatencySummary: Codable, Equatable {
 
 /// Read-only, paced performance measurements. No stimulus, profile change or lease request.
 @MainActor enum PerformanceDiagnostics {
+    /// Fixed thirty-minute ordinary-use session; no caller duration, target or stimulus.
+    static func runLong(comfort: Bool) async -> Int32 {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyPerformance-\(UUID().uuidString)")
+        let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false)
+        defer { model.stop(); try? FileManager.default.removeItem(at: root) }
+        do {
+            model.observePower()
+            let powerGeneration = model.powerTransitionCount
+            let reader = try HardwareSnapshotReader()
+            guard try reader.snapshot().fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+            for _ in 0..<5 { await model.tick() }
+            if comfort {
+                guard model.powerTransitionCount == powerGeneration else { throw ControlError.restorationUnverified }
+                model.select("cool-chassis")
+                for _ in 0..<15 { await model.tick(); if model.isSelected("cool-chassis") { break }; try await Task.sleep(for: .seconds(1)) }
+                guard model.isSelected("cool-chassis") else { throw ControlError.helperUnavailable }
+            }
+            let started = ContinuousClock.now
+            let deadline = started.advanced(by: .seconds(1800))
+            var ticks: [Double] = []
+            while ContinuousClock.now < deadline {
+                let began = ProcessInfo.processInfo.systemUptime
+                await model.tick()
+                ticks.append(ProcessInfo.processInfo.systemUptime - began)
+                guard model.powerTransitionCount == powerGeneration, model.hardwareError == nil, model.isSelected(comfort ? "cool-chassis" : "system"), let snapshot = model.snapshot else { throw ControlError.helperUnavailable }
+                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: SensorRegistry.capabilities.chipPolicy.required.union(SensorRole.comfort))
+                if ticks.count % 30 == 0 {
+                    let row: [String: Any] = ["event": "performanceSample", "session": comfort ? "comfort" : "system", "ticks": ticks.count,
+                        "modes": snapshot.fans.map { $0.mode.rawValue }, "rpm": snapshot.fans.map { $0.actualRPM },
+                        "tickMilliseconds": ticks.last! * 1000]
+                    var data = try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]); data.append(10); FileHandle.standardOutput.write(data)
+                }
+                try await Task.sleep(for: .seconds(1))
+            }
+            await model.prepareForTermination()
+            guard try reader.snapshot().fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+            struct Report: Encodable { let event: String; let session: String; let durationSeconds: Int; let tickLatency: LatencySummary }
+            var data = try JSONEncoder().encode(Report(event: "longPerformancePassed", session: comfort ? "comfort" : "system", durationSeconds: 1800, tickLatency: LatencySummary(seconds: ticks)))
+            data.append(10); FileHandle.standardOutput.write(data); return 0
+        } catch {
+            await model.prepareForTermination()
+            FileHandle.standardError.write(Data("Long performance session failed; System restoration requested.\n".utf8)); return 1
+        }
+    }
     static func run() async -> Int32 {
         do {
             let reader = try HardwareSnapshotReader(), client = FanXPCClient()

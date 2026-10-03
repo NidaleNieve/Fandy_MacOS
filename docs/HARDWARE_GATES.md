@@ -50,3 +50,9 @@ Variable-speed qualification observed actual RPM during warm re-entry, target up
 ## Refreshed production recovery and performance
 
 The architecture/security pass retains production eligibility, command construction and batch order. Post-I/O expiry checks and a separate 2-Hz acquisition budget preserve the 100-ms expiry/release cadence. Final modest spinning-fan trials passed controller SIGKILL (~0.032s), heartbeat (~10.057s), disconnect (~0.268s) and normal termination (~0.017s), independently verifying both modes. Signed production hostile-input/identity checks and 221 Swift/31 tool tests pass, with sanitizer coverage. Previous helper-restart evidence remains; physical active sleep/wake is prepared but pending a coordinated manual wake. [Detailed scope and results](ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md).
+
+## Balanced-polish verification — 2026-10-03
+
+All eligible production profiles remain enabled on the qualified model. The sequential live profile/editor/backend/rapid-switch regression passed. A final bounded heartbeat trial observed rotating manual fans return to automatic after approximately 10.19 seconds. Exclusive thirty-minute System/Cool Chassis sessions maintained policy and fresh inputs and ended in independently verified modes 0/0. Initial overlapping diagnostics and an intentionally stopped power-harness setup are explicitly excluded from acceptance.
+
+These results do not certify physical sleep/wake, editor-open energy use, subjective comfort or sustained gaming. Active full-control-tick p95 was 358.29 ms; short acquisition/status/engine budgets separately passed. See [full results and limitations](IMPROVEMENT_DELIVERY.md). No arbitrary RPM, target-clearing operation or new privileged method was added.

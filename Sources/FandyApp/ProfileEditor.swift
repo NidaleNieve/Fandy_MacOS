@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import ServiceManagement
 import FandyCore
 import FandyHardware
@@ -23,6 +25,10 @@ struct ProfileEditor: View {
                 Button { model.create() } label: { Image(systemName: "plus") }.help("Create profile").accessibilityLabel("Create profile")
                 Button { model.duplicate() } label: { Image(systemName: "square.on.square") }.disabled(model.edited == nil).help("Duplicate profile").accessibilityLabel("Duplicate profile")
                 Button { model.delete() } label: { Image(systemName: "minus") }.disabled(model.edited?.bundled != false).help("Delete profile").accessibilityLabel("Delete profile")
+                Menu {
+                    Button("Import Profiles…") { importFile() }
+                    Button("Export Selected Profile…") { exportFile() }.disabled(model.edited == nil)
+                } label: { Image(systemName: "ellipsis.circle") }.help("Profile files")
                 Spacer()
             }.padding(10)
         } detail: {
@@ -59,20 +65,27 @@ struct ProfileEditor: View {
                             }
                             HStack {
                                 Text("Minimum airflow")
-                                Slider(value: Binding(get: { profile.floor }, set: { var next = profile; next.floor = $0.rounded(); model.update(next) }), in: 0...100)
+                                Slider(value: Binding(get: { profile.floor }, set: { var next = profile; next.floor = $0.rounded(); model.update(next) }), in: 0...100, onEditingChanged: { editing in if editing { model.beginEditGroup() } else { model.endEditGroup() } })
                                 Text("\(Int(profile.floor))%").monospacedDigit().frame(width: 40)
                             }
+                            Text("0% uses each fan’s minimum RPM. Apple auto at idle can release control instead.").font(.caption).foregroundStyle(.secondary)
                             Toggle("Use Apple auto at idle", isOn: Binding(get: { profile.automaticAtIdle }, set: { var next = profile; next.automaticAtIdle = $0; model.update(next) }))
                         }
                         if !model.simulation && profile.kind != .system {
                             if let preview = model.preview {
-                                Text(StatusPresentation.demand(preview, active: model.isSelected(profile.id)))
+                                Text(StatusPresentation.demand(preview, active: model.isSelected(profile.id)) + "\n" + StatusPresentation.breakdown(preview, floor: profile.floor))
                                     .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("profile.shadow-demand")
                             } else { Text("Preview unavailable: required readings are missing or unreliable.").font(.caption).foregroundStyle(.secondary) }
                             if let reason = model.eligibility(profile).reason { Text(reason).font(.caption).foregroundStyle(.secondary) }
                         }
                         if let error = model.draftError { Text(error).foregroundStyle(.red).font(.caption).accessibilityIdentifier("curve.validation-error") }
+                        if model.unsavedChanges { Text("Changes not saved").font(.caption).foregroundStyle(.orange) }
+                        if let error = model.saveError {
+                            HStack { Text(error).font(.caption).foregroundStyle(.orange); Button("Retry") { model.save() } }
+                        }
                         HStack {
+                            Button("Undo") { model.editorHistory.undo() }.disabled(!model.canUndo).keyboardShortcut("z")
+                            Button("Redo") { model.editorHistory.redo() }.disabled(!model.canRedo).keyboardShortcut("z", modifiers: [.command, .shift])
                             if profile.bundled && !profile.protected { Button("Reset to Default") { model.reset() } }
                             if !profile.bundled {
                                 Button { model.move(-1) } label: { Image(systemName: "arrow.up") }
@@ -88,7 +101,30 @@ struct ProfileEditor: View {
                 }.onAppear { name = profile.name }.onChange(of: profile.id) { _, _ in name = profile.name }.onChange(of: profile.name) { _, new in name = new }
             } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
         }.frame(minWidth: 680, minHeight: 560)
+        .disabled(model.savingCollection)
+        .onChange(of: model.editorSelection) { _, _ in model.resetEditorHistory() }
         .toolbar { ToolbarItem { Text(model.simulation ? "Simulation" : "Live").foregroundStyle(.secondary).font(.caption) } }
+    }
+    private func importFile() {
+        let panel = NSOpenPanel(); panel.allowedContentTypes = [.json]; panel.allowsMultipleSelection = false
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task {
+                do { let data = try await Task.detached { try ProfileStore.readBounded(url) }.value; model.importProfiles(data) }
+                catch { model.draftError = "Profile file could not be read." }
+            }
+        }
+    }
+    private func exportFile() {
+        guard let profile = model.edited else { return }
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Profile.json"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task {
+                do { try await Task.detached { try ProfileInterchange.encode([profile]).write(to: url, options: .atomic) }.value }
+                catch { model.draftError = "Profile file could not be exported." }
+            }
+        }
     }
 }
 struct CurveSection: View {
@@ -104,7 +140,7 @@ struct CurveSection: View {
                 Spacer()
                 Button("Reset Curve") { resetCurve() }.font(.caption)
             }
-            CurveEditor(curve: curve, resetRevision: resetRevision, onChange: commit).id(profile.id + input.rawValue).disabled(!curve.enabled).opacity(curve.enabled ? 1 : 0.5)
+            CurveEditor(curve: curve, resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve), onBegin: model.beginEditGroup, onEnd: model.endEditGroup, onChange: commit).id(profile.id + input.rawValue).disabled(!curve.enabled).opacity(curve.enabled ? 1 : 0.5)
         }
     }
     func resetCurve() {
@@ -143,8 +179,23 @@ struct SensorStatus: View {
 }
 struct SettingsView: View {
     @Bindable var model: AppModel
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var loginStatus = SMAppService.mainApp.status
+    @State private var helperStatus = HelperManager.service.status
     var body: some View {
         Form {
+            Section("General") {
+                Toggle("Launch at login", isOn: Binding(get: { loginStatus == .enabled }, set: { enabled in
+                    do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; refreshRegistration() }
+                    catch { model.draftError = "Login setting could not be changed." }
+                }))
+                Button("Export Diagnostics…") { exportDiagnostics() }
+                if loginStatus == .requiresApproval {
+                    Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
+                }
+                Text("Login starts in System.").font(.caption).foregroundStyle(.secondary)
+                if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
+            }
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: model.setSimulation))
                 Text("Live mode reads sensors and runs the selected profile.").font(.caption).foregroundStyle(.secondary)
@@ -156,7 +207,7 @@ struct SettingsView: View {
             }
             Section("Fan Helper") {
                 Text(model.helperRegistrationText)
-                if HelperManager.service.status == .requiresApproval {
+                if helperStatus == .requiresApproval {
                     Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                 }
                 Text(model.capabilities.stage == .qualifiedControl ? "Eligible profiles control real fans. System restores Apple automatic control." : model.capabilities.canRestore ? "System and Max are available. Temperature profiles await their required inputs and activation test." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
@@ -169,5 +220,19 @@ struct SettingsView: View {
                 Text("Startup and wake begin in System. No telemetry or networking.").font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).padding().frame(width: 440)
+        .onAppear { refreshRegistration() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { refreshRegistration() } }
     }
+    private func refreshRegistration() { loginStatus = SMAppService.mainApp.status; helperStatus = HelperManager.service.status }
+    private func exportDiagnostics() {
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Diagnostics.json"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task {
+                do { let data = try model.sanitizedDiagnostics(); try await Task.detached { try data.write(to: url, options: .atomic) }.value }
+                catch { model.draftError = "Diagnostics could not be exported." }
+            }
+        }
+    }
+
 }

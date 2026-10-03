@@ -5,10 +5,14 @@ struct CurveEditor: View {
     let curve: FanCurve
     let resetRevision: UInt64
     let onChange: (FanCurve) -> Void
+    let onBegin: () -> Void
+    let onEnd: () -> Void
+    let currentTemperature: Double?
     @State private var editor: CurveDraft
     @State private var dragging: UUID?
     @State private var dragRange: ClosedRange<Double>?
-    init(curve: FanCurve, resetRevision: UInt64 = 0, onChange: @escaping (FanCurve) -> Void) {
+    init(curve: FanCurve, resetRevision: UInt64 = 0, currentTemperature: Double? = nil, onBegin: @escaping () -> Void = {}, onEnd: @escaping () -> Void = {}, onChange: @escaping (FanCurve) -> Void) {
+        self.currentTemperature = currentTemperature; self.onBegin = onBegin; self.onEnd = onEnd;
         self.curve = curve; self.resetRevision = resetRevision; self.onChange = onChange; _editor = State(initialValue: CurveDraft(curve))
     }
     var range: ClosedRange<Double> { dragRange ?? editor.range }
@@ -28,6 +32,11 @@ struct CurveEditor: View {
                         let x = coordinate(CurvePoint(Double(temperature),0), plot: plot).x
                         context.draw(Text("\(temperature)°").font(.system(size: 10)).foregroundStyle(.secondary), at: CGPoint(x: x, y: plot.maxY + 12))
                     }
+                    if let temperature = currentTemperature, temperature.isFinite, range.contains(temperature) {
+                        let x = coordinate(CurvePoint(temperature, 0), plot: plot).x
+                        var marker = Path(); marker.move(to: CGPoint(x: x, y: plot.minY)); marker.addLine(to: CGPoint(x: x, y: plot.maxY))
+                        context.stroke(marker, with: .color(.secondary), style: StrokeStyle(lineWidth: 1, dash: [3,3]))
+                    }
                     var line = Path()
                     for (index, point) in editor.curve.points.enumerated() {
                         let location = coordinate(point, plot: plot)
@@ -46,14 +55,26 @@ struct CurveEditor: View {
                 .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                     if dragging == nil {
                         let nearest = editor.curve.points.min { distance(coordinate($0,plot:plot),value.startLocation) < distance(coordinate($1,plot:plot),value.startLocation) }
-                        if let nearest, distance(coordinate(nearest,plot:plot),value.startLocation) < 16 { dragging = nearest.id; dragRange = editor.range; editor.select(nearest.id) }
+                        if let nearest, distance(coordinate(nearest,plot:plot),value.startLocation) < 16 { onBegin(); dragging = nearest.id; dragRange = editor.range; editor.select(nearest.id) }
                     }
                     guard dragging != nil else { return }
                     let temperature = range.lowerBound + (value.location.x - plot.minX) / plot.width * (range.upperBound - range.lowerBound)
                     let percent = (plot.maxY - value.location.y) / plot.height * 100
                     publish(editor.move(temperature: temperature, percent: percent, in: range))
-                }.onEnded { _ in dragging = nil; dragRange = nil })
-                .accessibilityLabel("\(curve.input.label) fan curve")
+                }.onEnded { _ in if dragging != nil { onEnd() }; dragging = nil; dragRange = nil })
+                .focusable()
+                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { key in
+                    let step = key.modifiers.contains(.shift) ? 0.1 : 1.0
+                    switch key.key {
+                    case .leftArrow: publish(editor.nudge(temperature: -step))
+                    case .rightArrow: publish(editor.nudge(temperature: step))
+                    case .upArrow: publish(editor.nudge(percent: step))
+                    case .downArrow: publish(editor.nudge(percent: -step))
+                    default: return .ignored
+                    }
+                    return .handled
+                }
+                .accessibilityLabel("\(curve.input.label) fan curve; arrow keys edit the selected point")
                 .accessibilityIdentifier("curve.\(curve.input.rawValue).graph")
             }.frame(height: 170)
             HStack(spacing: 8) {
@@ -80,6 +101,7 @@ struct CurveEditor: View {
             }.textFieldStyle(.roundedBorder)
             if let validation = editor.validation { Text("Not applied: \(validation)").font(.caption).foregroundStyle(.red) }
         }
+        .onDisappear { if dragging != nil { onEnd() }; dragging = nil; dragRange = nil }
         .onChange(of: curve) { _, new in if dragging == nil { editor.replace(with: new) } }
         .onChange(of: resetRevision) { _, _ in
             dragging = nil; dragRange = nil; editor.replace(with: curve)

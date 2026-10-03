@@ -1,6 +1,20 @@
 import Foundation
 /// User-process diagnostics only. The root helper uses unified logging and accepts no paths.
-public final class RotatingDiagnostics {
+public final class RotatingDiagnostics: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "is.dsr.fandy.diagnostics", qos: .utility)
+    private let admission = NSLock()
+    private let writer = NSLock()
+    private var pending = false
+    /// At most one outstanding write; diagnostic backpressure never blocks control.
+    public func enqueue(profile: String, snapshot: HardwareSnapshot) {
+        admission.lock()
+        guard !pending else { admission.unlock(); return }
+        pending = true; admission.unlock()
+        queue.async { [self] in
+            defer { admission.lock(); pending = false; admission.unlock() }
+            try? record(profile: profile, snapshot: snapshot)
+        }
+    }
     private let directory:URL
     private let limit:Int
     public init(directory:URL, limit:Int=1_048_576) throws {
@@ -8,6 +22,7 @@ public final class RotatingDiagnostics {
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
     }
     public func record(profile:String,snapshot:HardwareSnapshot) throws {
+        writer.lock(); defer { writer.unlock() }
         struct Entry:Encodable { let timestamp:Date;let profile:String;let sensors:[SensorReading];let fans:[Fan];let thermalPressure:ThermalPressure }
         let encoder=JSONEncoder();encoder.dateEncodingStrategy = .iso8601
         var line=try encoder.encode(Entry(timestamp:Date(),profile:profile,sensors:snapshot.sensors,fans:snapshot.fans,thermalPressure:snapshot.thermalPressure));line.append(10)
