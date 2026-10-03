@@ -125,6 +125,7 @@ enum ImportValidation {
         if let value = object["activationDefaults"] { try defaults(value) }
         if let value = object["periods"] { try periods(value) }
         if let value = object["pauses"] { try pauses(value) }
+        // Accept the retired clock field in old exports, but decoding drops it.
         if let value = object["preferences"] { _ = try fields(value, allowed: ["launchAtLogin", "use24HourTime", "showClock", "showHelperProcesses", "menuSensors", "shortcuts"], path: "preferences")
             if let shortcuts = (value as? [String: Any])?["shortcuts"] as? [String: Any] {
                 for binding in shortcuts.values { _ = try fields(binding, allowed: ["keyCode", "modifiers", "key"], path: "shortcut") }

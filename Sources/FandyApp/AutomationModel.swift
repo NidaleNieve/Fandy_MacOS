@@ -23,9 +23,10 @@ extension AppModel {
     func toggleProfile(_ id: String) { select(machine.selected.id == id && id != "system" && machine.state != .fault ? "system" : id) }
     func activationDefaultUnavailableReason(_ profile: Profile) -> String? {
         guard let rule = automation.activationDefaults[profile.id], rule.kind == .application else { return nil }
-        return applicationCatalog().contains(where: { $0.bundleID == rule.applicationID && ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }) ? nil : "\(rule.applicationName) is not running. Change this profile’s activation condition to use it now."
+        return runningApplicationIDs.contains(rule.applicationID) ? nil : "\(rule.applicationName) is not running. Change this profile’s activation condition to use it now."
     }
     func canUseActivationDefault(_ profile: Profile) -> Bool {
+        if automation.activationDefaults[profile.id]?.kind == .application { refreshApplicationAvailability(force: true) }
         if let reason = activationDefaultUnavailableReason(profile) { draftError = reason; return false }; return true
     }
     func applyActivationDefault(_ profile: Profile) {
@@ -41,6 +42,7 @@ extension AppModel {
     }
     func setActivationDefault(_ rule: ProfileActivationDefault, profileID: String) {
         var next = automation; next.activationDefaults[profileID] = rule; setAutomation(next)
+        if rule.kind == .application { refreshApplicationAvailability(force: true) }
     }
     var cancellationTitle: String {
         guard let intent = manualIntent else { return scheduledPeriodID == nil ? "Resume Schedule" : "Cancel \(machine.selected.name)" }
@@ -130,13 +132,13 @@ extension AppModel {
         clearActivation()
     }
     func setPreferences(_ update: (inout AppPreferences) -> Void) {
-        var next = automation; update(&next.preferences); setAutomation(next)
+        var next = automation; update(&next.preferences); setAutomation(next, recordHistory: false)
     }
-    func setAutomation(_ next: AutomationConfiguration) {
+    func setAutomation(_ next: AutomationConfiguration, recordHistory: Bool = true) {
         guard !savingCollection, !isQuitting else { return }
         do {
             try next.validate(profileIDs: Set(profiles.map(\.id)))
-            discardFailedConfiguration(); registerConfigurationUndo(); automation = next; save(); draftError = nil
+            discardFailedConfiguration(); if recordHistory { registerConfigurationUndo() }; automation = next; save(); draftError = nil
         } catch { draftError = error.localizedDescription }
     }
     func removePeriod(_ id: UUID) { var next = automation; next.periods.removeAll { $0.id == id }; setAutomation(next) }

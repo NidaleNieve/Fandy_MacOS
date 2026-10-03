@@ -13,6 +13,7 @@ import FandyCore
     private var pickerPopover: NSPopover?
     private var profileRows: [String: NSMenuItem] = [:]
     private var timingRow: NSMenuItem?
+    private(set) var isOpen = false
     init(model: AppModel, install: Bool = true) {
         self.model = model; item = install ? NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength) : nil; super.init()
         let menu = NSMenu(); menu.delegate = self; item?.menu = menu
@@ -28,25 +29,29 @@ import FandyCore
             }
         }
     }
-    func show() { item?.button?.performClick(nil) }
+    func toggle() {
+        if isOpen { item?.menu?.cancelTracking() }
+        else { pickerPopover?.close(); item?.button?.performClick(nil) }
+    }
     private func refreshSelection() {
-        for (id, row) in profileRows { row.state = model.menuSelectionID == id ? .on : .off }
+        for (id, row) in profileRows { row.state = model.menuSelectionID == id ? .on : .off; row.view?.needsDisplay = true }
         timingRow?.isEnabled = model.canSetActivationLimit
     }
     func updateTitle() {
         refreshSelection()
-        let text = ([model.automation.preferences.showClock ? model.formattedTime(Date()) : nil, model.sensorMenu.compactText.isEmpty ? nil : model.sensorMenu.compactText].compactMap { $0 }).joined(separator: "  ")
+        let text = model.sensorMenu.compactText
         item?.button?.title = text.isEmpty ? "" : " " + text
         item?.button?.toolTip = model.statusText + " · " + model.activationDescription
     }
-    func menuWillOpen(_ menu: NSMenu) { rebuild(menu) }
+    func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
+    func menuDidClose(_ menu: NSMenu) { isOpen = false }
     func rebuild(_ menu: NSMenu) {
         actions.removeAll(); profileRows.removeAll(); menu.removeAllItems(); menu.autoenablesItems = false
         for profile in model.profiles {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
-            row.view = fitted(ProfileMenuRow(model: model, profile: profile, select: { [weak self] in self?.model.select(profile.id); self?.refreshSelection() }))
+            row.isEnabled = model.canActivate(profile) && model.activationDefaultUnavailableReason(profile) == nil
             profileRows[profile.id] = row; row.state = model.menuSelectionID == profile.id ? .on : .off
-            row.toolTip = model.eligibility(profile).reason
+            row.toolTip = model.activationDefaultUnavailableReason(profile) ?? model.eligibility(profile).reason ?? profile.name
         }
         menu.addItem(.separator())
         let timing = submenu("Activate for/until", in: menu)
@@ -61,18 +66,19 @@ import FandyCore
             if value == 24 { hours.addItem(.separator()) }
             add("\(value) \(value == 1 ? "hour" : "hours")", to: hours) { [weak model] in model?.activateFor(seconds: Double(value * 3600)) }
         }
-        let custom = submenu("Other Time/Until", in: timing)
-        add("Choose Duration or Time…", to: custom) { [weak self] in self?.presentPicker(time: true) }
-        let apps = submenu("While App Is Running", in: timing)
-        add("Choose Running Application…", to: apps) { [weak self] in self?.presentPicker(time: false) }
+        add("Other Time/Until…", to: timing) { [weak self] in self?.presentPicker(time: true) }
+        add("While App Is Running…", to: timing) { [weak self] in self?.presentPicker(time: false) }
         timing.addItem(.separator())
         let forever = add("Until changed", to: timing) { [weak model] in model?.activateForever() }
         if case .forever = model.manualIntent?.limit { forever.state = .on }
-        let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); if let view = explanation.view { view.frame.size.height = max(64, view.fittingSize.height) }; menu.addItem(explanation)
-        let cancel = add(model.cancellationTitle, to: menu) { [weak model] in model?.cancelActivation() }
-        cancel.view = fitted(CancellationMenuRow(model: model)); if let view = cancel.view { view.frame.size.height = max(36, view.fittingSize.height) }
+        if (model.manualIntent.map { $0.limit != .forever } ?? false) || model.scheduledPeriodID != nil {
+            let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); menu.addItem(explanation)
+        }
+        if model.machine.selected.kind != .system || model.blockedScheduleID != nil {
+            add(model.cancellationTitle, to: menu) { [weak model] in model?.cancelActivation() }
+        }
         menu.addItem(.separator())
-        let status = NSMenuItem(); status.view = fitted(FanMenuStatus(model: model)); if let view = status.view { view.frame.size.height = max(80, view.fittingSize.height) }; menu.addItem(status)
+        let status = NSMenuItem(); status.view = fitted(FanMenuStatus(model: model)); menu.addItem(status)
         menu.addItem(.separator())
         add("Edit Profiles…", to: menu) { [weak self] in self?.openProfiles() }
         add("Settings…", to: menu) { [weak self] in self?.openSettings() }
@@ -82,7 +88,8 @@ import FandyCore
         let id = UUID(); actions[id] = action
         let item = NSMenuItem(title: title, action: #selector(invoke(_:)), keyEquivalent: "")
         item.target = self; item.representedObject = id
-        item.view = fitted(Button(action: action) { WrappedMenuText(text: title) }.buttonStyle(MenuActionStyle()))
+        item.toolTip = title
+        if MenuLayout.titleWidth(title) > MenuLayout.nativeTitleWidth { item.view = BoundedMenuAction(title: title) }
         menu.addItem(item); return item
     }
     @objc private func invoke(_ item: NSMenuItem) { if let id = item.representedObject as? UUID { actions[id]?() } }
@@ -93,8 +100,8 @@ import FandyCore
     private func presentPicker(time: Bool) {
         guard let button = item?.button else { return }
         item?.menu?.cancelTracking()
-        // Apple's NSMenu custom views do not support keyboard input. Use an
-        // anchored native popover for searchable apps and editable time fields.
+        // Give editable fields and search a regular key window and focus lifecycle
+        // in a native popover anchored directly to the status item.
         DispatchQueue.main.async { [weak self, weak button] in
             guard let self, let button else { return }
             self.pickerPopover?.close()
@@ -107,17 +114,11 @@ import FandyCore
         }
     }
     private func fitted<V: View>(_ view: V) -> NSView {
-        let hosting = NSHostingView(rootView: view); hosting.frame.size = NSSize(width: MenuLayout.width, height: max(28, hosting.fittingSize.height)); return hosting
+        let hosting = NSHostingView(rootView: view); hosting.frame.size = NSSize(width: MenuLayout.width, height: hosting.fittingSize.height); return hosting
     }
-    private func host<V: View>(_ view: V, size: NSSize) -> NSMenuItem {
-        let item = NSMenuItem(); let hosting = NSHostingView(rootView: view); hosting.frame.size = size; item.view = hosting; return item
-    }
+
 }
 
-struct CancellationMenuRow: View {
-    @Bindable var model: AppModel
-    var body: some View { Button { model.cancelActivation() } label: { WrappedMenuText(text: model.cancellationTitle) }.buttonStyle(MenuActionStyle()) }
-}
 struct ActivationMenuSummary: View {
     @Bindable var model: AppModel
     var body: some View { WrappedMenuText(text: model.activationDescription).foregroundStyle(.secondary) }
@@ -161,7 +162,7 @@ struct CustomActivationPicker: View {
             }
             if let error { Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
             Button("Continue") { apply() }.buttonStyle(.borderedProminent).tint(.accentColor)
-        }.padding(16).frame(width: MenuLayout.width, height: 350)
+        }.padding(16).frame(width: 280, height: 330)
         .onChange(of: focused) { _, value in if let value { editing = value } }
         .onChange(of: until) { _, _ in
             focused = .hours; error = nil
@@ -198,7 +199,7 @@ struct ProcessPicker: View {
     private var filtered: [RunningProcess] { processes.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) } }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Search running apps", text: $search).textFieldStyle(.roundedBorder)
+            NativeSearchField(placeholder: "Search running apps", text: $search).frame(height: 24)
             Toggle("Show helper apps and processes", isOn: Binding(get: { helpers }, set: { enabled in model.setPreferences { $0.showHelperProcesses = enabled } }))
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -218,7 +219,7 @@ struct ProcessPicker: View {
                 }
             }
             Button("Refresh") { refresh() }.font(.caption)
-        }.padding(12).frame(width: 330, height: 350)
+        }.padding(12).frame(width: 280, height: 350)
         .onAppear { refresh() }.onChange(of: helpers) { _, _ in refresh() }
     }
     private func refresh() { processes = ProcessCatalog.list(includeHelpers: helpers) }

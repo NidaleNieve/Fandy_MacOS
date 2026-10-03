@@ -4,7 +4,7 @@ A small native Apple Silicon macOS menu-bar fan controller with named profiles a
 
 **Current build: real control with all built-in profiles and custom curves on the qualified Mac17,9.** System+, Cool Chassis, Gaming and School use independently read hardware temperatures. System releases control to macOS; Max uses each fan's actual reported maximum. The signed helper, watchdog, crash recovery and native editor are integrated. See [delivery status](docs/DEVELOPMENT_STATUS.md).
 
-Menu/profile polish includes optional global shortcuts, per-profile activation defaults, universal undo, contextual curve editing, a persistent adjustable sidebar, an observed fan-speed bar and native time/app popovers. [Behavior and verification](docs/MENU_POLISH_DELIVERY.md).
+Menu/profile polish includes optional global shortcuts, per-profile activation defaults, profile-only undo, direct secondary-click curve editing, a persistent adjustable sidebar, an observed fan-speed bar and native time/app popovers. [Current UI behavior and verification](docs/NATIVE_UI_DELIVERY.md).
 
 Chip control uses a separately named conservative **Chip envelope** across a fixed 105-key model manifest. CPU/GPU averages remain labelled estimates. Chassis control uses Trackpad, Actuator, Left/Right airflow and an explicitly labelled **Top proximity** input. These are reviewed operational inputs, not a claim that every physical sensor identity is certified. [Sensor evidence and limitations](docs/SENSOR_EVIDENCE.md).
 
@@ -79,7 +79,7 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md), [SAFETY.md](SAFETY.md), [SECURITY.md](S
 
 The sidebar menu imports/exports individual profiles with schedules. Built-ins retain their identities and protected definitions; custom imports receive fresh identifiers. Imports validate and save before publication, with conflict review for schedules. Arrow keys edit the selected graph node; Shift uses finer increments. Undo/Redo reverses valid profile edits and groups a drag into one operation. Storage failures retain an explicit unsaved/error state with Retry.
 
-Settings provide launch at login (enabled by default, with an explicit disable option), portable configuration files, configurable temperature/clock readouts and a local sanitized diagnostic export. Login starts in System; eligible configured schedules can run after fresh checks. Enabling login does not install or approve the privileged helper. No networking or automatic uploads are introduced. See [improvement delivery](docs/IMPROVEMENT_DELIVERY.md) for verification and remaining calibration.
+Settings provide launch at login (enabled by default, with an explicit disable option), portable configuration files, configurable temperature readouts and a local sanitized diagnostic export. Login starts in System; eligible configured schedules can run after fresh checks. Enabling login does not install or approve the privileged helper. No networking or automatic uploads are introduced. See [improvement delivery](docs/IMPROVEMENT_DELIVERY.md) for verification and remaining calibration.
 
 ## Timers and weekly schedules
 

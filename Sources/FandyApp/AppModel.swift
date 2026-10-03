@@ -17,6 +17,8 @@ import ServiceManagement
     var sensorMenu = SensorMenuModel()
     var shortcutErrors: [String: String] = [:]
     let wallClock: @Sendable () -> Date
+    private(set) var runningApplicationIDs: Set<String> = []
+    private var applicationCatalogRefreshedAt = -Double.infinity
     let applicationCatalog: @MainActor () -> [RunningProcess]
     var isQuitting: Bool { quitting }
     func clockNow() -> Double { clock() }
@@ -219,8 +221,14 @@ import ServiceManagement
             save()
         } catch { draftError = error.localizedDescription }
     }
+    func refreshApplicationAvailability(force: Bool = false) {
+        guard force || (automation.activationDefaults.values.contains { $0.kind == .application } && clock() - applicationCatalogRefreshedAt >= 1) else { return }
+        runningApplicationIDs = Set(applicationCatalog().filter { ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }.compactMap(\.bundleID))
+        applicationCatalogRefreshedAt = clock()
+    }
     func tick() async {
-        guard !busy, !quitting else { return }; expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
+        guard !busy, !quitting else { return }
+        refreshApplicationAvailability(); expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
         var restorationReport: RestorationReport?
         do {
             if simulation {
@@ -342,10 +350,14 @@ import ServiceManagement
         editorHistory.registerUndo(withTarget: self) { target in
             MainActor.assumeIsolated { target.restoreEditorConfiguration(previousProfiles, automation: previousAutomation, selection: previousSelection) }
         }
-        editorHistory.setActionName("Change Configuration"); historyRevision &+= 1
+        editorHistory.setActionName("Edit Profiles"); historyRevision &+= 1
     }
     private func restoreEditorConfiguration(_ next: [Profile], automation config: AutomationConfiguration, selection: String) {
         guard !savingCollection, !quitting else { return }
+        var config = config
+        // Undo profile edits and automation rules; retain current global settings.
+        config.preferences = automation.preferences
+        config.preferences.shortcuts = config.preferences.shortcuts.filter { binding in binding.key == "menu" || next.contains { $0.id == binding.key } }
         do {
             try PortableConfiguration(profiles: next, automation: config).validate()
             registerConfigurationUndo()
@@ -356,7 +368,7 @@ import ServiceManagement
                     lifecycleToken = UUID(); let effect = try machine.select(replacement); Task { await execute(effect) }
                 }
             } else { clearActivation(); select("system") }
-            draftError = nil; configureLogin(); scheduleSave()
+            draftError = nil; scheduleSave()
         } catch { draftError = error.localizedDescription }
     }
     func beginEditGroup() {

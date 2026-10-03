@@ -72,9 +72,8 @@ struct ShortcutSettings: View {
     @Bindable var model: AppModel
     var body: some View {
         Section("Keyboard Shortcuts") {
-            shortcut("Open Menu", id: "menu")
+            shortcut("Toggle Menu", id: "menu")
             ForEach(model.profiles) { profile in shortcut(profile.name, id: profile.id) }
-            Text("None are enabled by default. Click Record, then press a combination with Command, Option or Control. Press Escape to cancel. A profile shortcut switches back to System when pressed again.").font(.caption).foregroundStyle(.secondary)
         }
     }
     private func shortcut(_ title: String, id: String) -> some View {

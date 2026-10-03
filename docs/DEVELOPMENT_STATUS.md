@@ -1,3 +1,13 @@
+# Current checkpoint — 2026-10-03: compact native UI
+
+Ordinary menu actions now use AppKit rows; the custom blue hover style, excess padding/heights, extra Choose clicks and clock readout are removed. Bounded long-name/readout handling keeps the complete menu within 256 points in layout tests. Native actions close the menu normally. Menu shortcut is Toggle Menu.
+
+Profiles retain their native split/hosting controllers, use native table selection/doubleAction, expose Fan Curves / Schedule / When Activated tabs, and keep universal current readings in a fixed right column. Undo preserves Settings; secondary clicks edit graph nodes directly. Native sensor search and a visible raw-sensor separator are implemented. Availability rendering no longer enumerates processes repeatedly.
+
+302 Swift tests, 33 tools, full ASan 302 and signed native build pass. Details and remaining human review are in [current UI delivery](NATIVE_UI_DELIVERY.md). Fan protocol and qualification are unchanged. Installed startup verification passed five ticks in System with no warning and modes 0/0; helper/login registrations remain enabled. The ordinary app is running System, independently observed at modes 0/0.
+
+---
+
 # Current checkpoint — 2026-10-03: recovery and menu/profile polish
 
 Verified restoration clears stale GUI/controller warnings; startup explicitly verifies handback and retries transient failures. Immediate menu checkmarks indicate selection, while Starting/Restoring remains separate from acknowledged control. Timers can be attached during initialization. Menu rows wrap within fixed content width and mouse-selected profiles/presets keep tracking open. Editable/searchable pickers use keyboard-capable native popovers, including a selectable clock.

@@ -1,5 +1,7 @@
 # Menu and profile improvements — 2026-10-03
 
+Historical verification record. Menu layout, sidebar implementation and undo scope are superseded by [compact native UI corrections](NATIVE_UI_DELIVERY.md).
+
 ## Recovery and truthful presentation
 
 Two paths retained a resolved automatic-restoration warning: the GUI's hardware error and the controller's unverified fault. Successful verified handback clears both. Other failure context remains available. Startup explicitly requests the already-qualified restoration operation before normal monitoring; a transient failure retries through the existing restoration state machine without requiring a profile switch. This does not manufacture verification from RPM or hide a genuinely failed release.

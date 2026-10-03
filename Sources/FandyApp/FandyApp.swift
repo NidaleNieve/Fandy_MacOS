@@ -55,7 +55,7 @@ struct FandyApp: App {
         guard !CommandLine.arguments.contains("--functional-check"), (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
         let shortcuts = GlobalShortcuts(); self.shortcuts = shortcuts
         shortcuts.invoke = { [weak self, weak model] action in
-            if action == "menu" { self?.menu?.show() } else { model?.toggleProfile(action) }
+            if action == "menu" { self?.menu?.toggle() } else { model?.toggleProfile(action) }
         }
         shortcutLoop = Task { [weak model, weak shortcuts] in
             while !Task.isCancelled {
@@ -72,7 +72,7 @@ struct FandyApp: App {
     }
     func showProfiles() {
         guard let model else { return }
-        if profilesWindow == nil { profilesWindow = window("Fandy Profiles", size: NSSize(width: 760, height: 720), view: ProfileEditor(model: model)) }
+        if profilesWindow == nil { profilesWindow = window("Fandy Profiles", size: NSSize(width: 980, height: 720), view: ProfileEditor(model: model)) }
         if let profilesWindow { present(profilesWindow) }
     }
     func showSettings() {

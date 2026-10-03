@@ -94,7 +94,7 @@ private actor StartupRetryClient: PrivilegedFanClient {
     #expect(await client.restores() >= 2)
     #expect(model.isSelected("system") && model.hardwareError == nil && model.machine.fault == nil)
 }
-@MainActor @Test func sidebarNeverCollapsesAndBoundedMenuNamesHaveCustomViews() {
+@MainActor @Test func sidebarNeverCollapsesAndMenuActionsUseNativeRows() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString); defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
     var profile = BuiltInProfiles.school; profile.name = String(repeating: "Wide profile ", count: 6); model.update(profile)
@@ -103,7 +103,11 @@ private actor StartupRetryClient: PrivilegedFanClient {
     #expect(split.splitViewItems[0].minimumThickness == 220)
     let menu = NSMenu(), presenter = StatusMenu(model: model, install: false); presenter.rebuild(menu)
     #expect(menu.items.filter { $0.view != nil }.allSatisfy { $0.view!.frame.width <= MenuLayout.width })
-    #expect(menu.items.first { $0.title == profile.name }?.view != nil)
+    let row = try #require(menu.items.first { $0.title == profile.name })
+    #expect(row.view is BoundedMenuAction)
+    #expect(menu.size.width <= MenuLayout.maximumMenuWidth)
+    #expect(menu.items.filter { $0.action != nil && $0.title != profile.name }.allSatisfy { $0.view == nil })
+    #expect(menu.items.filter { $0.action != nil && $0.view == nil }.allSatisfy { MenuLayout.titleWidth($0.title) <= MenuLayout.nativeTitleWidth })
 }
 
 @MainActor @Test func defaultApplicationTracksItsExactProcessAndReleaseOnExit() async throws {

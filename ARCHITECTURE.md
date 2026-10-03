@@ -103,3 +103,8 @@ Version-two `ProfileArchive` includes `AutomationConfiguration`. Revisioned acto
 ## Selection, defaults and global shortcuts
 
 Selection is rendered immediately without changing acknowledged engine state or helper eligibility. Startup handback runs before monitoring; verified recovery clears stale unverified-fault presentation. NSSplitViewController enforces non-collapsible sidebar constraints. ProfileActivationDefault is portable configuration separate from an ephemeral duration/PID-start-time condition. Defaults apply only to manual/shortcut selections. Carbon registrations route fixed menu/profile actions; focused recording suspends registrations and does not monitor unrelated key events. See [menu/profile delivery](docs/MENU_POLISH_DELIVERY.md).
+
+
+## Compact native UI
+
+Ordinary menu actions use NSMenuItem; only readouts and exceptional long titles need bounded views. Profile editing retains its NSSplitViewController/hosting roots and uses NSTableView selection/doubleAction. Independent SwiftUI roots observe the same model, preserving interaction state without recreating the editor per sensor tick. Availability display uses a throttled application cache; activation checks fresh process identity. Undo captures profile/schedule/default edits and preserves current global preferences. See [current UI verification](docs/NATIVE_UI_DELIVERY.md).

@@ -12,13 +12,12 @@ struct ProfileSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresenta
         let left = NSSplitViewItem(viewController: NSHostingController(rootView: sidebar))
         left.canCollapse = false; left.minimumThickness = 220; left.maximumThickness = 350; left.holdingPriority = .defaultHigh
         let right = NSSplitViewItem(viewController: NSHostingController(rootView: detail))
-        right.canCollapse = false; right.minimumThickness = 460
+        right.canCollapse = false; right.minimumThickness = 660
         controller.addSplitViewItem(left); controller.addSplitViewItem(right)
         controller.splitView.setPosition(240, ofDividerAt: 0)
         return controller
     }
-    func updateNSViewController(_ controller: NSSplitViewController, context: Context) {
-        (controller.splitViewItems[0].viewController as? NSHostingController<Sidebar>)?.rootView = sidebar
-        (controller.splitViewItems[1].viewController as? NSHostingController<Detail>)?.rootView = detail
-    }
+    // Both roots retain the same observable model. Replacing them on each sensor
+    // tick discards native sizing/interaction state and invalidates the editor.
+    func updateNSViewController(_ controller: NSSplitViewController, context: Context) {}
 }

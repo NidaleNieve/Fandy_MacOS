@@ -9,6 +9,7 @@ struct MenuSensor: Identifiable, Sendable {
     let keys: [String]
     let role: SensorRole?
     let estimate: Bool
+    var isRaw: Bool { id.hasPrefix("key:") || id.hasPrefix("hid:") }
 }
 
 actor DisplaySensorReader {

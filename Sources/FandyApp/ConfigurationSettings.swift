@@ -18,14 +18,14 @@ struct ConfigurationSettings: View {
             }))
             if loginStatus == .requiresApproval { Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() } }
             Text("Login starts in System. Enabled schedules can run after fresh hardware checks.").font(.caption).foregroundStyle(.secondary)
-            Toggle("Show time in menu bar", isOn: Binding(get: { model.automation.preferences.showClock }, set: { enabled in model.setPreferences { $0.showClock = enabled } }))
             Toggle("Use 24-hour time", isOn: Binding(get: { model.automation.preferences.use24HourTime }, set: { enabled in model.setPreferences { $0.use24HourTime = enabled } }))
         }
         Section("Menu Bar Temperatures") {
-            TextField("Search sensors", text: $search)
+            NativeSearchField(placeholder: "Search sensors", text: $search).frame(height: 24)
             ScrollView {
                 LazyVStack(alignment: .leading) {
-                    ForEach(model.sensorMenu.choices.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { choice in
+                    ForEach(visibleChoices) { choice in
+                        if choice.id == firstRawID { Divider().padding(.vertical, 4); Text("Raw temperature sensors").font(.caption).foregroundStyle(.secondary) }
                         Toggle(choice.name + (choice.estimate && !choice.name.contains("estimate") ? " · estimate" : ""), isOn: Binding(get: { model.automation.preferences.menuSensors.contains(choice.id) }, set: { enabled in
                             model.setPreferences { prefs in
                                 if enabled && prefs.menuSensors.count < 16 { prefs.menuSensors.append(choice.id) }
@@ -52,6 +52,11 @@ struct ConfigurationSettings: View {
         } message: { Text(importSummary) }
         .task { loginStatus = SMAppService.mainApp.status; if !model.simulation { await model.sensorMenu.discover() } }
     }
+    private var visibleChoices: [MenuSensor] {
+        let matched = model.sensorMenu.choices.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
+        return matched.filter { !$0.isRaw } + matched.filter { $0.isRaw }
+    }
+    private var firstRawID: String? { visibleChoices.first { $0.isRaw }?.id }
     private func exportFile() {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Configuration.json"
         panel.begin { response in

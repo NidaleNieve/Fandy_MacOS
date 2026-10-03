@@ -56,11 +56,11 @@ struct CurveEditor: View {
                     CurveContextSurface { location in
                         let nearest = editor.curve.points.min { distance(coordinate($0, plot: plot), location) < distance(coordinate($1, plot: plot), location) }
                         if let nearest, distance(coordinate(nearest, plot: plot), location) < 16 {
-                            return CurveContextAction(title: "Delete Point", enabled: editor.curve.points.count > 2) { editor.select(nearest.id); publish(editor.remove()) }
+                            return CurveContextAction(enabled: editor.curve.points.count > 2) { editor.select(nearest.id); publish(editor.remove()) }
                         }
                         let temperature = range.lowerBound + (location.x-plot.minX)/plot.width*(range.upperBound-range.lowerBound)
                         let percentage = (plot.maxY-location.y)/plot.height*100
-                        return CurveContextAction(title: "Add Point", enabled: plot.contains(location) && editor.canAdd) { publish(editor.add(at: temperature, percent: percentage)) }
+                        return CurveContextAction(enabled: plot.contains(location) && editor.canAdd) { publish(editor.add(at: temperature, percent: percentage)) }
                     }
                 }
                 .contentShape(Rectangle())

@@ -7,116 +7,20 @@ import FandyHardware
 
 struct ProfileEditor: View {
     @Bindable var model: AppModel
-    @State private var name = ""
     var body: some View {
         ProfileSplitView {
-            VStack(spacing: 0) {
-            List(selection: $model.editorSelection) {
-                Section("Profiles") {
-                    ForEach(model.profiles) { profile in
-                        HStack {
-                            Text(profile.name)
-                            Spacer()
-                            if model.isSelected(profile.id) { Image(systemName: "checkmark").foregroundStyle(.secondary) }
-                        }.padding(.horizontal, 8).padding(.vertical, 5).contentShape(Rectangle())
-                        .onTapGesture(count: 2) { model.editorSelection = profile.id; model.select(profile.id) }.tag(profile.id)
-                    }
-                }
-            }.listStyle(.sidebar)
-            Divider()
-            HStack {
-                Button { model.create() } label: { Image(systemName: "plus").frame(width: 18, height: 18) }.help("Create profile").accessibilityLabel("Create profile")
-                Button { model.duplicate() } label: { Image(systemName: "square.on.square").frame(width: 18, height: 18) }.disabled(model.edited == nil).help("Duplicate profile").accessibilityLabel("Duplicate profile")
-                Button { model.delete() } label: { Image(systemName: "minus").frame(width: 18, height: 18) }.disabled(model.edited?.bundled != false).help("Delete profile").accessibilityLabel("Delete profile")
-                Menu {
-                    Button("Import Profiles…") { importFile() }
-                    Button("Export Selected Profile…") { exportFile() }.disabled(model.edited == nil)
-                } label: { Image(systemName: "ellipsis.circle") }.help("Profile files")
-                Spacer()
-            }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal, 12).padding(.vertical, 10)
-            }
+            ProfileSidebarPanel(model: model, importFile: importFile, exportFile: exportFile)
         } detail: {
-            if let profile = model.edited {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            TextField("Profile name", text: $name).font(.headline).textFieldStyle(.plain)
-                                .disabled(profile.protected)
-                                .onSubmit { var next = profile; next.name = name; model.update(next) }
-                                .accessibilityIdentifier("profile.name")
-                            Button(model.isSelected(profile.id) ? "Active" : "Use Profile") { model.select(profile.id) }
-                                .disabled(model.isSelected(profile.id) || !model.canActivate(profile) || model.activationDefaultUnavailableReason(profile) != nil)
-                        }
-                        if profile.kind == .system { Text(model.simulation ? "macOS controls all fans in simulation." : model.statusText).foregroundStyle(.secondary) }
-                        else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
-                        else {
-                            CurveSection(profile: profile, input: .chip, model: model)
-                            if !model.simulation && model.capabilities.chipPolicy == .conservativeEnvelope {
-                                Text("Chip uses the hottest reading in the reviewed chip-region envelope. CPU/GPU averages are estimates.")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Divider()
-                            Text("Chassis").font(.headline)
-                            Picker("Sensor", selection: $model.curveInput) {
-                                Text("Trackpad").tag(CurveInput.trackpad)
-                                Text("Actuator").tag(CurveInput.actuator)
-                                Text("Airflow").tag(CurveInput.airflow)
-                            }.pickerStyle(.segmented).onAppear { if model.curveInput == .chip { model.curveInput = .trackpad } }
-                            CurveSection(profile: profile, input: model.curveInput == .chip ? .trackpad : model.curveInput, model: model)
-                            if !model.simulation && model.capabilities.sensorName(.airflowTop) == "Top proximity" {
-                                Text("Airflow uses the hottest of Left, Right and the Top proximity input.")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            HStack {
-                                Text("Minimum airflow")
-                                Slider(value: Binding(get: { profile.floor }, set: { var next = profile; next.floor = $0.rounded(); model.update(next) }), in: 0...100, onEditingChanged: { editing in if editing { model.beginEditGroup() } else { model.endEditGroup() } })
-                                Text("\(Int(profile.floor))%").monospacedDigit().frame(width: 40)
-                            }
-                            Text("0% uses each fan’s minimum RPM. Apple auto at idle can release control instead.").font(.caption).foregroundStyle(.secondary)
-                            Toggle("Use Apple auto at idle", isOn: Binding(get: { profile.automaticAtIdle }, set: { var next = profile; next.automaticAtIdle = $0; model.update(next) }))
-                        }
-                        if !model.simulation && profile.kind != .system {
-                            if let preview = model.preview {
-                                Text(StatusPresentation.demand(preview, active: model.isSelected(profile.id)) + "\n" + StatusPresentation.breakdown(preview, floor: profile.floor))
-                                    .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("profile.shadow-demand")
-                            } else { Text("Preview unavailable: required readings are missing or unreliable.").font(.caption).foregroundStyle(.secondary) }
-                            if let reason = model.eligibility(profile).reason { Text(reason).font(.caption).foregroundStyle(.secondary) }
-                        }
-                        if let reason = model.activationDefaultUnavailableReason(profile) { Text(reason).font(.caption).foregroundStyle(.secondary) }
-                        if let error = model.draftError { Text(error).foregroundStyle(.red).font(.caption).accessibilityIdentifier("curve.validation-error") }
-                        if model.unsavedChanges { Text("Changes not saved").font(.caption).foregroundStyle(.orange) }
-                        if let error = model.saveError {
-                            HStack { Text(error).font(.caption).foregroundStyle(.orange); Button("Retry") { model.save() } }
-                        }
-                        HStack {
-                            Button("Undo") { model.editorHistory.undo() }.disabled(!model.canUndo).keyboardShortcut("z")
-                            Button("Redo") { model.editorHistory.redo() }.disabled(!model.canRedo).keyboardShortcut("z", modifiers: [.command, .shift])
-                            if profile.bundled && !profile.protected { Button("Reset to Default") { model.reset() } }
-                            if !profile.bundled {
-                                Button { model.move(-1) } label: { Image(systemName: "arrow.up") }
-                                    .disabled(!model.canMove(-1)).help("Move profile up").accessibilityLabel("Move profile up")
-                                Button { model.move(1) } label: { Image(systemName: "arrow.down") }
-                                    .disabled(!model.canMove(1)).help("Move profile down").accessibilityLabel("Move profile down")
-                            }
-                            Spacer()
-                        }
-                        Divider()
-                        ActivationDefaultsEditor(model: model, profile: profile)
-                        Divider()
-                        ScheduleEditor(model: model, profile: profile).id(profile.id)
-                        Divider()
-                        SensorStatus(model: model)
-                    }.padding(20)
-                }.onAppear { name = profile.name }.onChange(of: profile.id) { _, _ in name = profile.name }.onChange(of: profile.name) { _, new in name = new }
-            } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
-        }.frame(minWidth: 720, minHeight: 560)
+            ProfileWorkspace(model: model)
+        }.frame(minWidth: 880, minHeight: 560)
         .sheet(item: $model.scheduleReview) { _ in ScheduleConflictSheet(model: model) }
         .disabled(model.savingCollection)
         .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button { model.editorHistory.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }.disabled(!model.canUndo).help("Undo any profile or schedule change")
+            ToolbarItem {
+                Button { model.editorHistory.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+                    .disabled(!model.canUndo || model.savingCollection).help("Undo profile changes").keyboardShortcut("z")
+                    .contextMenu { Button("Redo") { model.editorHistory.redo() }.disabled(!model.canRedo || model.savingCollection).keyboardShortcut("z", modifiers: [.command, .shift]) }
             }
-            ToolbarItem(placement: .automatic) { Text(model.simulation ? "Simulation" : "Live").foregroundStyle(.secondary).font(.caption).fixedSize() }
         }
     }
     private func importFile() {
@@ -139,6 +43,126 @@ struct ProfileEditor: View {
                 do { try await Task.detached { try ScheduledProfileInterchange.encode(profile, automation: config).write(to: url, options: .atomic) }.value }
                 catch { model.draftError = "Profile file could not be exported." }
             }
+        }
+    }
+}
+
+private struct ProfileSidebarPanel: View {
+    @Bindable var model: AppModel
+    let importFile: () -> Void
+    let exportFile: () -> Void
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Profiles").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 10)
+            ProfileSidebar(model: model, profiles: model.profiles, selection: model.editorSelection, activeID: model.menuSelectionID)
+            Divider()
+            HStack(spacing: 6) {
+                Button { model.create() } label: { Image(systemName: "plus").frame(width: 16, height: 16) }.help("Create profile").accessibilityLabel("Create profile")
+                Button { model.duplicate() } label: { Image(systemName: "square.on.square").frame(width: 16, height: 16) }.disabled(model.edited == nil).help("Duplicate profile").accessibilityLabel("Duplicate profile")
+                Button { model.delete() } label: { Image(systemName: "minus").frame(width: 16, height: 16) }.disabled(model.edited?.bundled != false).help("Delete profile").accessibilityLabel("Delete profile")
+                Menu {
+                    Button("Import Profiles…", action: importFile)
+                    Button("Export Selected Profile…", action: exportFile).disabled(model.edited == nil)
+                } label: { Image(systemName: "ellipsis.circle") }.help("Profile files")
+                Spacer(minLength: 0)
+            }.buttonStyle(.bordered).controlSize(.small).padding(10)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
+    }
+}
+private struct ProfileWorkspace: View {
+    @Bindable var model: AppModel
+    var body: some View {
+        HStack(spacing: 0) {
+            ProfileDetail(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
+            Divider()
+            ScrollView { SensorStatus(model: model).padding(14).frame(maxWidth: .infinity, alignment: .leading) }
+                .frame(width: 205)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
+    }
+}
+private struct ProfileDetail: View {
+    @Bindable var model: AppModel
+    @State private var name = ""
+    @State private var tab = EditorTab.curves
+    enum EditorTab: String, CaseIterable { case curves = "Fan Curves", schedule = "Schedule", activation = "When Activated" }
+    var body: some View {
+        if let profile = model.edited {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    TextField("Profile name", text: $name).font(.headline).textFieldStyle(.plain).disabled(profile.protected)
+                        .onSubmit { var next = profile; next.name = name; model.update(next) }.accessibilityIdentifier("profile.name")
+                    Button(model.isSelected(profile.id) ? "Active" : "Use Profile") { model.select(profile.id) }
+                        .disabled(model.isSelected(profile.id) || !model.canActivate(profile) || model.activationDefaultUnavailableReason(profile) != nil)
+                }
+                Picker("Profile section", selection: $tab) {
+                    ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented).labelsHidden()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        switch tab {
+                        case .curves: fanControls(profile)
+                        case .schedule: ScheduleEditor(model: model, profile: profile).id(profile.id)
+                        case .activation: ActivationDefaultsEditor(model: model, profile: profile).id(profile.id)
+                        }
+                        if let reason = model.activationDefaultUnavailableReason(profile) { Text(reason).font(.caption).foregroundStyle(.secondary) }
+                        if let error = model.draftError { Text(error).foregroundStyle(.red).font(.caption).accessibilityIdentifier("curve.validation-error") }
+                        if model.unsavedChanges { Text("Changes not saved").font(.caption).foregroundStyle(.orange) }
+                        if let error = model.saveError {
+                            HStack { Text(error).font(.caption).foregroundStyle(.orange); Button("Retry") { model.save() } }
+                        }
+
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 12)
+                }
+            }.padding(16)
+            .onAppear { name = profile.name }
+            .onChange(of: profile.id) { _, _ in name = profile.name }
+            .onChange(of: profile.name) { _, new in name = new }
+        } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
+    }
+    @ViewBuilder private func fanControls(_ profile: Profile) -> some View {
+        if profile.kind == .system { Text("Returns all fans to Apple automatic control.").foregroundStyle(.secondary) }
+        else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
+        else {
+            CurveSection(profile: profile, input: .chip, model: model)
+            if !model.simulation && model.capabilities.chipPolicy == .conservativeEnvelope {
+                Text("Chip uses the hottest reading in the reviewed chip-region envelope. CPU/GPU averages are estimates.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Divider()
+            Text("Chassis").font(.headline)
+            Picker("Sensor", selection: $model.curveInput) {
+                Text("Trackpad").tag(CurveInput.trackpad)
+                Text("Actuator").tag(CurveInput.actuator)
+                Text("Airflow").tag(CurveInput.airflow)
+            }.pickerStyle(.segmented).onAppear { if model.curveInput == .chip { model.curveInput = .trackpad } }
+            CurveSection(profile: profile, input: model.curveInput == .chip ? .trackpad : model.curveInput, model: model)
+            if !model.simulation && model.capabilities.sensorName(.airflowTop) == "Top proximity" {
+                Text("Airflow uses the hottest of Left, Right and the Top proximity input.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                Text("Minimum airflow")
+                Slider(value: Binding(get: { profile.floor }, set: { var next = profile; next.floor = $0.rounded(); model.update(next) }), in: 0...100, onEditingChanged: { editing in if editing { model.beginEditGroup() } else { model.endEditGroup() } })
+                Text("\(Int(profile.floor))%").monospacedDigit().frame(width: 40)
+            }
+            Text("0% uses each fan’s minimum RPM. Apple auto at idle can release control instead.").font(.caption).foregroundStyle(.secondary)
+            Toggle("Use Apple auto at idle", isOn: Binding(get: { profile.automaticAtIdle }, set: { var next = profile; next.automaticAtIdle = $0; model.update(next) }))
+        }
+
+        if !model.simulation && profile.kind != .system {
+            if let preview = model.preview {
+                Text(StatusPresentation.demand(preview, active: model.isSelected(profile.id)) + "\n" + StatusPresentation.breakdown(preview, floor: profile.floor))
+                    .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("profile.shadow-demand")
+            }
+            if let reason = model.eligibility(profile).reason { Text(reason).font(.caption).foregroundStyle(.secondary) }
+        }
+        HStack {
+            if profile.bundled && !profile.protected { Button("Reset to Default") { model.reset() } }
+            if !profile.bundled {
+                Button { model.move(-1) } label: { Image(systemName: "arrow.up") }.disabled(!model.canMove(-1)).help("Move profile up")
+                Button { model.move(1) } label: { Image(systemName: "arrow.down") }.disabled(!model.canMove(1)).help("Move profile down")
+            }
+            Spacer()
         }
     }
 }
@@ -172,20 +196,29 @@ struct CurveSection: View {
 }
 struct SensorStatus: View {
     @Bindable var model: AppModel
+    private func label(_ role: SensorRole) -> String {
+        if role == .cpuAverage { return "CPU" }
+        if role == .gpuAverage { return "GPU" }
+        if role == .socPeak { return "Chip peak" }
+        return model.simulation ? role.name : model.capabilities.sensorName(role)
+    }
     private var primary: [SensorRole] { [.cpuAverage,.gpuAverage] + (model.capabilities.chipPolicy == .conservativeEnvelope && !model.simulation ? [.socPeak] : []) + [.trackpad,.airflowLeft,.airflowTop,.airflowRight] }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Current").font(.headline)
-            Grid(alignment: .leading, horizontalSpacing: 22, verticalSpacing: 5) {
-                ForEach(primary) { role in GridRow { Text(model.simulation ? role.name : model.capabilities.sensorName(role)); Text(model.temperatureText(role)).monospacedDigit().foregroundStyle(.secondary) } }
+            Text(model.machine.selected.name).font(.subheadline)
+            Text(model.statusText).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            FanSpeedReadout(model: model)
+            Divider()
+            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 5) {
+                ForEach(primary) { role in GridRow { Text(label(role)); Text(model.temperatureText(role)).monospacedDigit().foregroundStyle(.secondary) } }
                 ForEach(model.snapshot?.fans ?? []) { fan in GridRow { Text("Fan \(fan.id + 1)"); Text("\(Int(fan.actualRPM.rounded())) RPM").monospacedDigit().foregroundStyle(.secondary) } }
             }
             DisclosureGroup("Details") {
-                Grid(alignment: .leading, horizontalSpacing: 22, verticalSpacing: 5) {
+                Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 5) {
                     ForEach([SensorRole.actuator,.charger,.powerSupply,.wireless]) { role in GridRow { Text(role.name); Text(model.temperatureText(role)).monospacedDigit() } }
                 }.padding(.top, 5)
             }
-            Text(model.statusText).font(.caption).foregroundStyle(.secondary)
             if let error = model.hardwareError ?? model.machine.fault ?? model.issues.first, error != model.statusText {
                 Text(error).font(.caption).foregroundStyle(.orange)
             }

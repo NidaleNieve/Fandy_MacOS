@@ -2,50 +2,45 @@ import SwiftUI
 import AppKit
 import FandyCore
 
-/// Fixed content width bounds long user names and diagnostics without truncating them.
-enum MenuLayout { static let width: CGFloat = 330; static let textWidth: CGFloat = 294 }
+/// Native action rows size themselves. Only readouts use a bounded custom view.
+enum MenuLayout {
+    static let width: CGFloat = 168
+    static let textWidth: CGFloat = 140
+    static let nativeTitleWidth: CGFloat = textWidth
+    // AppKit reserves its own state/key-equivalent columns outside custom views.
+    static let maximumMenuWidth: CGFloat = 256
+    static func titleWidth(_ title: String) -> CGFloat { (title as NSString).size(withAttributes: [.font: NSFont.menuFont(ofSize: 0)]).width }
+
+}
 struct WrappedMenuText: View {
     let text: String
-    var body: some View { Text(text).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true).frame(width: MenuLayout.textWidth, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 5) }
+    var body: some View { Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true).frame(width: MenuLayout.textWidth, alignment: .leading).padding(.horizontal, 14).padding(.vertical, 3) }
 }
-struct ProfileMenuRow: View {
+struct FanSpeedReadout: View {
     @Bindable var model: AppModel
-    let profile: Profile
-    let select: () -> Void
     var body: some View {
-        Button(action: select) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "checkmark").opacity(model.menuSelectionID == profile.id ? 1 : 0).frame(width: 12)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(profile.name).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }.frame(width: 294, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 5).contentShape(Rectangle())
-        }.buttonStyle(MenuActionStyle()).disabled(!model.canActivate(profile) || model.activationDefaultUnavailableReason(profile) != nil).help(model.activationDefaultUnavailableReason(profile) ?? model.eligibility(profile).reason ?? profile.name)
-    }
-}
-struct MenuActionStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { MenuActionLabel(configuration: configuration) }
-    private struct MenuActionLabel: View {
-        let configuration: ButtonStyleConfiguration
-        @State private var hovered = false
-        var body: some View {
-            configuration.label.font(.system(size: 13)).background(hovered || configuration.isPressed ? Color.accentColor.opacity(0.16) : .clear).onHover { hovered = $0 }
+        VStack(alignment: .leading, spacing: 4) {
+            if let fans = model.snapshot?.fans, !fans.isEmpty, model.ownership != .unknown {
+                let percentage = StatusPresentation.observedFanPercent(fans)
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.secondary.opacity(0.18))
+                        Capsule().fill(Color.secondary).frame(width: geometry.size.width * percentage / 100)
+                    }
+                }.frame(width: 120, height: 3)
+                .accessibilityLabel("Observed fan speed").accessibilityValue("\(Int(percentage.rounded())) percent")
+                Text("\(Int(percentage.rounded()))% · " + fans.map { "\(Int($0.actualRPM.rounded()))" }.joined(separator: " / ") + " RPM").font(.caption).monospacedDigit()
+            } else { Text("Fan speed unavailable").font(.caption).foregroundStyle(.secondary) }
         }
     }
 }
 struct FanMenuStatus: View {
     @Bindable var model: AppModel
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if let fans = model.snapshot?.fans, !fans.isEmpty, model.ownership != .unknown {
-                let percentage = StatusPresentation.observedFanPercent(fans)
-                ProgressView(value: percentage, total: 100).progressViewStyle(.linear).tint(.secondary)
-                    .accessibilityLabel("Observed fan speed").accessibilityValue("\(Int(percentage.rounded())) percent")
-                Text("\(Int(percentage.rounded()))% · " + fans.map { "\(Int($0.actualRPM.rounded()))" }.joined(separator: " / ") + " RPM").font(.caption).monospacedDigit()
-            } else { Text("Fan speed unavailable").font(.caption).foregroundStyle(.secondary) }
+        VStack(alignment: .leading, spacing: 4) {
+            FanSpeedReadout(model: model)
             Text(model.statusText).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }.frame(width: MenuLayout.textWidth, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 8)
+        }.frame(width: MenuLayout.textWidth, alignment: .leading).padding(.horizontal, 14).padding(.vertical, 5)
     }
 }
 

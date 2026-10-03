@@ -15,7 +15,7 @@ struct ScheduleEditor: View {
     @State private var pendingPeriods: [WeeklyPeriod]?
     @State private var pendingPauses: [SchedulePause] = []
     var body: some View {
-        DisclosureGroup("Schedule") {
+        VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Manual selections take priority. Resume Schedule in the menu to return to automation.")
                     .font(.caption).foregroundStyle(.secondary)

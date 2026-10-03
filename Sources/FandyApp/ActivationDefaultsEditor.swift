@@ -9,7 +9,7 @@ struct ActivationDefaultsEditor: View {
     @State private var applications: [RunningProcess] = []
     var rule: ProfileActivationDefault { model.automation.activationDefaults[profile.id] ?? .init() }
     var body: some View {
-        DisclosureGroup("When activated") {
+        VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 10) {
                 Picker("Keep this profile active", selection: Binding(get: { rule.kind }, set: { kind in
                     var next = rule; next.kind = kind
