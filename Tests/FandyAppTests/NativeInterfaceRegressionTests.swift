@@ -47,21 +47,35 @@ import Testing
     #expect(queries == initial + 1 && model.machine.selected.id == "system")
 }
 
-@MainActor @Test func nativeMenuUsesDirectPickersAndCompactReadouts() throws {
+@MainActor @Test func nativeMenuEmbedsHoverPickersAndCentersCompactReadouts() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
     let presenter = StatusMenu(model: model, install: false), menu = NSMenu()
     presenter.rebuild(menu)
     let timing = try #require(menu.items.first { $0.title == "Activate for/until" }?.submenu)
-    for title in ["Other Time/Until…", "While App Is Running…"] {
+    for (title, identifier) in [("Other Time/Until", "activation.time"), ("While App Is Running", "activation.application")] {
         let row = try #require(timing.items.first { $0.title == title })
-        #expect(row.submenu == nil && row.action != nil && row.view == nil)
+        let child = try #require(row.submenu)
+        // AppKit supplies its own submenu action; there is no chooser callback.
+        #expect(row.target !== presenter && row.view == nil)
+        #expect(child.items.count == 1)
+        let controls = try #require(child.items.first?.view)
+        #expect(controls.accessibilityIdentifier() == identifier)
+        #expect(controls.frame.width <= 260 && controls.frame.height <= 320)
+        #expect(controls.frame.height >= 250)
     }
     #expect(menu.items.filter { $0.view != nil }.count == 1)
     let status = try #require(menu.items.compactMap(\.view).first)
     #expect(status.frame.width == MenuLayout.width && status.frame.height < 65)
-    #expect(timing.items.compactMap(\.submenu).flatMap(\.items).allSatisfy { $0.view == nil })
+    #expect(status.autoresizingMask.contains(.width))
+    // Wider native shortcut/state columns must resize the whole centered readout,
+    // rather than leaving a fixed custom view stranded against the left edge.
+    let parent = NSView(frame: NSRect(x: 0, y: 0, width: MenuLayout.width, height: 65))
+    parent.addSubview(status)
+    parent.frame.size.width += 48
+    #expect(status.frame.width == MenuLayout.width + 48)
+    #expect(timing.items.prefix(2).compactMap(\.submenu).flatMap(\.items).allSatisfy { $0.view == nil })
     presenter.menuWillOpen(menu); #expect(presenter.isOpen)
     presenter.menuDidClose(menu); #expect(!presenter.isOpen)
     let wide = BoundedMenuAction(title: String(repeating: "W", count: 64))

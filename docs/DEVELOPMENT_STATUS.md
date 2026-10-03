@@ -1,4 +1,14 @@
-# Current checkpoint — 2026-10-03: temperature goal and rename
+# Current checkpoint — 2026-10-03: inline controls and test DMG
+
+Time/Until and running-app conditions now open as hover submenus with embedded controls. The fan readout centers across the actual native menu width. Profiles hide scroll indicators while retaining scrolling. Git was checkpointed before edits on `codex/inline-menu-dmg`.
+
+314 Swift tests, 37 tool tests and the signed Release build pass. A privacy-clean 1.7 MB arm64 DMG passes image and read-only mounted payload verification. It is Apple Development-signed and unnotarized; broad distribution still requires Developer ID/notarization. Physical control remains Mac17,9-only. See [inline menu and DMG delivery](INLINE_MENU_AND_DMG.md).
+
+The installed app is updated to Release. System startup passes five live ticks with both modes 0/0, helper controlReady, Apple ownership and no monitoring warning. Helper/login registration is enabled. The update's signature check caught two stale Debug preview libraries; removing only those obsolete files restored the verified Release bundle before helper registration.
+
+---
+
+# Previous checkpoint — 2026-10-03: temperature goal and rename
 
 Editable profiles now have an optional target for Chip/Trackpad/Actuator/Airflow. Target demand joins curves/floor/chip guard by maximum; qualified complete fresh inputs remain mandatory. Old profiles keep target=nil; persistence/interchange/undo support the new metadata. Header Rename+pencil and native sidebar context Rename open a focused dialog. Name-only edits preserve active control generation; protected System/Max cannot change.
 

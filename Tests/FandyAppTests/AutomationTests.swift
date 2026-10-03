@@ -121,7 +121,7 @@ import FandyCore
     let model = makeAutomationModel(dir.appendingPathComponent("profiles.json"))
     let status = StatusMenu(model: model, install: false); let menu = NSMenu(); status.rebuild(menu)
     let timing = menu.items.first { $0.title == "Activate for/until" }?.submenu
-    #expect(timing?.items.compactMap(\.submenu).map(\.title) == ["Minutes", "Hours"])
+    #expect(timing?.items.compactMap(\.submenu).map(\.title) == ["Minutes", "Hours", "Other Time/Until", "While App Is Running"])
     let minutes = timing?.items[0].submenu?.items.filter { !$0.isSeparatorItem }.map(\.title)
     #expect(minutes == stride(from: 5, through: 55, by: 5).map { "\($0) minutes" })
     #expect(timing?.items[1].submenu?.items.filter { !$0.isSeparatorItem }.count == 13)

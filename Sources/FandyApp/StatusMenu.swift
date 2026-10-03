@@ -10,7 +10,6 @@ import FandyCore
     var openSettings: () -> Void = {}
     private var observation: Task<Void, Never>?
     private var actions: [UUID: () -> Void] = [:]
-    private var pickerPopover: NSPopover?
     private var profileRows: [String: NSMenuItem] = [:]
     private var timingRow: NSMenuItem?
     private(set) var isOpen = false
@@ -31,7 +30,7 @@ import FandyCore
     }
     func toggle() {
         if isOpen { item?.menu?.cancelTracking() }
-        else { pickerPopover?.close(); item?.button?.performClick(nil) }
+        else { item?.button?.performClick(nil) }
     }
     private func refreshSelection() {
         for (id, row) in profileRows { row.state = model.menuSelectionID == id ? .on : .off; row.view?.needsDisplay = true }
@@ -66,8 +65,14 @@ import FandyCore
             if value == 24 { hours.addItem(.separator()) }
             add("\(value) \(value == 1 ? "hour" : "hours")", to: hours) { [weak model] in model?.activateFor(seconds: Double(value * 3600)) }
         }
-        add("Other Time/Until…", to: timing) { [weak self] in self?.presentPicker(time: true) }
-        add("While App Is Running…", to: timing) { [weak self] in self?.presentPicker(time: false) }
+        let time = submenu("Other Time/Until", in: timing)
+        let timeControls = NSMenuItem()
+        timeControls.view = embedded(CustomActivationPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.time")
+        time.addItem(timeControls)
+        let applications = submenu("While App Is Running", in: timing)
+        let appControls = NSMenuItem()
+        appControls.view = embedded(ProcessPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.application")
+        applications.addItem(appControls)
         timing.addItem(.separator())
         let forever = add("Until changed", to: timing) { [weak model] in model?.activateForever() }
         if case .forever = model.manualIntent?.limit { forever.state = .on }
@@ -97,24 +102,21 @@ import FandyCore
         let child = NSMenu(title: title); child.autoenablesItems = false
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.submenu = child; menu.addItem(item); return child
     }
-    private func presentPicker(time: Bool) {
-        guard let button = item?.button else { return }
-        item?.menu?.cancelTracking()
-        // Give editable fields and search a regular key window and focus lifecycle
-        // in a native popover anchored directly to the status item.
-        DispatchQueue.main.async { [weak self, weak button] in
-            guard let self, let button else { return }
-            self.pickerPopover?.close()
-            let popover = NSPopover(); popover.behavior = .transient; popover.animates = false
-            if time { popover.contentViewController = NSHostingController(rootView: CustomActivationPicker(model: self.model, close: { [weak popover] in popover?.close() })) }
-            else { popover.contentViewController = NSHostingController(rootView: ProcessPicker(model: self.model, close: { [weak popover] in popover?.close() })) }
-            self.pickerPopover = popover; NSApp.activate(ignoringOtherApps: true)
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
-        }
+    private func embedded<V: View>(_ view: V, identifier: String) -> NSView {
+        // NSMenuItem.view receives native mouse/keyboard events. Keep its controls
+        // in the submenu's own window; never activate a separate panel/popover.
+        let hosting = NSHostingView(rootView: view)
+        hosting.frame.size = hosting.fittingSize
+        hosting.setAccessibilityIdentifier(identifier)
+        return hosting
     }
     private func fitted<V: View>(_ view: V) -> NSView {
-        let hosting = NSHostingView(rootView: view); hosting.frame.size = NSSize(width: MenuLayout.width, height: hosting.fittingSize.height); return hosting
+        let hosting = NSHostingView(rootView: view)
+        hosting.frame.size = NSSize(width: MenuLayout.width, height: hosting.fittingSize.height)
+        // AppKit expands this view to the menu width, including the space used by
+        // native checkmarks/shortcuts. The readout centers in that actual width.
+        hosting.autoresizingMask = [.width]
+        return hosting
     }
 
 }
@@ -162,7 +164,7 @@ struct CustomActivationPicker: View {
             }
             if let error { Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
             Button("Continue") { apply() }.buttonStyle(.borderedProminent).tint(.accentColor)
-        }.padding(16).frame(width: 280, height: 330)
+        }.padding(12).frame(width: 240, height: 300)
         .onChange(of: focused) { _, value in if let value { editing = value } }
         .onChange(of: until) { _, _ in
             focused = .hours; error = nil
@@ -217,9 +219,9 @@ struct ProcessPicker: View {
                         }.buttonStyle(.plain)
                     }
                 }
-            }
+            }.scrollIndicators(.hidden)
             Button("Refresh") { refresh() }.font(.caption)
-        }.padding(12).frame(width: 280, height: 350)
+        }.padding(10).frame(width: 260, height: 320)
         .onAppear { refresh() }.onChange(of: helpers) { _, _ in refresh() }
     }
     private func refresh() { processes = ProcessCatalog.list(includeHelpers: helpers) }

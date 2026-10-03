@@ -18,8 +18,9 @@ struct WrappedMenuText: View {
 }
 struct FanSpeedReadout: View {
     @Bindable var model: AppModel
+    var centered = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: centered ? .center : .leading, spacing: 4) {
             if let fans = model.snapshot?.fans, !fans.isEmpty, model.ownership != .unknown {
                 let percentage = StatusPresentation.observedFanPercent(fans)
                 GeometryReader { geometry in
@@ -31,16 +32,18 @@ struct FanSpeedReadout: View {
                 .accessibilityLabel("Observed fan speed").accessibilityValue("\(Int(percentage.rounded())) percent")
                 Text("\(Int(percentage.rounded()))% · " + fans.map { "\(Int($0.actualRPM.rounded()))" }.joined(separator: " / ") + " RPM").font(.caption).monospacedDigit()
             } else { Text("Fan speed unavailable").font(.caption).foregroundStyle(.secondary) }
-        }
+        }.multilineTextAlignment(centered ? .center : .leading)
     }
 }
 struct FanMenuStatus: View {
     @Bindable var model: AppModel
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            FanSpeedReadout(model: model)
-            Text(model.statusText).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }.frame(width: MenuLayout.textWidth, alignment: .leading).padding(.horizontal, 14).padding(.vertical, 5)
+        VStack(alignment: .center, spacing: 4) {
+            FanSpeedReadout(model: model, centered: true)
+            Text(model.statusText).font(.caption).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        }.frame(width: MenuLayout.textWidth).frame(maxWidth: .infinity)
+            .padding(.horizontal, 14).padding(.vertical, 5)
     }
 }
 

@@ -4,7 +4,7 @@ A small native Apple Silicon macOS menu-bar fan controller with named profiles a
 
 **Current build: real control with all built-in profiles and custom curves on the qualified Mac17,9.** System+, Cool Chassis, Gaming and School use independently read hardware temperatures. System releases control to macOS; Max uses each fan's actual reported maximum. The signed helper, watchdog, crash recovery and native editor are integrated. See [delivery status](docs/DEVELOPMENT_STATUS.md).
 
-Menu/profile polish includes optional global shortcuts, per-profile activation defaults, profile-only undo, direct secondary-click curve editing, a persistent adjustable sidebar, an observed fan-speed bar and native time/app popovers. [Current UI behavior and verification](docs/NATIVE_UI_DELIVERY.md).
+Menu/profile polish includes optional global shortcuts, per-profile activation defaults, profile-only undo, direct secondary-click curve editing, a persistent adjustable sidebar, a centered observed fan-speed bar and inline time/app hover submenus. Profiles retain scrolling with hidden indicators. [Current UI behavior and packaging](docs/INLINE_MENU_AND_DMG.md).
 
 Editable profiles also support an optional target temperature for Chip, Trackpad, Actuator or Airflow. It adds cooling demand while curves and chip safety remain authoritative. Rename profiles using the visible pencil/Rename button or sidebar right-click menu; System and Max stay protected. [Details and verification](docs/TEMPERATURE_TARGET_DELIVERY.md).
 
@@ -25,6 +25,17 @@ Open `Fandy.xcodeproj` and use the shared **Fandy** scheme. It has two native ta
 The app starts in the menu bar with its editor closed, in **System**, with **real hardware monitoring** enabled. Simulation is an explicit development option in Settings or the `--simulation` launch argument. Click the fan menu icon to select a profile in one click. **Edit Profiles…** opens the compact native editor. Drag a node or choose it with the native point selector; press Return to apply exact °C/% values. Decimal-comma input is supported for those locales. Add/remove nodes or reset the curve as needed. Invalid changes are marked “Not applied” and keep the last valid profile running. Invalid drafts stay visible but never replace the validated profile. Trackpad, Actuator and Airflow have separate comfort curves because their temperatures use different scales. Built-ins remain available; System and Max are immutable; other built-ins can be reset. Custom profiles support creation, duplication, renaming, deletion and reordering.
 
 Settings includes deterministic comfortable, warm chassis, gaming, GPU hot, sensor failure, stale sensor, disconnected helper and overheating scenarios. Real monitoring is the default. Reviewed control inputs are distinguished from informational CPU/GPU estimates and unresolved proximity candidates. Selecting a profile in the editor calculates a shadow demand, labeled as a preview with no fan commands. Unqualified profiles cannot activate from the menu or editor. Preview values never enter a control lease, and stale/missing inputs make the preview unavailable. A System checkmark is withheld if another application is visibly using manual fan mode. Selecting System requests verified automatic restoration. Firmware mode 3 is unqualified on this model and does not receive an Apple-ownership checkmark.
+
+## Package a test DMG
+
+```sh
+FANDY_BUILD_CONFIGURATION=Release Scripts/build.sh -jobs 1
+python3 Scripts/package-dmg.py
+```
+
+The image appears in `build/Distribution`, alongside its SHA-256 checksum and verification report. Packaging checks the app/helper identities, matching signing team, hardened runtime, absence of debugging entitlement, arm64 architecture and private files/paths. It verifies the image and mounts it read-only to check the actual payload; it never launches the app or registers a helper. Release builds strip local debug symbols before signing and map developer source paths. Build products, DMGs and private signing configuration remain excluded from Git.
+
+The current artifact is an **Apple Development-signed, unnotarized test build**. Gatekeeper may block it on another Mac. Broad distribution requires Developer ID Application signing and Apple notarization. macOS 15+ on Apple Silicon is supported for monitoring; physical fan control is currently qualified only for **Mac17,9**. See [packaging verification and limits](docs/INLINE_MENU_AND_DMG.md).
 
 ## Profiles
 

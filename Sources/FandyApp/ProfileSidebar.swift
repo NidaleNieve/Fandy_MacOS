@@ -19,7 +19,8 @@ struct ProfileSidebar: NSViewRepresentable {
         table.delegate = context.coordinator; table.dataSource = context.coordinator
         table.target = context.coordinator; table.doubleAction = #selector(Coordinator.activate(_:))
         table.setAccessibilityIdentifier("profiles.sidebar")
-        let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.drawsBackground = false; scroll.documentView = table
+        let scroll = NSScrollView(); scroll.hasVerticalScroller = false; scroll.hasHorizontalScroller = false
+        scroll.drawsBackground = false; scroll.documentView = table
         context.coordinator.table = table
         context.coordinator.update()
         return scroll

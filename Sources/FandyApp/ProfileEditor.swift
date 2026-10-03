@@ -77,6 +77,7 @@ private struct ProfileWorkspace: View {
             ProfileDetail(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             ScrollView { SensorStatus(model: model).padding(14).frame(maxWidth: .infinity, alignment: .leading) }
+                .scrollIndicators(.hidden)
                 .frame(width: 205)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
     }
@@ -114,7 +115,7 @@ private struct ProfileDetail: View {
                         }
 
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 12)
-                }
+                }.scrollIndicators(.hidden)
             }.padding(16)
 
         } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
