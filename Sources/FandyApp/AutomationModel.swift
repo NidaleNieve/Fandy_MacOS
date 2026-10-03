@@ -12,10 +12,44 @@ struct ScheduleReview: Identifiable {
     var originals: [WeeklyPeriod]
     var currentBaseline: [WeeklyPeriod]? = nil
     var pauses: [SchedulePause]
+    var activationDefaults: [String: ProfileActivationDefault] = [:]
     var conflict: [ScheduleConflict] { remaining.first.map { ScheduleEngine.conflicts($0, in: accepted) } ?? [] }
 }
 
 extension AppModel {
+
+    var menuSelectionID: String? { machine.state == .fault ? nil : machine.selected.id }
+    var canSetActivationLimit: Bool { machine.state != .fault && (machine.state != .restoringSystem || machine.selected.kind == .system) }
+    func toggleProfile(_ id: String) { select(machine.selected.id == id && id != "system" && machine.state != .fault ? "system" : id) }
+    func activationDefaultUnavailableReason(_ profile: Profile) -> String? {
+        guard let rule = automation.activationDefaults[profile.id], rule.kind == .application else { return nil }
+        return applicationCatalog().contains(where: { $0.bundleID == rule.applicationID && ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }) ? nil : "\(rule.applicationName) is not running. Change this profile’s activation condition to use it now."
+    }
+    func canUseActivationDefault(_ profile: Profile) -> Bool {
+        if let reason = activationDefaultUnavailableReason(profile) { draftError = reason; return false }; return true
+    }
+    func applyActivationDefault(_ profile: Profile) {
+        manualIntent = ActivationIntent(profileID: profile.id); activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
+        guard let rule = automation.activationDefaults[profile.id] else { return }
+        switch rule.kind {
+        case .forever: break
+        case .duration: activateFor(seconds: Double(rule.seconds))
+        case .application:
+            if let process = applicationCatalog().first(where: { $0.bundleID == rule.applicationID }) { activateWhile(process) }
+            else { clearActivation(); select("system", manual: false) }
+        }
+    }
+    func setActivationDefault(_ rule: ProfileActivationDefault, profileID: String) {
+        var next = automation; next.activationDefaults[profileID] = rule; setAutomation(next)
+    }
+    var cancellationTitle: String {
+        guard let intent = manualIntent else { return scheduledPeriodID == nil ? "Resume Schedule" : "Cancel \(machine.selected.name)" }
+        let end: Date
+        if case .deadline(let deadline) = intent.limit { end = deadline } else { end = wallClock().addingTimeInterval(7 * 86400) }
+        let resumes = ScheduleEngine.hasActivity(in: automation, after: wallClock(), before: end)
+        return "Cancel \(machine.selected.name)" + (resumes ? " / Resume Schedule" : "")
+    }
+
     var activationDescription: String {
         if let manualIntent {
             switch manualIntent.limit {
@@ -25,7 +59,7 @@ extension AppModel {
             }
         }
         if scheduledPeriodID != nil { return "Scheduled" }
-        if blockedScheduleID != nil { return "Schedule stopped after a fault · Resume Schedule to retry" }
+        if blockedScheduleID != nil { return "Schedule paused for this occurrence · Resume Schedule to retry" }
         return "Schedule ready · System"
     }
     func formattedTime(_ date: Date) -> String {
@@ -45,13 +79,18 @@ extension AppModel {
         watchedProcessName = process.name
     }
     @discardableResult private func claimCurrentActivation(_ limit: ActivationIntent.Limit) -> Bool {
-        guard machine.state != .fault, machine.state != .restoringSystem,
+        guard machine.state != .fault, (machine.state != .restoringSystem || machine.selected.kind == .system),
               let profile = profiles.first(where: { $0.id == machine.selected.id }), canActivate(profile) else {
-            draftError = "Wait for acknowledged activation before setting a duration."; return false
+            draftError = "Select an available profile before setting a duration."; return false
         }
         manualIntent = ActivationIntent(profileID: profile.id, limit: limit)
         activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
         return true
+    }
+    func cancelActivation() {
+        if manualIntent == nil, let occurrence = scheduledPeriodID {
+            clearActivation(); blockedScheduleID = occurrence; select("system", manual: false)
+        } else { resumeSchedule() }
     }
     func resumeSchedule() {
         clearActivation(); blockedScheduleID = nil
@@ -97,21 +136,21 @@ extension AppModel {
         guard !savingCollection, !isQuitting else { return }
         do {
             try next.validate(profileIDs: Set(profiles.map(\.id)))
-            discardFailedConfiguration(); automation = next; save(); draftError = nil
+            discardFailedConfiguration(); registerConfigurationUndo(); automation = next; save(); draftError = nil
         } catch { draftError = error.localizedDescription }
     }
     func removePeriod(_ id: UUID) { var next = automation; next.periods.removeAll { $0.id == id }; setAutomation(next) }
     func removePause(_ id: UUID) { var next = automation; next.pauses.removeAll { $0.id == id }; setAutomation(next) }
-    func reviewPeriods(_ periods: [WeeklyPeriod], pauses: [SchedulePause] = [], profiles added: [Profile] = [], replacing: [Profile] = []) {
+    func reviewPeriods(_ periods: [WeeklyPeriod], pauses: [SchedulePause] = [], profiles added: [Profile] = [], replacing: [Profile] = [], defaults: [String: ProfileActivationDefault] = [:]) {
         guard scheduleReview == nil, !savingCollection else { return }
         do {
             var checking = automation
             let incomingIDs = Set(periods.map(\.id))
             let originals = automation.periods.filter { incomingIDs.contains($0.id) }
             checking.periods.removeAll { incomingIDs.contains($0.id) }
-            checking.periods += periods; checking.pauses += pauses
+            checking.periods += periods; checking.pauses += pauses; checking.activationDefaults.merge(defaults) { _, new in new }
             try checking.validate(profileIDs: Set((profiles + added).map(\.id)), allowConflicts: true)
-            scheduleReview = ScheduleReview(remaining: periods, accepted: automation.periods.filter { !incomingIDs.contains($0.id) }, addedProfiles: added, replacements: replacing, originals: originals, pauses: pauses)
+            scheduleReview = ScheduleReview(remaining: periods, accepted: automation.periods.filter { !incomingIDs.contains($0.id) }, addedProfiles: added, replacements: replacing, originals: originals, pauses: pauses, activationDefaults: defaults)
             advanceReview()
         } catch { draftError = error.localizedDescription }
     }
@@ -147,7 +186,7 @@ extension AppModel {
             }
             review.accepted.append(incoming); review.remaining.removeFirst(); review.currentBaseline = nil
         }
-        var next = automation; next.periods = review.accepted; next.pauses += review.pauses
+        var next = automation; next.periods = review.accepted; next.pauses += review.pauses; next.activationDefaults.merge(review.activationDefaults) { _, new in new }
         scheduleReview = nil
         let nextProfiles = profiles.map { profile in review.replacements.first { $0.id == profile.id } ?? profile } + review.addedProfiles
         commitConfiguration(profiles: nextProfiles, automation: next, selection: review.addedProfiles.first?.id ?? review.replacements.first?.id ?? editorSelection)

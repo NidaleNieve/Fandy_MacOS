@@ -36,6 +36,12 @@ public struct ProfileStore: Sendable {
                     let bytes = try JSONSerialization.data(withJSONObject: entry)
                     var profile = try JSONDecoder().decode(Profile.self, from: bytes)
                     profile.bundled = BuiltInProfiles.all.contains { $0.id == profile.id }
+                    if profile.id == "gaming", profile.defaultRevision == 1,
+                       profile.floor == 0, !profile.automaticAtIdle, profile.curves.count == 1,
+                       profile.curves[0].enabled, profile.curves[0].input == .chip,
+                       profile.curves[0].points.map({ [$0.temperature, $0.percent] }) == [[55,0],[65,25],[72,45],[77,65],[81,85],[85,100]] {
+                        profile.curves = BuiltInProfiles.gaming.curves; profile.defaultRevision = 2
+                    }
                     try profile.validate()
                     guard ids.insert(profile.id).inserted else { throw ControlError.invalidProfile("Duplicate profile identifier.") }
                     profiles.append(profile)

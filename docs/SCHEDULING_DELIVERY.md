@@ -1,5 +1,7 @@
 # Timers, schedules and portable configuration — 2026-10-03
 
+The subsequent [menu/profile delivery](MENU_POLISH_DELIVERY.md) updates selection checkmarks, keyboard-capable pickers, shortcuts and per-profile activation defaults. The results below retain the original scheduling checkpoint.
+
 ## Delivered behavior
 
 The existing System/Max and temperature profiles use the same qualified controller and authenticated five-method helper interface. Automation chooses a profile above that controller; it cannot grant hardware qualification or weaken the immutable chip guard.

@@ -70,6 +70,15 @@ struct CurveDraft {
         curve.points.insert(node, at: index); select(node.id)
         return validated()
     }
+    mutating func add(at temperature: Double, percent: Double) -> FanCurve? {
+        guard canAdd, temperature.isFinite, percent.isFinite, (0...125).contains(temperature),
+              curve.points.allSatisfy({ abs($0.temperature-temperature) >= 0.1 }) else { return nil }
+        let index = curve.points.firstIndex { $0.temperature > temperature } ?? curve.points.count
+        let lower = index > 0 ? curve.points[index-1].percent : 0
+        let upper = index < curve.points.count ? curve.points[index].percent : 100
+        let point = CurvePoint(temperature, min(upper, max(lower, percent)))
+        curve.points.insert(point, at: index); select(point.id); return validated()
+    }
     mutating func remove() -> FanCurve? {
         guard canRemove, let index = selectedIndex else { return nil }
         curve.points.remove(at: index)

@@ -57,8 +57,9 @@ public struct AppPreferences: Codable, Sendable, Equatable {
     public var showClock: Bool = false
     public var showHelperProcesses: Bool = false
     public var menuSensors: [String] = []
+    public var shortcuts: [String: ShortcutBinding] = [:]
     public init() {}
-    private enum CodingKeys: String, CodingKey { case launchAtLogin, use24HourTime, showClock, showHelperProcesses, menuSensors }
+    private enum CodingKeys: String, CodingKey { case launchAtLogin, use24HourTime, showClock, showHelperProcesses, menuSensors, shortcuts }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
@@ -66,25 +67,32 @@ public struct AppPreferences: Codable, Sendable, Equatable {
         showClock = try c.decodeIfPresent(Bool.self, forKey: .showClock) ?? false
         showHelperProcesses = try c.decodeIfPresent(Bool.self, forKey: .showHelperProcesses) ?? false
         menuSensors = try c.decodeIfPresent([String].self, forKey: .menuSensors) ?? []
+        shortcuts = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcuts) ?? [:]
     }
 }
 public struct AutomationConfiguration: Codable, Sendable, Equatable {
     public var periods: [WeeklyPeriod] = []
     public var pauses: [SchedulePause] = []
     public var preferences = AppPreferences()
+    public var activationDefaults: [String: ProfileActivationDefault] = [:]
     public init() {}
-    private enum CodingKeys: String, CodingKey { case periods, pauses, preferences }
+    private enum CodingKeys: String, CodingKey { case periods, pauses, preferences, activationDefaults }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         periods = try c.decodeIfPresent([WeeklyPeriod].self, forKey: .periods) ?? []
         pauses = try c.decodeIfPresent([SchedulePause].self, forKey: .pauses) ?? []
         preferences = try c.decodeIfPresent(AppPreferences.self, forKey: .preferences) ?? .init()
+        activationDefaults = try c.decodeIfPresent([String: ProfileActivationDefault].self, forKey: .activationDefaults) ?? [:]
     }
     public func validate(profileIDs: Set<String>, allowConflicts: Bool = false) throws {
         guard periods.count <= 1024, pauses.count <= 256, preferences.menuSensors.count <= 16,
               Set(periods.map(\.id)).count == periods.count, Set(pauses.map(\.id)).count == pauses.count,
               Set(preferences.menuSensors).count == preferences.menuSensors.count,
               preferences.menuSensors.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 100 }) else { throw ScheduleError("Configuration limit exceeded or duplicate identifiers.") }
+        guard Set(activationDefaults.keys).isSubset(of: profileIDs), Set(preferences.shortcuts.keys).isSubset(of: profileIDs.union(["menu"])),
+              Set(preferences.shortcuts.values.map { "\($0.keyCode):\($0.modifiers)" }).count == preferences.shortcuts.count else { throw ScheduleError("Duplicate shortcuts or unknown profile preferences.") }
+        try activationDefaults.values.forEach { try $0.validate() }
+        try preferences.shortcuts.values.forEach { try $0.validate() }
         try periods.forEach { try $0.validate(profileIDs: profileIDs) }
         guard pauses.allSatisfy({ $0.start.timeIntervalSince1970.isFinite && $0.end.timeIntervalSince1970.isFinite && $0.start < $0.end && ($0.profileID.map { profileIDs.contains($0) } ?? true) }) else { throw ScheduleError("Pause must have a valid profile and increasing finite dates.") }
         if !allowConflicts {
@@ -101,6 +109,35 @@ public struct ScheduleConflict: Sendable, Equatable, Identifiable {
     public let overlaps: [WeekSegment]
 }
 public enum ScheduleEngine {
+    public static func hasActivity(in configuration: AutomationConfiguration, after start: Date, before end: Date, calendar: Calendar = .current) -> Bool {
+        guard start < end, configuration.periods.contains(where: \.enabled) else { return false }
+        var day = calendar.startOfDay(for: start)
+        // Temporary activations are bounded to 31 days; indefinite/process menus
+        // ask about the coming week rather than assuming a termination time.
+        for _ in 0..<33 {
+            guard day < end, let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            let weekday = (calendar.component(.weekday, from: day) + 5) % 7
+            for period in configuration.periods where period.enabled {
+                for segment in period.segments where segment.start / 1440 == weekday {
+                    let low = segment.start % 1440, high = segment.end - weekday * 1440
+                    guard let begin = calendar.date(bySettingHour: low / 60, minute: low % 60, second: 0, of: day),
+                          let finish = high == 1440 ? nextDay : calendar.date(bySettingHour: high / 60, minute: high % 60, second: 0, of: day) else { continue }
+                    let lower = max(start, begin), upper = min(end, finish)
+                    guard lower < upper else { continue }
+                    var portions: [(Date, Date)] = [(lower, upper)]
+                    for pause in configuration.pauses where pause.profileID == nil || pause.profileID == period.profileID {
+                        portions = portions.flatMap { a, b in
+                            guard pause.start < b, a < pause.end else { return [(a,b)] }
+                            return [a < pause.start ? (a,min(b,pause.start)) : nil, pause.end < b ? (max(a,pause.end),b) : nil].compactMap { $0 }
+                        }
+                    }
+                    if !portions.isEmpty { return true }
+                }
+            }
+            day = nextDay
+        }
+        return false
+    }
     public static func conflicts(_ incoming: WeeklyPeriod, in existing: [WeeklyPeriod]) -> [ScheduleConflict] {
         guard incoming.enabled else { return [] }
         return existing.filter { $0.enabled && $0.id != incoming.id }.compactMap { period in

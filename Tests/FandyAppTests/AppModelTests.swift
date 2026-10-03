@@ -441,3 +441,17 @@ private actor EnvelopeClient: PrivilegedFanClient {
     #expect(!model.isSelected("system")); #expect(model.helperHealth == .fault)
     let counts = await client.counts(); #expect(counts.0 == 0); #expect(counts.1 == 0)
 }
+
+@MainActor @Test func successfulSystemHandbackClearsLatchedErrorWithoutAnotherProfile() async throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let client = MonitoringClient(), release = HardwareCapabilities(model: "Test", stage: .restorationQualification, topology: .verified)
+    let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, client: client, capabilities: release, helperAvailable: { true }, clock: { 10 })
+    await model.tick(); await client.setRestoreFailed(true); model.select("system")
+    while await client.counts().1 == 0 { await Task.yield() }
+    while model.machine.state != .fault { await Task.yield() }
+    #expect(model.hardwareError != nil && model.menuSelectionID == nil)
+    await client.setRestoreFailed(false); model.select("system")
+    while model.machine.state != .system { await Task.yield() }
+    #expect(model.hardwareError == nil && model.isSelected("system"))
+}

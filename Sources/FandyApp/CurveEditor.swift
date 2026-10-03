@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import FandyCore
 
 struct CurveEditor: View {
@@ -49,6 +50,17 @@ struct CurveEditor: View {
                         let position = coordinate(point, plot: plot), radius: CGFloat = point.id == editor.selectedID ? 5.5 : 4
                         let rect = CGRect(x: position.x-radius,y:position.y-radius,width:radius*2,height:radius*2)
                         context.fill(Path(ellipseIn: rect), with: .color(color))
+                    }
+                }
+                .overlay {
+                    CurveContextSurface { location in
+                        let nearest = editor.curve.points.min { distance(coordinate($0, plot: plot), location) < distance(coordinate($1, plot: plot), location) }
+                        if let nearest, distance(coordinate(nearest, plot: plot), location) < 16 {
+                            return CurveContextAction(title: "Delete Point", enabled: editor.curve.points.count > 2) { editor.select(nearest.id); publish(editor.remove()) }
+                        }
+                        let temperature = range.lowerBound + (location.x-plot.minX)/plot.width*(range.upperBound-range.lowerBound)
+                        let percentage = (plot.maxY-location.y)/plot.height*100
+                        return CurveContextAction(title: "Add Point", enabled: plot.contains(location) && editor.canAdd) { publish(editor.add(at: temperature, percent: percentage)) }
                     }
                 }
                 .contentShape(Rectangle())

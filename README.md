@@ -4,6 +4,8 @@ A small native Apple Silicon macOS menu-bar fan controller with named profiles a
 
 **Current build: real control with all built-in profiles and custom curves on the qualified Mac17,9.** System+, Cool Chassis, Gaming and School use independently read hardware temperatures. System releases control to macOS; Max uses each fan's actual reported maximum. The signed helper, watchdog, crash recovery and native editor are integrated. See [delivery status](docs/DEVELOPMENT_STATUS.md).
 
+Menu/profile polish includes optional global shortcuts, per-profile activation defaults, universal undo, contextual curve editing, a persistent adjustable sidebar, an observed fan-speed bar and native time/app popovers. [Behavior and verification](docs/MENU_POLISH_DELIVERY.md).
+
 Chip control uses a separately named conservative **Chip envelope** across a fixed 105-key model manifest. CPU/GPU averages remain labelled estimates. Chassis control uses Trackpad, Actuator, Left/Right airflow and an explicitly labelled **Top proximity** input. These are reviewed operational inputs, not a claim that every physical sensor identity is certified. [Sensor evidence and limitations](docs/SENSOR_EVIDENCE.md).
 
 ## Build and run

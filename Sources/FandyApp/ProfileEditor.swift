@@ -9,7 +9,8 @@ struct ProfileEditor: View {
     @Bindable var model: AppModel
     @State private var name = ""
     var body: some View {
-        NavigationSplitView {
+        ProfileSplitView {
+            VStack(spacing: 0) {
             List(selection: $model.editorSelection) {
                 Section("Profiles") {
                     ForEach(model.profiles) { profile in
@@ -17,20 +18,23 @@ struct ProfileEditor: View {
                             Text(profile.name)
                             Spacer()
                             if model.isSelected(profile.id) { Image(systemName: "checkmark").foregroundStyle(.secondary) }
-                        }.tag(profile.id)
+                        }.padding(.horizontal, 8).padding(.vertical, 5).contentShape(Rectangle())
+                        .onTapGesture(count: 2) { model.editorSelection = profile.id; model.select(profile.id) }.tag(profile.id)
                     }
                 }
-            }.navigationSplitViewColumnWidth(min: 170, ideal: 185)
+            }.listStyle(.sidebar)
+            Divider()
             HStack {
-                Button { model.create() } label: { Image(systemName: "plus") }.help("Create profile").accessibilityLabel("Create profile")
-                Button { model.duplicate() } label: { Image(systemName: "square.on.square") }.disabled(model.edited == nil).help("Duplicate profile").accessibilityLabel("Duplicate profile")
-                Button { model.delete() } label: { Image(systemName: "minus") }.disabled(model.edited?.bundled != false).help("Delete profile").accessibilityLabel("Delete profile")
+                Button { model.create() } label: { Image(systemName: "plus").frame(width: 18, height: 18) }.help("Create profile").accessibilityLabel("Create profile")
+                Button { model.duplicate() } label: { Image(systemName: "square.on.square").frame(width: 18, height: 18) }.disabled(model.edited == nil).help("Duplicate profile").accessibilityLabel("Duplicate profile")
+                Button { model.delete() } label: { Image(systemName: "minus").frame(width: 18, height: 18) }.disabled(model.edited?.bundled != false).help("Delete profile").accessibilityLabel("Delete profile")
                 Menu {
                     Button("Import Profiles…") { importFile() }
                     Button("Export Selected Profile…") { exportFile() }.disabled(model.edited == nil)
                 } label: { Image(systemName: "ellipsis.circle") }.help("Profile files")
                 Spacer()
-            }.padding(10)
+            }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal, 12).padding(.vertical, 10)
+            }
         } detail: {
             if let profile = model.edited {
                 ScrollView {
@@ -41,7 +45,7 @@ struct ProfileEditor: View {
                                 .onSubmit { var next = profile; next.name = name; model.update(next) }
                                 .accessibilityIdentifier("profile.name")
                             Button(model.isSelected(profile.id) ? "Active" : "Use Profile") { model.select(profile.id) }
-                                .disabled(model.isSelected(profile.id) || !model.canActivate(profile))
+                                .disabled(model.isSelected(profile.id) || !model.canActivate(profile) || model.activationDefaultUnavailableReason(profile) != nil)
                         }
                         if profile.kind == .system { Text(model.simulation ? "macOS controls all fans in simulation." : model.statusText).foregroundStyle(.secondary) }
                         else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
@@ -78,6 +82,7 @@ struct ProfileEditor: View {
                             } else { Text("Preview unavailable: required readings are missing or unreliable.").font(.caption).foregroundStyle(.secondary) }
                             if let reason = model.eligibility(profile).reason { Text(reason).font(.caption).foregroundStyle(.secondary) }
                         }
+                        if let reason = model.activationDefaultUnavailableReason(profile) { Text(reason).font(.caption).foregroundStyle(.secondary) }
                         if let error = model.draftError { Text(error).foregroundStyle(.red).font(.caption).accessibilityIdentifier("curve.validation-error") }
                         if model.unsavedChanges { Text("Changes not saved").font(.caption).foregroundStyle(.orange) }
                         if let error = model.saveError {
@@ -96,17 +101,23 @@ struct ProfileEditor: View {
                             Spacer()
                         }
                         Divider()
+                        ActivationDefaultsEditor(model: model, profile: profile)
+                        Divider()
                         ScheduleEditor(model: model, profile: profile).id(profile.id)
                         Divider()
                         SensorStatus(model: model)
                     }.padding(20)
                 }.onAppear { name = profile.name }.onChange(of: profile.id) { _, _ in name = profile.name }.onChange(of: profile.name) { _, new in name = new }
             } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
-        }.frame(minWidth: 680, minHeight: 560)
+        }.frame(minWidth: 720, minHeight: 560)
         .sheet(item: $model.scheduleReview) { _ in ScheduleConflictSheet(model: model) }
         .disabled(model.savingCollection)
-        .onChange(of: model.editorSelection) { _, _ in model.resetEditorHistory() }
-        .toolbar { ToolbarItem { Text(model.simulation ? "Simulation" : "Live").foregroundStyle(.secondary).font(.caption) } }
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button { model.editorHistory.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }.disabled(!model.canUndo).help("Undo any profile or schedule change")
+            }
+            ToolbarItem(placement: .automatic) { Text(model.simulation ? "Simulation" : "Live").foregroundStyle(.secondary).font(.caption).fixedSize() }
+        }
     }
     private func importFile() {
         let panel = NSOpenPanel(); panel.allowedContentTypes = [.json]; panel.allowsMultipleSelection = false
@@ -196,6 +207,7 @@ struct SettingsView: View {
                 if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
             }
             ConfigurationSettings(model: model)
+            ShortcutSettings(model: model)
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: { model.setSimulation($0) }))
                 Text("Live mode reads sensors and runs the selected profile.").font(.caption).foregroundStyle(.secondary)

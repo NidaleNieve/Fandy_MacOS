@@ -43,7 +43,10 @@ public enum BuiltInProfiles {
     public static let maximum = Profile(id: "max", name: "Max", kind: .maximum, bundled: true, curves: [])
     public static let systemPlus = Profile(id: "system-plus", name: "System+", bundled: true, curves: [chip], automaticAtIdle: true)
     public static let coolChassis = Profile(id: "cool-chassis", name: "Cool Chassis", bundled: true, curves: [chip, trackpad, actuator, airflow], floor: 20)
-    public static let gaming = Profile(id: "gaming", name: "Gaming", bundled: true, curves: [FanCurve(.chip, [(55,0),(65,25),(72,45),(77,65),(81,85),(85,100)])])
+    public static let gaming: Profile = {
+        var profile = Profile(id: "gaming", name: "Gaming", bundled: true, curves: [FanCurve(.chip, [(35,15),(45,25),(55,40),(65,55),(72,70),(77,85),(81,95),(85,100)])])
+        profile.defaultRevision = 2; return profile
+    }()
     public static let school: Profile = {
         var comfort = [trackpad, actuator, airflow]
         for i in comfort.indices { for j in comfort[i].points.indices { comfort[i].points[j].percent = max(0, comfort[i].points[j].percent / 2 - 10) } }

@@ -39,9 +39,10 @@ public struct ScheduledProfileBundle: Sendable {
     public var periods: [WeeklyPeriod]
     public var pauses: [SchedulePause]
     public var replacements: [Profile] = []
+    public var activationDefaults: [String: ProfileActivationDefault] = [:]
 }
 public enum ScheduledProfileInterchange {
-    private struct Archive: Codable { let version: Int; let profiles: [Profile]; let periods: [WeeklyPeriod]; let pauses: [SchedulePause] }
+    private struct Archive: Codable { let version: Int; let profiles: [Profile]; let periods: [WeeklyPeriod]; let pauses: [SchedulePause]; let activationDefaults: [String: ProfileActivationDefault]? }
     public static func encode(_ profile: Profile, automation: AutomationConfiguration) throws -> Data {
         var copy = profile.bundled ? profile : profile.duplicated(); copy.name = profile.name
         let periods = automation.periods.filter { $0.profileID == profile.id }.map { period in
@@ -51,18 +52,21 @@ public enum ScheduledProfileInterchange {
             var result = pause; result.profileID = copy.id; return result
         }
         var config = AutomationConfiguration(); config.periods = periods; config.pauses = pauses
+        let defaults = automation.activationDefaults[profile.id].map { [copy.id: $0] } ?? [:]
+        config.activationDefaults = defaults
         try copy.validate(); try config.validate(profileIDs: [copy.id])
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(Archive(version: 2, profiles: [copy], periods: periods, pauses: pauses))
+        let data = try encoder.encode(Archive(version: 2, profiles: [copy], periods: periods, pauses: pauses, activationDefaults: defaults))
         guard data.count <= 1_048_576 else { throw ScheduleError("Profile exceeds 1 MiB.") }; return data
     }
     public static func decode(_ data: Data, existingCount: Int) throws -> ScheduledProfileBundle {
         let root = try ImportValidation.root(data)
         if root["version"] as? Int == 1 { return ScheduledProfileBundle(profiles: try ProfileInterchange.decode(data, existingCount: existingCount), periods: [], pauses: []) }
-        guard Set(root.keys) == ["version", "profiles", "periods", "pauses"] else { throw ScheduleError("Expected version, profiles, periods and pauses.") }
+        guard Set(root.keys).isSubset(of: ["version", "profiles", "periods", "pauses", "activationDefaults"]), Set(["version", "profiles", "periods", "pauses"]).isSubset(of: Set(root.keys)) else { throw ScheduleError("Expected version, profiles, periods and pauses.") }
         try ImportValidation.profiles(root["profiles"])
         try ImportValidation.periods(root["periods"])
         try ImportValidation.pauses(root["pauses"])
+        if let defaults = root["activationDefaults"] { try ImportValidation.defaults(defaults) }
         let archive = try JSONDecoder().decode(Archive.self, from: data)
         guard archive.version == 2, !archive.profiles.isEmpty, archive.profiles.count <= 128, archive.profiles.filter({ !$0.bundled }).count <= 128 - min(max(existingCount, 0), 128),
               Set(archive.profiles.map(\.id)).count == archive.profiles.count else { throw ScheduleError("Invalid version, duplicate profiles or profile limit exceeded.") }
@@ -71,7 +75,7 @@ public enum ScheduledProfileInterchange {
             guard profile.bundled == builtin else { throw ScheduleError("Invalid built-in identity.") }
             try profile.validate()
         }
-        var config = AutomationConfiguration(); config.periods = archive.periods; config.pauses = archive.pauses
+        var config = AutomationConfiguration(); config.periods = archive.periods; config.pauses = archive.pauses; config.activationDefaults = archive.activationDefaults ?? [:]
         try config.validate(profileIDs: Set(archive.profiles.map(\.id)), allowConflicts: true)
         let copies = archive.profiles.map { profile -> Profile in var result = profile.bundled ? profile : profile.duplicated(); result.name = profile.name; return result }
         let ids = Dictionary(uniqueKeysWithValues: zip(archive.profiles.map(\.id), copies.map(\.id)))
@@ -79,7 +83,7 @@ public enum ScheduledProfileInterchange {
             var result = period; result.id = UUID(); result.profileID = ids[period.profileID]!; return result
         }, pauses: archive.pauses.map { pause in
             var result = pause; result.id = UUID(); result.profileID = pause.profileID.flatMap { ids[$0] }; return result
-        }, replacements: copies.filter(\.bundled))
+        }, replacements: copies.filter(\.bundled), activationDefaults: Dictionary(uniqueKeysWithValues: (archive.activationDefaults ?? [:]).map { (ids[$0.key]!, $0.value) }))
     }
 }
 enum ImportValidation {
@@ -112,11 +116,19 @@ enum ImportValidation {
             _ = try fields(entry, allowed: ["id", "profileID", "start", "end"], path: "pauses")
         }
     }
+    static func defaults(_ value: Any) throws {
+        guard let defaults = value as? [String: Any], defaults.count <= 128 else { throw ScheduleError("Invalid activation defaults.") }
+        for item in defaults.values { _ = try fields(item, allowed: ["kind", "seconds", "applicationID", "applicationName"], path: "activation default") }
+    }
     static func automation(_ value: Any?) throws {
-        let object = try fields(value, allowed: ["periods", "pauses", "preferences"], path: "automation")
+        let object = try fields(value, allowed: ["periods", "pauses", "preferences", "activationDefaults"], path: "automation")
+        if let value = object["activationDefaults"] { try defaults(value) }
         if let value = object["periods"] { try periods(value) }
         if let value = object["pauses"] { try pauses(value) }
-        if let value = object["preferences"] { _ = try fields(value, allowed: ["launchAtLogin", "use24HourTime", "showClock", "showHelperProcesses", "menuSensors"], path: "preferences") }
+        if let value = object["preferences"] { _ = try fields(value, allowed: ["launchAtLogin", "use24HourTime", "showClock", "showHelperProcesses", "menuSensors", "shortcuts"], path: "preferences")
+            if let shortcuts = (value as? [String: Any])?["shortcuts"] as? [String: Any] {
+                for binding in shortcuts.values { _ = try fields(binding, allowed: ["keyCode", "modifiers", "key"], path: "shortcut") }
+            } }
     }
     static func root(_ data: Data) throws -> [String: Any] {
         guard !data.isEmpty, data.count <= 1_048_576 else { throw ScheduleError("Import must be between 1 byte and 1 MiB.") }

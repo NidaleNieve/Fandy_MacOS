@@ -85,7 +85,7 @@ public struct ControlMachine: Sendable {
         guard verified else { state = .fault; fault = ControlError.restorationUnverified.localizedDescription; return }
         governor.reset(); percent = 0
         if automaticAtIdle && selected.kind != .system { state = .customActive }
-        else { state = .system; if !restorationIsFault { fault = nil } }
+        else { state = .system; if !restorationIsFault || fault == ControlError.restorationUnverified.localizedDescription { fault = nil } }
     }
 }
 

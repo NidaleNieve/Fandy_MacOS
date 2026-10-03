@@ -15,7 +15,9 @@ import ServiceManagement
     var blockedScheduleID: UUID?
     var scheduleReview: ScheduleReview?
     var sensorMenu = SensorMenuModel()
+    var shortcutErrors: [String: String] = [:]
     let wallClock: @Sendable () -> Date
+    let applicationCatalog: @MainActor () -> [RunningProcess]
     var isQuitting: Bool { quitting }
     func clockNow() -> Double { clock() }
     var editorSelection = "system-plus"
@@ -52,7 +54,7 @@ import ServiceManagement
     let editorHistory = UndoManager()
     private var groupedOriginal: Profile?
     private var failedConfiguration: (profiles: [Profile], automation: AutomationConfiguration, selection: String, restore: Bool)?
-    private var failedCollection: (profiles: [Profile], selection: String, release: Bool)?
+    private var failedCollection: (profiles: [Profile], selection: String)?
     private var historyRevision: UInt64 = 0
     var canUndo: Bool { _ = historyRevision; return editorHistory.canUndo }
     var canRedo: Bool { _ = historyRevision; return editorHistory.canRedo }
@@ -76,12 +78,13 @@ import ServiceManagement
          capabilities: HardwareCapabilities? = nil, helperAvailable: (@MainActor () -> Bool)? = nil,
          powerCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
          wallClock: @escaping @Sendable () -> Date = { Date() },
+         applicationCatalog: @escaping @MainActor () -> [RunningProcess] = { ProcessCatalog.list(includeHelpers: false) },
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
         self.capabilities = capabilities ?? SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel())
         self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : self.capabilities.chipPolicy)
-        self.clock = clock; self.wallClock = wallClock; self.powerCenter = powerCenter
+        self.clock = clock; self.wallClock = wallClock; self.applicationCatalog = applicationCatalog; self.powerCenter = powerCenter
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         store = ProfileStore(url: storeURL ?? root.appendingPathComponent("Fandy/profiles.json"))
         persistence = ProfilePersistence(store: store)
@@ -157,7 +160,7 @@ import ServiceManagement
         return switch machine.state {
         case .system: "System"
         case .initializingCustom: "Starting \(machine.selected.name)…"
-        case .customActive: "\(machine.selected.name) · \(Int(machine.percent.rounded()))%"
+        case .customActive: machine.selected.name
         case .restoringSystem: "Returning to System…"
         case .fault: "Fan state unverified"
         }
@@ -182,6 +185,11 @@ import ServiceManagement
         guard loop == nil, !quitting else { return }
         observePower(); configureLogin()
         loop = Task { [weak self] in
+            // First-launch/reconnect handback is an actual verified transaction, not
+            // an assumed state or a temperature-gated operation.
+            if let self, !self.simulation, self.capabilities.canRestore, self.helperAvailable() {
+                if let effect = try? self.machine.select(BuiltInProfiles.system) { await self.execute(effect) }
+            }
             while !Task.isCancelled {
                 guard self != nil else { break }; await self?.tick()
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
@@ -191,7 +199,8 @@ import ServiceManagement
     func select(_ id: String, manual: Bool = true) {
         guard let profile = profiles.first(where: { $0.id == id }) else { return }
         if !canActivate(profile) { hardwareError = eligibility(profile).reason; return }
-        if manual && profile == machine.selected && machine.state == .customActive { activateForever(); return }
+        if manual && profile == machine.selected && (machine.state == .customActive || machine.state == .initializingCustom) { applyActivationDefault(profile); return }
+        if manual, !canUseActivationDefault(profile) { return }
         lifecycleToken = UUID(); requestedSimulation = simulation
         do {
             if !simulation && profile.kind != .system && !helperAvailable() {
@@ -203,8 +212,7 @@ import ServiceManagement
             }
             let effect = try machine.select(profile)
             if manual {
-                manualIntent = ActivationIntent(profileID: id)
-                activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
+                applyActivationDefault(profile)
             }
             logger.notice("Profile changed to \(profile.name, privacy: .public)")
             Task { await execute(effect) }
@@ -295,7 +303,7 @@ import ServiceManagement
             switch effect {
             case .restore(let generation):
                 if helperAvailable() && capabilities.canRestore {
-                    do { try await client.restoreAutomatic(); guard token == lifecycleToken else { return }; machine.restored(generation:generation,verified:true) }
+                    do { try await client.restoreAutomatic(); guard token == lifecycleToken else { return }; machine.restored(generation:generation,verified:true); hardwareError = nil }
                     catch { guard token == lifecycleToken else { return }; machine.restored(generation:generation,verified:false); hardwareError=error.localizedDescription }
                 } else {
                     // An observation-only build never acquired a lease and cannot release an
@@ -307,6 +315,7 @@ import ServiceManagement
                         try reading.validateFans(now: clock())
                         snapshot = reading
                         machine.restored(generation: generation, verified: reading.fans.allSatisfy { $0.mode == .automatic })
+                        if machine.state == .system { hardwareError = nil }
                     } catch { guard token == lifecycleToken else { return }; machine.restored(generation: generation, verified: false); hardwareError = error.localizedDescription }
                 }
             case .apply(let targets,let generation,_,let required):
@@ -327,6 +336,28 @@ import ServiceManagement
             do { try await mock.apply(targets, generation: generation); guard token == lifecycleToken else { return }; machine.applied(generation: generation) }
             catch { guard token == lifecycleToken else { return }; await execute(machine.fail(error)) }
         }
+    }
+    func registerConfigurationUndo(profiles previousProfiles: [Profile]? = nil, automation previousAutomation: AutomationConfiguration? = nil, selection previousSelection: String? = nil) {
+        let previousProfiles = previousProfiles ?? profiles, previousAutomation = previousAutomation ?? automation, previousSelection = previousSelection ?? editorSelection
+        editorHistory.registerUndo(withTarget: self) { target in
+            MainActor.assumeIsolated { target.restoreEditorConfiguration(previousProfiles, automation: previousAutomation, selection: previousSelection) }
+        }
+        editorHistory.setActionName("Change Configuration"); historyRevision &+= 1
+    }
+    private func restoreEditorConfiguration(_ next: [Profile], automation config: AutomationConfiguration, selection: String) {
+        guard !savingCollection, !quitting else { return }
+        do {
+            try PortableConfiguration(profiles: next, automation: config).validate()
+            registerConfigurationUndo()
+            let activeID = machine.selected.id
+            profiles = next; automation = config; editorSelection = selection; scheduleReview = nil
+            if let replacement = next.first(where: { $0.id == activeID }) {
+                if replacement != machine.selected {
+                    lifecycleToken = UUID(); let effect = try machine.select(replacement); Task { await execute(effect) }
+                }
+            } else { clearActivation(); select("system") }
+            draftError = nil; configureLogin(); scheduleSave()
+        } catch { draftError = error.localizedDescription }
     }
     func beginEditGroup() {
         guard groupedOriginal == nil, let edited, !edited.protected else { return }
@@ -360,7 +391,7 @@ import ServiceManagement
             profiles[index] = profile; draftError = nil; scheduleSave()
         } catch { draftError = error.localizedDescription }
     }
-    private func commitCollection(_ next: [Profile], selection: String, releaseDeleted: Bool = false) {
+    private func commitCollection(_ next: [Profile], selection: String) {
         guard !savingCollection, !quitting else { return }
         failedConfiguration = nil
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
@@ -372,12 +403,14 @@ import ServiceManagement
                 let ids = Set(next.map(\.id))
                 nextAutomation.periods.removeAll { !ids.contains($0.profileID) }
                 nextAutomation.pauses.removeAll { $0.profileID.map { !ids.contains($0) } ?? false }
+                nextAutomation.activationDefaults = nextAutomation.activationDefaults.filter { ids.contains($0.key) }
+                nextAutomation.preferences.shortcuts = nextAutomation.preferences.shortcuts.filter { $0.key == "menu" || ids.contains($0.key) }
                 try await persistence.save(next, selection: active, revision: revision, automation: nextAutomation)
-                automation = nextAutomation
-                profiles = next; editorSelection = selection; resetEditorHistory()
+                registerConfigurationUndo(); automation = nextAutomation
+                profiles = next; editorSelection = selection
                 unsavedChanges = false; saveError = nil; failedCollection = nil
-                if releaseDeleted && !quitting { select("system") }
-            } catch { failedCollection = (next, selection, releaseDeleted); saveError = "Profile changes could not be saved." }
+                if !next.contains(where: { $0.id == machine.selected.id }) && !quitting { select("system") }
+            } catch { failedCollection = (next, selection); saveError = "Profile changes could not be saved." }
         }
     }
     func create() {
@@ -386,11 +419,12 @@ import ServiceManagement
     }
     func duplicate() {
         guard let profile = edited else { return }; let copy = profile.duplicated()
-        commitCollection(profiles + [copy], selection: copy.id)
+        var config = automation; config.activationDefaults[copy.id] = config.activationDefaults[profile.id]
+        commitConfiguration(profiles: profiles + [copy], automation: config, selection: copy.id)
     }
     func delete() {
         guard let profile = edited, !profile.bundled else { return }
-        commitCollection(profiles.filter { $0.id != profile.id }, selection: "system-plus", releaseDeleted: machine.selected.id == profile.id)
+        commitCollection(profiles.filter { $0.id != profile.id }, selection: "system-plus")
     }
     func reset() {
         guard let original = BuiltInProfiles.all.first(where: { $0.id == editorSelection }), !original.protected else { return }; update(original)
@@ -403,7 +437,7 @@ import ServiceManagement
     func importProfiles(_ data: Data) {
         do {
             let imported = try ScheduledProfileInterchange.decode(data, existingCount: profiles.count)
-            reviewPeriods(imported.periods, pauses: imported.pauses, profiles: imported.profiles, replacing: imported.replacements)
+            reviewPeriods(imported.periods, pauses: imported.pauses, profiles: imported.profiles, replacing: imported.replacements, defaults: imported.activationDefaults)
         } catch { draftError = "Import rejected: \(error.localizedDescription)" }
     }
     func commitConfiguration(profiles next: [Profile], automation nextAutomation: AutomationConfiguration, selection: String, restore: Bool = false) {
@@ -428,7 +462,7 @@ import ServiceManagement
                     do { let effect = try machine.select(replacement); Task { await execute(effect) } }
                     catch { automationFailed(); await execute(machine.fail(error)) }
                 }
-                profiles = next; automation = nextAutomation; editorSelection = selection; resetEditorHistory()
+                registerConfigurationUndo(); profiles = next; automation = nextAutomation; editorSelection = selection
                 unsavedChanges = false; saveError = nil; configureLogin()
             } catch {
                 failedConfiguration = (next, nextAutomation, selection, restore)
@@ -498,7 +532,7 @@ import ServiceManagement
     }
     func save() {
         if let failed = failedConfiguration { commitConfiguration(profiles: failed.profiles, automation: failed.automation, selection: failed.selection, restore: failed.restore) }
-        else if let failed = failedCollection { commitCollection(failed.profiles, selection: failed.selection, releaseDeleted: failed.release) }
+        else if let failed = failedCollection { commitCollection(failed.profiles, selection: failed.selection) }
         else { Task { await saveLatest() } }
     }
     private func saveLatest() async {

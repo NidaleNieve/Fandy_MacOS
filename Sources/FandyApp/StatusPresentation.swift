@@ -2,6 +2,14 @@ import Foundation
 import FandyCore
 
 enum StatusPresentation {
+    /// Actual RPM as a fraction of reported maximum: stopped is 0%, regardless
+    /// of manual minimum. This is observation, not the engine's requested level.
+    static func observedFanPercent(_ fans: [Fan]) -> Double {
+        fans.compactMap { fan -> Double? in
+            guard fan.actualRPM.isFinite, fan.maximumRPM.isFinite, fan.maximumRPM > 0 else { return nil }
+            return min(100, max(0, fan.actualRPM / fan.maximumRPM * 100))
+        }.max() ?? 0
+    }
     static func temperature(_ reading: SensorReading?, now: Double, estimate: Bool = false) -> String {
         guard var display = reading else { return "Unavailable" }
         let candidate = display.health == .unverified

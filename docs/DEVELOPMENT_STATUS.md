@@ -1,4 +1,12 @@
-# Current checkpoint — 2026-10-03: timers and scheduling
+# Current checkpoint — 2026-10-03: recovery and menu/profile polish
+
+Verified restoration clears stale GUI/controller warnings; startup explicitly verifies handback and retries transient failures. Immediate menu checkmarks indicate selection, while Starting/Restoring remains separate from acknowledged control. Timers can be attached during initialization. Menu rows wrap within fixed content width and mouse-selected profiles/presets keep tracking open. Editable/searchable pickers use keyboard-capable native popovers, including a selectable clock.
+
+Unset global shortcuts, per-profile duration/app defaults, universal configuration Undo/Redo, contextual curve nodes, non-collapsible adjustable sidebar, corrected window-front ordering and earlier revision-two Gaming defaults are implemented. Existing edited Gaming curves survive migration. See [delivery behavior and verification](MENU_POLISH_DELIVERY.md). Software suite: 296 Swift / 33 tools; final sanitizer/build/installation results are in that report. Manual native appearance/shortcut input and physical active sleep/wake still need human review.
+
+---
+
+# Scheduling checkpoint — 2026-10-03
 
 Timers (minutes/hours/custom until/process instance), weekly ranges/overnight continuation, pauses, conflict subtraction/review, chatbot text import, complete configuration interchange, scheduled profile interchange, default-on login and configurable menu temperature/clock readouts are implemented. Manual intent takes precedence and expires through System; timers/process watches never resume from disk. The five-method helper and qualified fan engine are unchanged.
 
@@ -17,7 +25,7 @@ Transactional background profile persistence, grouped native Undo/Redo, keyboard
 
 ## Working production milestone
 
-**All six built-in profiles and eligible custom curves now work on the real Mac17,9.** The signed app starts in System with independent hardware monitoring. System immediately releases both fans to Apple. Max uses each fan's fresh reported maximum. System+, Gaming, Cool Chassis, School and custom curves use the qualified operational temperature policy. The menu checkmark requires acknowledgement; previews never masquerade as active control. System+/School may remain active while releasing ownership to Apple at idle.
+**All six built-in profiles and eligible custom curves now work on the real Mac17,9.** The signed app starts in System with independent hardware monitoring. System immediately releases both fans to Apple. Max uses each fan's fresh reported maximum. System+, Gaming, Cool Chassis, School and custom curves use the qualified operational temperature policy. The menu checkmark now indicates selection; Starting/Restoring stays distinct from acknowledged control. Previews never masquerade as active control. System+/School may remain active while releasing ownership to Apple at idle.
 
 The compiled stage is `qualifiedControl`, with `conservativeEnvelope` chip policy. Chip control is the maximum across a complete fixed 105-key Tp/Tm/Tg manifest, not a falsely certified CPU/GPU average. CPU/GPU estimates remain informational. Five operational chassis inputs are reviewed: Trackpad Ts0P, Actuator Ts1P, Left TaLP, Right TaRF and explicitly labelled **Top proximity TaTP**. Top is an airflow-scale proxy, not a claim that TG Pro's exact Top identity is settled. The three other proximity mappings remain informational and cannot raise demand. Missing members fail closed. This supersedes the previous inactive-envelope and maximum-only checkpoints; do not restart broad discovery or security work.
 

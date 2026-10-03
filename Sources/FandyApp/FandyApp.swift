@@ -20,10 +20,10 @@ struct FandyApp: App {
         if checking {
             Task {
                 try? await Task.sleep(for: .seconds(5))
-                let okay = model.machine.selected.id == "system" && model.machine.state == .system && model.tickCount >= 3 && model.snapshot != nil
+                let okay = model.machine.selected.id == "system" && model.machine.state == .system && model.tickCount >= 3 && model.snapshot != nil && model.hardwareError == nil
                 var report: [String: Any] = ["functionalCheck": okay ? "passed" : "failed", "ticks": model.tickCount,
                     "state": model.machine.state.rawValue, "simulation": model.simulation,
-                    "observedFanOwnership": model.ownership.rawValue, "helperHealth": model.helperHealth.rawValue,
+                    "observedFanOwnership": model.ownership.rawValue, "monitoringIssuePresent": model.hardwareError != nil, "helperHealth": model.helperHealth.rawValue,
                     "hardwareStage": model.capabilities.stage.rawValue,
                     "physicalWritesEnabled": model.capabilities.canRestore || model.capabilities.canControl,
                     "fanModes": model.snapshot?.fans.map { $0.mode.rawValue } ?? []]
@@ -43,6 +43,8 @@ struct FandyApp: App {
     private var menu: StatusMenu?
     private var profilesWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var shortcuts: GlobalShortcuts?
+    private var shortcutLoop: Task<Void, Never>?
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         guard let model else { return }
@@ -50,6 +52,18 @@ struct FandyApp: App {
         status.openProfiles = { [weak self] in self?.showProfiles() }
         status.openSettings = { [weak self] in self?.showSettings() }
         menu = status
+        guard !CommandLine.arguments.contains("--functional-check"), (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
+        let shortcuts = GlobalShortcuts(); self.shortcuts = shortcuts
+        shortcuts.invoke = { [weak self, weak model] action in
+            if action == "menu" { self?.menu?.show() } else { model?.toggleProfile(action) }
+        }
+        shortcutLoop = Task { [weak model, weak shortcuts] in
+            while !Task.isCancelled {
+                guard let model, let shortcuts else { return }
+                model.shortcutErrors = shortcuts.update(model.automation.preferences.shortcuts)
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
+        }
     }
     private func window<V: View>(_ title: String, size: NSSize, view: V) -> NSWindow {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -59,13 +73,25 @@ struct FandyApp: App {
     func showProfiles() {
         guard let model else { return }
         if profilesWindow == nil { profilesWindow = window("Fandy Profiles", size: NSSize(width: 760, height: 720), view: ProfileEditor(model: model)) }
-        profilesWindow?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        if let profilesWindow { present(profilesWindow) }
     }
     func showSettings() {
         guard let model else { return }
         if settingsWindow == nil { settingsWindow = window("Fandy Settings", size: NSSize(width: 500, height: 640), view: SettingsView(model: model)) }
-        settingsWindow?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        if let settingsWindow { present(settingsWindow) }
     }
+    private func present(_ window: NSWindow) {
+        menu?.item?.menu?.cancelTracking()
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.collectionBehavior.insert(.moveToActiveSpace)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil); window.orderFrontRegardless()
+        // Menu tracking can otherwise order a window behind the outgoing menu.
+        DispatchQueue.main.async { [weak window] in
+            guard let window else { return }; NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
+        }
+    }
+    func applicationWillTerminate(_ notification: Notification) { shortcutLoop?.cancel(); shortcuts?.stop() }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model else { return .terminateNow }
         if model.canTerminate { return .terminateNow }
