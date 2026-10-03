@@ -30,7 +30,12 @@ import FandyCore
     let url=directory.appendingPathComponent("profiles.json"),model=AppModel(storeURL:url,autoStart:false)
     model.editorSelection="school";var profile=model.edited!;profile.floor=15;model.update(profile)
     profile.floor=20;model.update(profile);profile.floor = .infinity;model.update(profile)
-    try await Task.sleep(for:.milliseconds(400))
+    #expect(model.unsavedChanges)
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+    // Wait for the save acknowledgement, not an assumed scheduler/disk speed.
+    let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+    while model.unsavedChanges && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(!model.unsavedChanges && model.saveError == nil)
     #expect(ProfileStore(url:url).load().profiles.first{$0.id=="school"}?.floor==20)
 }
 @MainActor @Test func customReorderingCannotDisplaceBuiltinsAndReportsBoundaries() async {
