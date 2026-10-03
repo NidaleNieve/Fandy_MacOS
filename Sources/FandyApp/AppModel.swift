@@ -32,6 +32,7 @@ import ServiceManagement
     private(set) var helperHealth: HelperHealth = .unavailable
     let capabilities: HardwareCapabilities
     var busy = false
+    var renameRequest: ProfileRenameRequest?
     var draftError: String?
     var curveInput: CurveInput = .chip
     var hardwareError: String?
@@ -399,7 +400,11 @@ import ServiceManagement
             failedCollection = nil; failedConfiguration = nil
             if groupedOriginal == nil { registerUndo(profiles[index]) }
             // The existing validated profile is retained if a draft is invalid.
-            if machine.selected.id == profile.id { lifecycleToken = UUID(); let effect = try machine.select(profile); Task { await execute(effect) } }
+            if machine.selected.id == profile.id {
+                var renamed = machine.selected; renamed.name = profile.name
+                if renamed == profile { try machine.updateSelectedName(from: profile) }
+                else { lifecycleToken = UUID(); let effect = try machine.select(profile); Task { await execute(effect) } }
+            }
             profiles[index] = profile; draftError = nil; scheduleSave()
         } catch { draftError = error.localizedDescription }
     }

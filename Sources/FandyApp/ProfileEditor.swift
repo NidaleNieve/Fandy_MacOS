@@ -14,6 +14,7 @@ struct ProfileEditor: View {
             ProfileWorkspace(model: model)
         }.frame(minWidth: 880, minHeight: 560)
         .sheet(item: $model.scheduleReview) { _ in ScheduleConflictSheet(model: model) }
+        .sheet(item: $model.renameRequest) { request in ProfileRenameSheet(model: model, request: request) }
         .disabled(model.savingCollection)
         .toolbar {
             ToolbarItem {
@@ -82,15 +83,16 @@ private struct ProfileWorkspace: View {
 }
 private struct ProfileDetail: View {
     @Bindable var model: AppModel
-    @State private var name = ""
     @State private var tab = EditorTab.curves
     enum EditorTab: String, CaseIterable { case curves = "Fan Curves", schedule = "Schedule", activation = "When Activated" }
     var body: some View {
         if let profile = model.edited {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    TextField("Profile name", text: $name).font(.headline).textFieldStyle(.plain).disabled(profile.protected)
-                        .onSubmit { var next = profile; next.name = name; model.update(next) }.accessibilityIdentifier("profile.name")
+                    Text(profile.name).font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+                    Button { model.requestRename(profile.id) } label: { Label("Rename", systemImage: "pencil") }
+                        .disabled(profile.protected).help(profile.protected ? "System and Max cannot be renamed" : "Rename profile")
+                        .accessibilityIdentifier("profile.rename")
                     Button(model.isSelected(profile.id) ? "Active" : "Use Profile") { model.select(profile.id) }
                         .disabled(model.isSelected(profile.id) || !model.canActivate(profile) || model.activationDefaultUnavailableReason(profile) != nil)
                 }
@@ -114,15 +116,15 @@ private struct ProfileDetail: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 12)
                 }
             }.padding(16)
-            .onAppear { name = profile.name }
-            .onChange(of: profile.id) { _, _ in name = profile.name }
-            .onChange(of: profile.name) { _, new in name = new }
+
         } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
     }
     @ViewBuilder private func fanControls(_ profile: Profile) -> some View {
         if profile.kind == .system { Text("Returns all fans to Apple automatic control.").foregroundStyle(.secondary) }
         else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
         else {
+            TemperatureTargetEditor(model: model, profile: profile)
+            Divider()
             CurveSection(profile: profile, input: .chip, model: model)
             if !model.simulation && model.capabilities.chipPolicy == .conservativeEnvelope {
                 Text("Chip uses the hottest reading in the reviewed chip-region envelope. CPU/GPU averages are estimates.")

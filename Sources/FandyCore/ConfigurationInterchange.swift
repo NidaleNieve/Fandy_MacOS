@@ -97,7 +97,8 @@ enum ImportValidation {
     }
     static func profiles(_ value: Any?) throws {
         for (index, entry) in try array(value, limit: 128, path: "profiles").enumerated() {
-            _ = try fields(entry, allowed: ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle"], path: "profiles[\(index)]")
+            _ = try fields(entry, allowed: ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle", "targetTemperature"], path: "profiles[\(index)]")
+            if let target = entry["targetTemperature"], !(target is NSNull) { _ = try fields(target, allowed: ["input", "celsius"], path: "targetTemperature") }
             for curve in try array(entry["curves"], limit: 4, path: "curves") {
                 _ = try fields(curve, allowed: ["input", "points", "enabled"], path: "curves")
                 for point in try array(curve["points"], limit: 32, path: "points") {

@@ -1,3 +1,11 @@
+# Current checkpoint — 2026-10-03: temperature goal and rename
+
+Editable profiles now have an optional target for Chip/Trackpad/Actuator/Airflow. Target demand joins curves/floor/chip guard by maximum; qualified complete fresh inputs remain mandatory. Old profiles keep target=nil; persistence/interchange/undo support the new metadata. Header Rename+pencil and native sidebar context Rename open a focused dialog. Name-only edits preserve active control generation; protected System/Max cannot change.
+
+314 Swift / 33 tool tests, full ASan and signed build pass. Installed startup passed five ticks in System/controlReady, modes 0/0 and no monitoring warning. See [temperature target delivery](TEMPERATURE_TARGET_DELIVERY.md) for behavior, tests and limits.
+
+---
+
 # Current checkpoint — 2026-10-03: compact native UI
 
 Ordinary menu actions now use AppKit rows; the custom blue hover style, excess padding/heights, extra Choose clicks and clock readout are removed. Bounded long-name/readout handling keeps the complete menu within 256 points in layout tests. Native actions close the menu normally. Menu shortcut is Toggle Menu.

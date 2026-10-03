@@ -131,8 +131,13 @@ public enum ProfileInterchange {
               let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               Set(root.keys) == ["version", "profiles"],
               let entries = root["profiles"] as? [[String: Any]], entries.count <= 128 else { throw ControlError.malformedMessage }
-        let allowed: Set<String> = ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle"]
+        let allowed: Set<String> = ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle", "targetTemperature"]
         guard entries.allSatisfy({ Set($0.keys).isSubset(of: allowed) }) else { throw ControlError.malformedMessage }
+        for entry in entries {
+            if let target = entry["targetTemperature"], !(target is NSNull) {
+                guard let fields = target as? [String: Any], Set(fields.keys).isSubset(of: ["input", "celsius"]) else { throw ControlError.malformedMessage }
+            }
+        }
         let archive = try JSONDecoder().decode(Archive.self, from: data)
         guard archive.version == 1, !archive.profiles.isEmpty, existingCount >= 0,
               archive.profiles.count <= 128, archive.profiles.count <= 128 - min(existingCount, 128),

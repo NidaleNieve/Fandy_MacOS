@@ -29,7 +29,8 @@ enum StatusPresentation {
             guard let demand = preview.byCurve[input] else { return nil }
             return "\(input.label): \(Int(demand.rounded()))%"
         }
-        return (curves + ["Floor: \(Int(floor.rounded()))%", "Chip guard: \(Int(preview.safetyPercent.rounded()))%"] ).joined(separator: " · ")
+        let target = preview.targetPercent.map { ["Target: \(Int($0.rounded()))%"] } ?? []
+        return (curves + target + ["Floor: \(Int(floor.rounded()))%", "Chip guard: \(Int(preview.safetyPercent.rounded()))%"] ).joined(separator: " · ")
     }
 
 }

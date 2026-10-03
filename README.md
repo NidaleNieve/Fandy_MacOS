@@ -6,6 +6,8 @@ A small native Apple Silicon macOS menu-bar fan controller with named profiles a
 
 Menu/profile polish includes optional global shortcuts, per-profile activation defaults, profile-only undo, direct secondary-click curve editing, a persistent adjustable sidebar, an observed fan-speed bar and native time/app popovers. [Current UI behavior and verification](docs/NATIVE_UI_DELIVERY.md).
 
+Editable profiles also support an optional target temperature for Chip, Trackpad, Actuator or Airflow. It adds cooling demand while curves and chip safety remain authoritative. Rename profiles using the visible pencil/Rename button or sidebar right-click menu; System and Max stay protected. [Details and verification](docs/TEMPERATURE_TARGET_DELIVERY.md).
+
 Chip control uses a separately named conservative **Chip envelope** across a fixed 105-key model manifest. CPU/GPU averages remain labelled estimates. Chassis control uses Trackpad, Actuator, Left/Right airflow and an explicitly labelled **Top proximity** input. These are reviewed operational inputs, not a claim that every physical sensor identity is certified. [Sensor evidence and limitations](docs/SENSOR_EVIDENCE.md).
 
 ## Build and run

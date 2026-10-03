@@ -94,3 +94,6 @@ Expiry checks run before/after acquisition and before dispatch, but ordinary tim
 ## Recovery presentation and activation defaults
 
 An actual verified handback clears a retained unverified-restoration fault; failure stays visible and continues retrying. Startup explicitly requests qualified System restoration before monitoring. Immediate menu checkmarks represent user selection, with pending control shown as Starting/Restoring. Timing conditions can be attached before acknowledgement without bypassing fresh input/lease gates. Per-profile durations/application conditions apply to manual activations, never resume from disk and never override scheduled ranges. A missing configured application blocks manual activation. Universal configuration undo never resurrects a runtime manual lease.
+
+
+An optional temperature goal adds cooling demand and cannot reduce curves, floor or immutable chip safety. It uses the same fresh/qualified input requirements; target-sensor failure returns to System. It is not a precision thermostat or a guaranteed achievable temperature. Response bands are profile-control choices, not asserted Apple critical thresholds.

@@ -10,7 +10,8 @@ struct ProfileSidebar: NSViewRepresentable {
     let activeID: String?
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
     func makeNSView(context: Context) -> NSScrollView {
-        let table = NSTableView()
+        let table = ContextTable()
+        table.contextMenuForRow = { [weak coordinator = context.coordinator] row in coordinator?.menu(for: row) }
         let column = NSTableColumn(identifier: .init("profile")); table.addTableColumn(column)
         table.headerView = nil; table.rowHeight = 30; table.intercellSpacing = .init(width: 0, height: 2)
         table.style = .sourceList
@@ -24,6 +25,10 @@ struct ProfileSidebar: NSViewRepresentable {
         return scroll
     }
     func updateNSView(_ view: NSScrollView, context: Context) { context.coordinator.update() }
+    @MainActor final class ContextTable: NSTableView {
+        var contextMenuForRow: (Int) -> NSMenu? = { _ in nil }
+        override func menu(for event: NSEvent) -> NSMenu? { contextMenuForRow(row(at: convert(event.locationInWindow, from: nil))) }
+    }
     @MainActor final class Coordinator: NSObject, NSTableViewDelegate, NSTableViewDataSource {
         let model: AppModel
         weak var table: NSTableView?
@@ -67,6 +72,19 @@ struct ProfileSidebar: NSViewRepresentable {
         func tableViewSelectionDidChange(_ notification: Notification) {
             guard !updating, !model.savingCollection, !model.isQuitting, let table, rows.indices.contains(table.selectedRow) else { return }
             model.editorSelection = rows[table.selectedRow].id
+        }
+        func menu(for row: Int) -> NSMenu? {
+            guard rows.indices.contains(row), let profile = model.profiles.first(where: { $0.id == rows[row].id }) else { return nil }
+            let menu = NSMenu(); menu.autoenablesItems = false
+            let rename = NSMenuItem(title: "Rename…", action: #selector(rename(_:)), keyEquivalent: "")
+            rename.target = self; rename.representedObject = profile.id
+            rename.image = NSImage(systemSymbolName: "pencil", accessibilityDescription: nil)
+            rename.isEnabled = !profile.protected && !model.savingCollection && !model.isQuitting
+            menu.addItem(rename)
+            return menu
+        }
+        @objc private func rename(_ item: NSMenuItem) {
+            guard let id = item.representedObject as? String else { return }; model.requestRename(id)
         }
         @objc func activate(_ sender: NSTableView) { activateRow(sender.clickedRow) }
         func activateRow(_ row: Int) {

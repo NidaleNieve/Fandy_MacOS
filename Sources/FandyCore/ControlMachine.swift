@@ -20,6 +20,13 @@ public struct ControlMachine: Sendable {
     private var restorationIsFault = false
     public let chipPolicy: ChipControlPolicy
     public init(chipPolicy: ChipControlPolicy = .cpuGPU) { self.chipPolicy = chipPolicy }
+    /// Presentation-only edits cannot restart a lease or change cooling policy.
+    public mutating func updateSelectedName(from profile: Profile) throws {
+        try profile.validate()
+        var renamed = selected; renamed.name = profile.name
+        guard renamed == profile else { throw ControlError.invalidProfile("Only the selected profile name may change here.") }
+        selected = profile
+    }
     public mutating func select(_ profile: Profile) throws -> ControlEffect {
         try profile.validate() // Invalid edits never replace the running configuration.
         guard generation < UInt64.max else { throw ControlError.staleSession }

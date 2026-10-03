@@ -7,6 +7,7 @@ public struct ProfilePreview: Sendable, Equatable {
     public let percent: Double
     public let safetyPercent: Double
     public let byCurve: [CurveInput: Double]
+    public let targetPercent: Double?
     public let usesCandidates: Bool
 }
 public enum ShadowProfileEngine {
@@ -20,6 +21,6 @@ public enum ShadowProfileEngine {
         }
         let demand = try ProfileEngine().evaluate(profile, snapshot: informational, now: now, chipPolicy: chipPolicy)
         return ProfilePreview(profileID: profile.id, snapshotID: snapshot.id, percent: demand.percent,
-                              safetyPercent: demand.safetyPercent, byCurve: demand.byCurve, usesCandidates: candidates)
+                              safetyPercent: demand.safetyPercent, byCurve: demand.byCurve, targetPercent: demand.targetPercent, usesCandidates: candidates)
     }
 }

@@ -9,14 +9,15 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
     public var curves: [FanCurve]
     public var floor: Double
     public var automaticAtIdle: Bool
-    public init(id: String = UUID().uuidString, name: String, kind: ProfileKind = .custom, bundled: Bool = false, curves: [FanCurve], floor: Double = 0, automaticAtIdle: Bool = false) {
-        self.id = id; self.name = name; self.kind = kind; self.bundled = bundled; defaultRevision = 1; self.curves = curves; self.floor = floor; self.automaticAtIdle = automaticAtIdle
+    public var targetTemperature: TemperatureTarget?
+    public init(id: String = UUID().uuidString, name: String, kind: ProfileKind = .custom, bundled: Bool = false, curves: [FanCurve], floor: Double = 0, automaticAtIdle: Bool = false, targetTemperature: TemperatureTarget? = nil) {
+        self.id = id; self.name = name; self.kind = kind; self.bundled = bundled; defaultRevision = 1; self.curves = curves; self.floor = floor; self.automaticAtIdle = automaticAtIdle; self.targetTemperature = targetTemperature
     }
     public var protected: Bool { id == "system" || id == "max" }
     public var requiredSensors: Set<SensorRole> { requiredSensors(chipPolicy: .cpuGPU) }
     public func requiredSensors(chipPolicy: ChipControlPolicy) -> Set<SensorRole> {
         if kind == .system || kind == .maximum { return [] }
-        return curves.filter(\.enabled).reduce(chipPolicy.required) { $0.union($1.input.required(chipPolicy: chipPolicy)) }
+        return curves.filter(\.enabled).reduce(chipPolicy.required) { $0.union($1.input.required(chipPolicy: chipPolicy)) }.union(targetTemperature?.input.required(chipPolicy: chipPolicy) ?? [])
     }
     public func validate() throws {
         guard !id.isEmpty, id.utf8.count <= 128, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 80,
@@ -25,6 +26,7 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
         if protected {
             guard let original = BuiltInProfiles.all.first(where: { $0.id == id }), self == original else { throw ControlError.invalidProfile("System and Max are protected.") }
         } else { guard kind == .custom else { throw ControlError.invalidProfile("Only System and Max may use special modes.") } }
+        try targetTemperature?.validate()
         try curves.forEach { try $0.validate() }
     }
     public func duplicated() -> Profile {
@@ -58,6 +60,7 @@ public struct Demand: Sendable, Equatable {
     public var percent: Double
     public var safetyPercent: Double
     public var byCurve: [CurveInput: Double]
+    public var targetPercent: Double? = nil
 }
 public struct ProfileEngine: Sendable {
     public init() {}
@@ -70,6 +73,7 @@ public struct ProfileEngine: Sendable {
         let safety = try guardCurve.evaluate(guardCurve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy))
         var byCurve: [CurveInput: Double] = [:]
         for curve in profile.curves where curve.enabled { byCurve[curve.input] = try curve.evaluate(curve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy)) }
-        return Demand(percent: profile.kind == .maximum ? 100 : max(profile.floor, byCurve.values.max() ?? 0, safety), safetyPercent: safety, byCurve: byCurve)
+        let target = try profile.targetTemperature?.demand(in: snapshot, now: now, chipPolicy: chipPolicy)
+        return Demand(percent: max(profile.floor, byCurve.values.max() ?? 0, safety, target ?? 0), safetyPercent: safety, byCurve: byCurve, targetPercent: target)
     }
 }
