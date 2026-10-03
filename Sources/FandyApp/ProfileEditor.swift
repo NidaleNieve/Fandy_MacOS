@@ -140,7 +140,7 @@ struct CurveSection: View {
                 Spacer()
                 Button("Reset Curve") { resetCurve() }.font(.caption)
             }
-            CurveEditor(curve: curve, resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve), onBegin: model.beginEditGroup, onEnd: model.endEditGroup, onChange: commit).id(profile.id + input.rawValue).disabled(!curve.enabled).opacity(curve.enabled ? 1 : 0.5)
+            CurveEditor(curve: curve, resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve), onBegin: { model.beginEditGroup() }, onEnd: { model.endEditGroup() }, onChange: { commit($0) }).id(profile.id + input.rawValue).disabled(!curve.enabled).opacity(curve.enabled ? 1 : 0.5)
         }
     }
     func resetCurve() {
@@ -197,7 +197,7 @@ struct SettingsView: View {
                 if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
             }
             Section("Backend") {
-                Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: model.setSimulation))
+                Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: { model.setSimulation($0) }))
                 Text("Live mode reads sensors and runs the selected profile.").font(.caption).foregroundStyle(.secondary)
                 if model.simulation {
                     Picker("Scenario", selection: $model.scenario) { ForEach(MockScenario.allCases) { Text($0.rawValue).tag($0) } }
