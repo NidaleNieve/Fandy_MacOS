@@ -8,8 +8,9 @@ import struct
 import subprocess
 import zlib
 
-# Only this reviewed, demo-data app rendering may be committed as a binary.
-PUBLIC_IMAGES = {'docs/images/profiles.png'}
+# Only these reviewed, demo-data captures may be committed as binaries.
+# Retain the prior image path for historical-content audits.
+PUBLIC_IMAGES = {'docs/images/profiles.png', 'docs/images/menu.png', 'docs/images/curve.png'}
 
 
 def png_problems(content):

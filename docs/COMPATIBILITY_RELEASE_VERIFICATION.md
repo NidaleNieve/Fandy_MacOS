@@ -1,5 +1,7 @@
 # Compatibility release verification — 2026-10-04
 
+**Distribution update:** the current build 8 GitHub release is Developer ID-signed, notarized and stapled; see [current release verification](GITHUB_RELEASE.md). The older build 2 measurements and test-artifact record below are retained as historical evidence.
+
 Version **0.2.0 (2)**, arm64, deployment target macOS 15. The native signed Release build passes on the available Mac17,9 M5 Pro. Local runtime is macOS 27; an older macOS runtime was not available. No M1–M4 or other M5 hardware was available. [Compatibility matrix and source evidence](COMPATIBILITY.md).
 
 ## Software verification

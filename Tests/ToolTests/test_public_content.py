@@ -48,7 +48,8 @@ class PublicContentTests(unittest.TestCase):
 
     def test_only_reviewed_metadata_free_app_image_is_allowed(self):
         png = self.png()
-        self.assertFalse(module.scan('docs/images/profiles.png', png))
+        for path in module.PUBLIC_IMAGES:
+            self.assertFalse(module.scan(path, png))
         self.assertTrue(module.scan('docs/images/unreviewed.png', png))
         self.assertTrue(module.scan('docs/images/profiles.png', b'not a PNG'))
         self.assertTrue(module.scan('docs/images/profiles.png', png + b'trailing private data'))

@@ -1,45 +1,36 @@
 # GitHub release verification
 
-Published October 4, 2026 as Fandy 0.2.0, build 8, tagged at `10c090b`. The release uses the tested application from source commit `63267a4`; subsequent publication changes add documentation and static SVG illustrations only.
+Updated October 4, 2026 for **Fandy 0.2.0, build 8**. The release retains tag commit `175270d` and application source `895537d`; subsequent changes cover publication documentation and screenshots. The application was re-signed for Developer ID distribution and notarized.
 
 ## Public download
 
 [Release page](https://github.com/NidaleNieve/Fandy_MacOS/releases/tag/v0.2.0) · [DMG](https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.0/Fandy-0.2.0-arm64.dmg)
 
-The assets include the DMG, its SHA-256 checksum and a machine-readable verification report. All three were downloaded anonymously from the public release and matched their local SHA-256 hashes. The README's latest-release direct download was independently checked. The DMG is 2,116,364 bytes.
+The release contains only the notarized DMG. Checksum and verification-report attachments were removed at the owner's request; local verification records remain available for development. Both the versioned download and README's latest-release download were retrieved anonymously and matched the verified local image.
 
 The image contains Fandy.app and an Applications shortcut; required license notices are inside the application. It contains no personal profiles, schedules, logs, measurements, signing configuration or debug symbols.
 
-SHA-256:
-
-```text
-5e113e56ff60b4dac04a84162405b91de3bf4366967b111bb70320842993ed84
-```
-
 ## Validation and limits
 
-- 375 Swift tests and 46 tool tests passed for the application changes.
-- A signed arm64 Release build, matching app/helper identities, hardened runtime, absence of debug entitlements, payload privacy, image integrity and read-only mounted contents were verified.
+- The application changes passed 375 Swift tests, 46 tool tests and signed arm64 Release compilation. The documentation image-policy changes pass 48 tool tests. The complete Swift suite was not rerun for these documentation-only changes.
+- The final app and image use **Developer ID Application** signing. Matching app/helper identities, hardened runtime and payload privacy pass the packaging verifier.
+- App and DMG notarization tickets are stapled and validate successfully. App execution and image-opening Gatekeeper assessments pass. Disk-image integrity and read-only mounted contents pass verification; the mounted app reports build 8.
 - M5 Pro fan-control evidence is local. Other M1–M5 MacBook Pro support is reference-derived and subject to runtime metadata/sensor checks. This release does not establish physical compatibility on inaccessible Macs.
-- The image is Apple Development-signed and **unnotarized**. Its certificate necessarily contains the developer identity; the owner accepted that disclosure. Developer ID signing and notarization remain necessary for smooth public installation.
+- Apple certificates necessarily disclose the signer identity; the owner accepted that disclosure. Private signing configuration and credentials remain outside Git.
 - The current root-helper/undocumented SMC architecture is not cleared for the Mac App Store. See [the assessment](APP_STORE_READINESS.md).
 
 ## Privacy audit
 
-Before publication, all 38 reachable Git commits and 629 unique blobs were scanned, including historical content and commit identities. No private-source/history findings were detected. Newly added publication documents and illustrations also pass the public-content checker across all 189 staged text files. Git authors use a project identity, and third-party license attribution remains intact.
+Before initial publication, all 38 reachable Git commits and 629 unique blobs were scanned, including historical content and commit identities. No private-source/history findings were detected. No history rewrite was necessary. Git authors use a project identity, and third-party license attribution remains intact. Subsequent publication updates also pass the staged public-content checker.
 
-No history rewrite was necessary. The audit intentionally preserves the public project/domain identifiers and legally required third-party credits. Apple certificate identity is the explicit distribution exception; private signing configuration and credentials remain outside Git.
+## Screenshots
 
-## Next distribution work
+The README shows two focused Retina captures: Fandy's actual native menu and its shipped chip curve editor. Each uses an isolated simulation model with built-in profiles and demo readings, separate from the installed controller. No personal profiles or schedules are shown. PNG ancillary metadata was stripped, and both images were visually reviewed.
 
-1. Configure a Developer ID Application certificate and notarization credentials privately, then rebuild, notarize, staple and assess the image using the existing distribution script.
-2. Collect real installation and hardware feedback from other MacBook Pro models; do not convert reference support into a physical-testing claim without observations.
-3. Resolve the App Store architecture blockers before preparing a Store archive or claiming Store readiness.
+The public-content checker permits only specifically reviewed image paths and validates PNG structure, checksums and allowed non-text chunks. Other binary artifacts remain rejected. The images are shown separately at compact widths; customizable temperature readings inside the menu are documented explicitly.
 
-This publication did not replace the running app, change user profiles or permissions, or issue fan commands.
+## Remaining work
 
-## Documentation revision
+Collect installation and hardware feedback from other MacBook Pro models. Reference support remains distinct from physical testing. Resolve the App Store architecture blockers before preparing a Store submission. Existing physical sleep/wake and subjective calibration follow-ups remain; notarization does not replace them.
 
-The README now uses a PNG rendered from the shipped `ProfileEditor` views, replacing the SVG interface illustration. Rendering used an isolated simulation model with built-in profiles and demo readings; the window remained hidden. The image was visually reviewed and embedded EXIF metadata removed. The public-content checker permits only the specifically reviewed image path and validates PNG structure, checksums and allowed non-text chunks. All other binary artifacts remain rejected.
-
-48 tool tests pass after the image-policy tests were added. The app-view render also compiled and completed successfully. Only documentation, assets and publication tooling changed; the downloadable build 8 app and checksum are unchanged. Release notes now contain the download, installation and signing status only. Notarization instructions are in [Distribution](DISTRIBUTION.md).
+This publication did not replace the running app, change user profiles or helper permissions, or issue fan commands.

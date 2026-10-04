@@ -27,6 +27,6 @@ Apple’s [SMAppService guidance](https://developer.apple.com/forums/thread/8024
 
 ## Direct download now
 
-The signed DMG can be published on GitHub. It currently uses Apple Development signing and lacks notarization, so it may be blocked on other Macs. Configure a Developer ID Application certificate and a private notarytool keychain profile, then use `Scripts/distribute.py` to sign, notarize, staple and verify the app and image. No certificate or notarization credential is committed to Git. The signer’s identity is part of Apple’s certificate and remains visible; the owner has explicitly accepted this for public releases.
+The GitHub DMG is Developer ID-signed, notarized and stapled. App and image signatures, tickets and Gatekeeper assessment pass. Distribution uses `Scripts/distribute.py`; no certificate or notarization credential is committed to Git. The signer’s identity is part of Apple’s certificate and remains visible; the owner has explicitly accepted this for public releases.
 
 No claim of App Store readiness, private entitlement approval, physical compatibility on inaccessible Macs or guaranteed recovery while the helper is dead is made.

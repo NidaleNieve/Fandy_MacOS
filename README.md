@@ -9,10 +9,11 @@
   · <a href="docs/INSTALLATION.md">Installation help</a>
   · <a href="https://github.com/NidaleNieve/Fandy_MacOS/issues">Report an issue</a>
 </p>
-<p align="center">Apple Silicon MacBook Pro · macOS 15 or later</p>
+<p align="center">Apple Silicon MacBook Pro · macOS 15 or later · Signed &amp; notarized</p>
 
-![Fandy's profile editor](docs/images/profiles.png)
-<p align="center"><sub>Rendered from Fandy’s app views using demo readings.</sub></p>
+<p align="center">
+  <img src="docs/images/menu.png" width="238" alt="Fandy menu with cooling profiles, fan speed and customizable temperatures">
+</p>
 
 Fandy is a native menu-bar fan controller and temperature monitor. View chip and chassis temperatures alongside fan speeds, switch cooling profiles, and schedule cooling around your day.
 
@@ -21,8 +22,6 @@ Fandy is a native menu-bar fan controller and temperature monitor. View chip and
 1. Download the **DMG**, open it, and drag **Fandy** into **Applications**.
 2. Open Fandy. Its setup window guides you to enable **Background App Activity** in System Settings.
 3. Click the fan icon in the menu bar and choose a profile.
-
-> **Notarization is pending.** macOS may block this release; see [installation help](docs/INSTALLATION.md).
 
 ## Pick your cooling style
 
@@ -38,11 +37,16 @@ Fandy is a native menu-bar fan controller and temperature monitor. View chip and
 
 Create and edit custom profiles with intuitive graphs for chip and chassis temperatures. Drag curve points or set a target temperature in **Edit Profiles…**.
 
+<p align="center">
+  <img src="docs/images/curve.png" width="440" alt="Fandy’s editable Gaming chip fan curve">
+  <br><sub>Actual app captures with demo readings.</sub>
+</p>
+
 ## Fit it around your day
 
 - **Temporary cooling:** activate a profile for minutes or hours, until a time, or until an application closes.
 - **Schedules:** choose weekday periods, overnight schedules and vacation pauses.
-- **Temperature monitoring:** see CPU, GPU, trackpad and other available sensor readings beside the profile editor. Choose which temperatures appear in the menu.
+- **Customizable menu temperatures:** choose the sensor readings shown inside the menu, including CPU/GPU averages and chassis temperatures. Live readings are also available beside the profile editor.
 - **At a glance:** show fan speeds and assign keyboard shortcuts.
 - **Make it portable:** export individual profiles with their schedules, or move your whole configuration to another Mac.
 

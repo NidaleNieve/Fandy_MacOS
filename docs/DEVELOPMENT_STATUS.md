@@ -1,4 +1,14 @@
-# Current checkpoint — 2026-10-04: Cool Chassis migration and named exports
+# Current checkpoint — 2026-10-04: notarized GitHub delivery
+
+Fandy 0.2.0 build 8 is Developer ID-signed, notarized and stapled. The verified artifacts are in ignored `build/Distribution-Notarized-0.2.0`; app/image tickets, signatures, Gatekeeper, mounted build/payload privacy and image integrity pass. The public v0.2.0 DMG is replaced with that artifact. Only the DMG remains attached, as requested; checksum and verification files stay local. Both public download links match SHA-256 `e7fc0c7f32500f2b8f0c2cc6e8893ae8e27106b855b3a695f7f8375a5787d510`.
+
+README screenshots now show the real native menu and one focused curve at Retina resolution with isolated demo data. Metadata is stripped, and the customizable menu temperatures are described. Pending-notarization notices are removed from current installation/release documentation. 48 publication/tool tests pass; the prior 375 Swift tests and build 8 code remain unchanged. No full Swift rerun, installation replacement, fan commands or helper approval changes occurred during publication. See [release verification](GITHUB_RELEASE.md).
+
+Next: collect the user's M1/other-Mac installation feedback and address specific reproducible issues. Physical compatibility beyond M5 Pro, actual sleep/wake follow-up and subjective comfort/gaming calibration remain open. App Store distribution still requires an architecture decision; direct-download notarization is complete. Preserve private profiles and signing credentials. Do not repeat broad hardware qualification for documentation work.
+
+---
+
+# Previous checkpoint — 2026-10-04: Cool Chassis migration and named exports
 
 0.2.0 build 8 matches the latest supplied Cool Chassis export: minimum airflow 0, Trackpad unchanged from build 7, Actuator starting 25°C/0% then 27.1°C/22%, and Airflow 32°C/0% then 35.5°C/18%. Factory revision is 3. Persistence upgrades only exact unchanged revision-1/revision-2 factory definitions; custom modifications are preserved. This fixes saved old defaults retaining their 20% floor. Reset to Default also uses the new definition. The private export file and point identities are excluded from Git.
 
