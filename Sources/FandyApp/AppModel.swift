@@ -12,6 +12,7 @@ import ServiceManagement
     var activationDeadline: Double?
     var watchedProcessName: String?
     var previousDefaultProfileID = "system"
+    private var defaultSelectionRevision: UInt64 = 0
     var defaultResumeBlocked = false
     var helperSetupStatus: SMAppService.Status = .notRegistered
     var helperSetupError: String?
@@ -439,7 +440,7 @@ import ServiceManagement
         guard !savingCollection, !quitting else { return }
         failedConfiguration = nil
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
-        let revision = saveRevision, active = machine.selected.id, admittedToken = lifecycleToken
+        let revision = saveRevision, active = machine.selected.id, admittedToken = lifecycleToken, admittedDefaultRevision = defaultSelectionRevision
         collectionTask = Task {
             var resave = false
             defer { savingCollection = false; collectionTask = nil; if resave { scheduleSave() } }
@@ -452,7 +453,7 @@ import ServiceManagement
                 if !ids.contains(nextAutomation.preferences.defaultProfileID) { nextAutomation.preferences.defaultProfileID = "system" }
                 nextAutomation.preferences.shortcuts = nextAutomation.preferences.shortcuts.filter { $0.key == "menu" || ids.contains($0.key) }
                 try await persistence.save(next, selection: active, revision: revision, automation: nextAutomation)
-                if lifecycleToken != admittedToken {
+                if lifecycleToken != admittedToken || defaultSelectionRevision != admittedDefaultRevision {
                     let latestDefault = automation.preferences.defaultProfileID
                     nextAutomation.preferences.defaultProfileID = ids.contains(latestDefault) ? latestDefault : "system"
                     resave = true
@@ -497,14 +498,14 @@ import ServiceManagement
         catch { draftError = error.localizedDescription; return }
         failedCollection = nil; failedConfiguration = nil
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
-        let revision = saveRevision, admittedToken = lifecycleToken
+        let revision = saveRevision, admittedToken = lifecycleToken, admittedDefaultRevision = defaultSelectionRevision
         collectionTask = Task {
             var resave = false
             defer { savingCollection = false; collectionTask = nil; if resave { scheduleSave() } }
             do {
                 try await persistence.save(next, selection: "system", revision: revision, automation: nextAutomation)
                 var publishedAutomation = nextAutomation
-                if lifecycleToken != admittedToken {
+                if lifecycleToken != admittedToken || defaultSelectionRevision != admittedDefaultRevision {
                     let latestDefault = automation.preferences.defaultProfileID
                     publishedAutomation.preferences.defaultProfileID = next.contains { $0.id == latestDefault } ? latestDefault : "system"
                     resave = true
@@ -523,7 +524,12 @@ import ServiceManagement
                 reconcileApplicationRules(publishedAutomation); registerConfigurationUndo(); profiles = next; automation = publishedAutomation; editorSelection = selection
                 unsavedChanges = false; saveError = nil; configureLogin()
             } catch {
-                failedConfiguration = (next, nextAutomation, selection, restore)
+                var retryAutomation = nextAutomation
+                if defaultSelectionRevision != admittedDefaultRevision {
+                    let latestDefault = automation.preferences.defaultProfileID
+                    retryAutomation.preferences.defaultProfileID = next.contains { $0.id == latestDefault } ? latestDefault : "system"
+                }
+                failedConfiguration = (next, retryAutomation, selection, restore)
                 saveError = "Configuration was not changed: storage failed. Retry when storage is available."
             }
         }
@@ -589,6 +595,15 @@ import ServiceManagement
             do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
             await self?.saveLatest()
         }
+    }
+    func saveDefaultPreference() {
+        defaultSelectionRevision &+= 1
+        if var failed = failedConfiguration {
+            let selected = automation.preferences.defaultProfileID
+            failed.automation.preferences.defaultProfileID = failed.profiles.contains { $0.id == selected } ? selected : "system"
+            failedConfiguration = failed
+        }
+        save()
     }
     func save() {
         if let failed = failedConfiguration { commitConfiguration(profiles: failed.profiles, automation: failed.automation, selection: failed.selection, restore: failed.restore) }

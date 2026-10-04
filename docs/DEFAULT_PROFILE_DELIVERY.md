@@ -17,19 +17,19 @@ Fandy uses a signed privileged background helper, not a system extension. On sup
 
 ## Verification
 
-- 357 Swift tests pass: 48 hardware, 191 core, 118 app. The nine added tests cover saved-default restart, scheduled gaps/end, active-schedule restart, explicit System during a schedule, reversible Until Changed, temporary activation, sensor-failure/deletion behavior, permission presentation and portable preference validation. Existing concurrency tests now also assert remembered selections survive asynchronous imports/deletions.
+- 359 Swift tests pass: 48 hardware, 191 core, 120 app. The eleven added tests cover saved-default restart, scheduled gaps/end, active-schedule restart, explicit System during a schedule, reversible Until Changed, temporary activation, sensor-failure/deletion behavior, permission presentation and portable preference validation. Two reproduced save races are also covered: reselecting an already-active profile during duplication, and retrying failed configuration storage after a new default selection. Both now retain the identifier in memory and on disk. Existing concurrency tests assert remembered selections survive asynchronous imports/deletions.
 - 46 Python tool tests pass.
 - One-job signed arm64 Release build passes; deployment minimum remains macOS 15. App/helper identifiers and private signing configuration are unchanged.
 - Installed update followed verified automatic restoration, normal GUI termination, verified unregistration, complete signed-bundle replacement and native reregistration. Helper/login registration remained enabled. Personal profile files were preserved; the existing Cool Chassis selection was migrated privately into the new preference before the normal app reopened.
 - The temporary-store live startup check passed five ticks: System, helper controlReady, modes 0/0, no monitoring warning.
-- Two normal launches produced fresh Cool Chassis records. Between them normal Quit retained the preference and independent mode observations verified automatic handback on both fans. The delivered app remains running Cool Chassis. Its observed modes were automatic at the current low demand; this is not evidence of a new manual-control qualification.
+- Two normal launches produced fresh Cool Chassis records. Between them normal Quit retained the preference and independent mode observations verified automatic handback on both fans. The delivered app remains running Cool Chassis. The initial low-demand records were automatic. A subsequent independent final observation confirmed both modes 1 while Cool Chassis demanded cooling. This is ordinary operation, not a new manual-control qualification.
 - Permission-denied presentation is covered by injected registration-status/model/native-menu tests. This already-approved machine was not deliberately deauthorized. Native layout and actual approval dialogs remain subject to human review; no screenshots or GUI automation were used.
 
 ## Package
 
-`build/Distribution/Default-Profile-0.2.0-build4/Fandy-0.2.0-arm64-Test.dmg`
+`build/Distribution/Default-Profile-Final-0.2.0-build4/Fandy-0.2.0-arm64-Test.dmg`
 
-SHA-256: `b3fa8c54edc223cfccddbc6eccb403ae2f953ffe2a6f072ff2d9383c015f02b2`.
+SHA-256: `e65d260c0d3a78b7ea357250d789542ff0dd5f4da718ce1c20e1a23ff5f26cd2`.
 
 The mounted image contains only Fandy.app and an Applications shortcut. Required license notices remain inside the signed bundle. App/helper signatures, matching identity, hardened runtime, arm64 architecture, payload privacy, image integrity and read-only mounted contents pass. No personal settings, local diagnostics or signing configuration are packaged. This is an Apple Development-signed, unnotarized test image. Developer ID signing/notarization remains a distribution prerequisite; do not describe the image as Gatekeeper-ready.
 

@@ -35,7 +35,7 @@ extension AppModel {
             automation.preferences.defaultProfileID = id
         }
         defaultResumeBlocked = false
-        save()
+        saveDefaultPreference()
     }
     func applyActivationDefault(_ profile: Profile, remember: Bool = true) {
         clearActivation(); blockedScheduleID = nil
@@ -108,7 +108,7 @@ extension AppModel {
         }
         if limit != .forever, automation.preferences.defaultProfileID == profile.id {
             automation.preferences.defaultProfileID = profiles.contains { $0.id == previousDefaultProfileID } ? previousDefaultProfileID : "system"
-            save()
+            saveDefaultPreference()
         }
         manualIntent = ActivationIntent(profileID: profile.id, limit: limit)
         activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
@@ -134,7 +134,7 @@ extension AppModel {
         if expired {
             if automation.preferences.defaultProfileID == intent.profileID {
                 automation.preferences.defaultProfileID = profiles.contains { $0.id == previousDefaultProfileID } ? previousDefaultProfileID : "system"
-                save()
+                saveDefaultPreference()
             }
             clearActivation(); select("system", manual: false)
         }

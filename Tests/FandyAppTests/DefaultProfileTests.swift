@@ -140,3 +140,33 @@ private final class ScheduleClock: @unchecked Sendable {
     for _ in 0..<8 { await model.tick() }
     #expect(model.isSelected("cool-chassis") && model.automation.preferences.defaultProfileID == "cool-chassis")
 }
+@MainActor @Test func reselectingTheSameProfileDuringDuplicationPreservesItsNewDefaultOnDisk() async throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let url = dir.appendingPathComponent("profiles.json")
+    let model = AppModel(storeURL: url, autoStart: false, simulation: true)
+    model.select("cool-chassis"); for _ in 0..<5 { await model.tick() }
+    model.activateFor(seconds: 300)
+    #expect(model.automation.preferences.defaultProfileID == "system")
+    model.duplicate("school"); model.select("cool-chassis"); await model.waitForCollection()
+    #expect(model.automation.preferences.defaultProfileID == "cool-chassis")
+    await model.prepareForTermination()
+    #expect(ProfileStore(url: url).load().automation.preferences.defaultProfileID == "cool-chassis")
+}
+@MainActor @Test func retryingFailedConfigurationDoesNotLoseANewerDefaultSelection() async throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let blocker = dir.appendingPathComponent("blocked"); try Data("file".utf8).write(to: blocker)
+    let url = blocker.appendingPathComponent("profiles.json")
+    let model = AppModel(storeURL: url, autoStart: false, simulation: true)
+    let period = WeeklyPeriod(profileID: "school", weekday: 1, startMinute: 500, endMinute: 600)
+    model.reviewPeriods([period]); await model.waitForCollection()
+    #expect(model.saveError != nil)
+    try FileManager.default.removeItem(at: blocker)
+    model.select("cool-chassis"); await model.waitForCollection()
+    #expect(model.automation.periods == [period])
+    #expect(model.automation.preferences.defaultProfileID == "cool-chassis")
+    await model.prepareForTermination()
+    #expect(ProfileStore(url: url).load().automation.preferences.defaultProfileID == "cool-chassis")
+}
