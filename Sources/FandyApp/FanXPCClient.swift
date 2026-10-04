@@ -292,11 +292,22 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
             let status = try await client.status()
             guard status.observationOnly, !status.manualQualified else { throw ControlError.unauthorized }
         }
-        if service.status != .notRegistered { try await service.unregister() }
+        if service.status != .notRegistered { try await unregisterService() }
     }
     static func uninstall(client:FanXPCClient) async throws {
         try await client.restoreAutomatic()
-        try await service.unregister()
+        try await unregisterService()
+    }
+    private static func unregisterService() async throws {
+        // Bridge the documented completion API on the main actor. macOS 15's SDK
+        // does not mark SMAppService Sendable, so its actor-owned wrapper must not
+        // be passed to the imported nonisolated async overload.
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            service.unregister { error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume(returning: ()) }
+            }
+        }
     }
     private static func requireInstalledLocation() throws {
         let url = Bundle.main.bundleURL.resolvingSymlinksInPath()
