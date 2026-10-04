@@ -42,11 +42,11 @@ The control acquisition reads its frozen selected keys once each; it does not en
 
 ## Artifact and remaining distribution blocker
 
-The inspected image is `build/Distribution/Compatibility-0.2.0-Delivery/Fandy-0.2.0-arm64-Test.dmg`, approximately 1.8 MB, **Apple Development signed and unnotarized**. The verification.json and checksum are beside it. This is explicitly a test artifact; it is not a Gatekeeper-ready deliverable.
+The inspected image is `build/Distribution/Compatibility-0.2.0-Delivery/Fandy-0.2.0-arm64-Test.dmg`, approximately 1.8 MB, containing an **Apple Development-signed, unnotarized app**. The Test image itself is unsigned and unnotarized. The verification.json and checksum are beside it. This is explicitly a test artifact; it is not a Gatekeeper-ready deliverable.
 
 SHA-256: `0b6aaf11d588b1db07e65c95a600897fbe551005cf35497799ba00bca3bb8681`.
 
-There is no valid Developer ID Application certificate installed in the local signing inventory, and no notarization keychain profile has been supplied. Paid membership alone does not supply either. The complete app+DMG signing/notarization/stapling pipeline is ready in Scripts/distribute.py, fails before publishing on absent identity/rejected notarization, and preserves the existing signing team. Configure the certificate and local keychain profile privately, then follow [Distribution](DISTRIBUTION.md). No credential, team configuration, raw measurement or personal profile is committed.
+There is no valid Developer ID Application certificate installed in the local signing inventory, and no notarization keychain profile has been supplied. Paid membership alone does not supply either. The complete app+DMG signing/notarization/stapling pipeline is ready in Scripts/distribute.py, fails before publishing on absent identity/rejected notarization, and preserves the existing signing team. Live peer authentication with the Developer ID-signed app/helper also remains credential-dependent; current live checks use Apple Development signatures. Configure the certificate and local keychain profile privately, then follow [Distribution](DISTRIBUTION.md). No credential, team configuration, raw measurement or personal profile is committed.
 
 Broad source compatibility is implemented. A notarized release, current root-helper crash retest, physical sleep/wake, and physical M1–M4 validation are not claimed complete. Unsupported metadata/required inputs keep Apple ownership and explain the unavailable profile. Calibration feedback on other machines remains unknown; no tuning, power changes or fan-floor claims were introduced.
 
