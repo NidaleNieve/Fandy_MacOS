@@ -62,8 +62,9 @@ extension AppModel {
         var next = automation; next.activationDefaults[profileID] = rule; setAutomation(next)
         if rule.kind == .application || rule.launchWhenOpened { refreshApplicationAvailability(force: true) }
     }
+    var showsCancellation: Bool { manualIntent != nil || scheduledPeriodID != nil || blockedScheduleID != nil }
     var cancellationTitle: String {
-        guard let intent = manualIntent else { return machine.selected.kind == .system && blockedScheduleID != nil ? "Resume Schedule" : "Cancel \(machine.selected.name)" }
+        guard let intent = manualIntent else { return blockedScheduleID != nil ? "Resume Schedule" : "Cancel \(machine.selected.name)" }
         let end: Date
         if case .deadline(let deadline) = intent.limit { end = deadline } else { end = wallClock().addingTimeInterval(7 * 86400) }
         let resumes = ScheduleEngine.hasActivity(in: automation, after: wallClock(), before: end)
@@ -115,7 +116,8 @@ extension AppModel {
         return true
     }
     func cancelActivation() {
-        if manualIntent == nil, let occurrence = scheduledPeriodID {
+        if manualIntent == nil, blockedScheduleID != nil { resumeSchedule() }
+        else if manualIntent == nil, let occurrence = scheduledPeriodID {
             clearActivation(); blockedScheduleID = occurrence; select("system", manual: false)
         } else if manualIntent == nil && machine.selected.kind != .system { select("system") }
         else { resumeSchedule() }

@@ -80,7 +80,7 @@ import FandyCore
         if (model.manualIntent.map { $0.limit != .forever } ?? false) || model.scheduledPeriodID != nil {
             let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); menu.addItem(explanation)
         }
-        if model.manualIntent != nil || model.machine.selected.kind != .system || model.blockedScheduleID != nil {
+        if model.showsCancellation {
             add(model.cancellationTitle, to: menu) { [weak model] in model?.cancelActivation() }
         }
         menu.addItem(.separator())

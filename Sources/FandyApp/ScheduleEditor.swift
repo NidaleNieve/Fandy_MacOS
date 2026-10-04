@@ -43,7 +43,7 @@ struct ScheduleEditor: View {
                 }
                 Button("Import Schedule from Text…") { importing = true }
                 Divider()
-                Label("Manual selections take priority. Resume Schedule in the menu to return to automation.", systemImage: "info.circle")
+                Label("Temporary overrides take priority. Scheduled periods return to your remembered default when they finish.", systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }.padding(.top, 8)
         }.accessibilityIdentifier("profile.schedule")

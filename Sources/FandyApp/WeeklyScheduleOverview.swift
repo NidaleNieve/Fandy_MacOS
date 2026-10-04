@@ -37,7 +37,6 @@ struct WeeklyScheduleOverview: View {
                         let rows = ScheduleOverviewRow.rows(day: day, periods: model.automation.periods)
                         VStack(alignment: .leading, spacing: 5) {
                             Text(ScheduleTextImport.days[day - 1]).font(.subheadline).bold()
-                            if rows.isEmpty { Text("System").font(.caption).foregroundStyle(.secondary) }
                             ForEach(rows) { row in
                                 HStack(alignment: .firstTextBaseline) {
                                     Text("\(ScheduleEngine.time(row.start))–\(ScheduleEngine.time(row.end))").monospacedDigit().frame(width: 100, alignment: .leading)
@@ -58,11 +57,49 @@ struct WeeklyScheduleOverview: View {
                             }
                         }
                     }
+                    let conditions = ProfileConditionOverviewRow.rows(profiles: model.profiles, automation: model.automation)
+                    if !conditions.isEmpty {
+                        Divider(); Text("Activation Conditions").font(.subheadline).bold()
+                        ForEach(conditions) { row in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(row.profileName).font(.callout)
+                                if let trigger = row.trigger { Text(trigger).font(.caption).foregroundStyle(.secondary) }
+                                Text(row.limit).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    if model.manualIntent != nil {
+                        Divider(); Text("Current Override").font(.subheadline).bold()
+                        Text(model.machine.selected.name + " · " + model.activationDescription).font(.caption)
+                    }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.scrollIndicators(.hidden)
             Divider()
-            Label("Unscheduled time uses System. Manual selections and application activations take priority; pause ranges suspend schedules.", systemImage: "info.circle")
+            Label("Between scheduled periods, your remembered default profile stays active. Temporary overrides take priority; pause ranges suspend schedules.", systemImage: "info.circle")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }.padding(20).frame(width: 540, height: 580)
+    }
+}
+
+/// Only configured rules appear here; an ordinary unlimited profile is not a schedule.
+struct ProfileConditionOverviewRow: Identifiable, Equatable {
+    let id: String
+    let profileName: String
+    let trigger: String?
+    let limit: String
+    static func rows(profiles: [Profile], automation: AutomationConfiguration) -> [Self] {
+        profiles.compactMap { profile in
+            guard let rule = automation.activationDefaults[profile.id], rule.launchWhenOpened || rule.kind != .forever else { return nil }
+            let app = rule.applicationName.isEmpty ? rule.applicationID : rule.applicationName
+            let limit: String
+            switch rule.kind {
+            case .forever: limit = "Until changed"
+            case .application: limit = "Until \(app) closes"
+            case .duration:
+                let hours = rule.seconds / 3600, minutes = (rule.seconds % 3600) / 60, seconds = rule.seconds % 60
+                limit = "For " + [hours > 0 ? "\(hours) hr" : nil, minutes > 0 ? "\(minutes) min" : nil, seconds > 0 ? "\(seconds) sec" : nil].compactMap { $0 }.joined(separator: " ")
+            }
+            return Self(id: profile.id, profileName: profile.name, trigger: rule.launchWhenOpened ? "When \(app) opens" : nil, limit: limit)
+        }
     }
 }

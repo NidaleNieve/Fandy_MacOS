@@ -43,6 +43,7 @@ struct FandyApp: App {
     private var menu: StatusMenu?
     private var profilesWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var helperSetupWindow: HelperSetupWindowController?
     private var shortcuts: GlobalShortcuts?
     private var shortcutLoop: Task<Void, Never>?
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -58,15 +59,8 @@ struct FandyApp: App {
             // native approval status a chance to settle before explaining it.
             try? await Task.sleep(for: .seconds(1))
             guard let model else { return }; model.refreshHelperSetup()
-            guard model.needsHelperSetup, model.helperSetupStatus == .requiresApproval else { return }
-            let alert = NSAlert(); alert.messageText = "Allow Fandy fan control"
-            alert.informativeText = "Enable Fandy in System Settings → General → Login Items & Extensions → Allow in the Background."
-            alert.addButton(withTitle: "Open System Settings"); alert.addButton(withTitle: "Later")
-            self?.showSettings()
-            guard let window = self?.settingsWindow else { return }
-            alert.beginSheetModal(for: window) { [weak model] response in
-                if response == .alertFirstButtonReturn { model?.openHelperSetup() }
-            }
+            guard model.needsHelperSetup, !model.isQuitting else { return }
+            self?.showHelperSetup()
         }
         let shortcuts = GlobalShortcuts(); self.shortcuts = shortcuts
         shortcuts.invoke = { [weak self, weak model] action in
@@ -89,10 +83,15 @@ struct FandyApp: App {
     func showProfiles() {
         guard let model else { return }
         if profilesWindow == nil {
-            profilesWindow = window("Fandy Profiles", size: NSSize(width: 1040, height: 720), view: ProfileEditor(model: model))
-            profilesWindow?.contentMinSize = NSSize(width: 960, height: 560)
+            profilesWindow = ProfilesWindow.make(content: ProfileEditor(model: model))
         }
         if let profilesWindow { present(profilesWindow) }
+    }
+    private func showHelperSetup() {
+        guard let model, model.needsHelperSetup, !model.isQuitting else { return }
+        if helperSetupWindow == nil { helperSetupWindow = HelperSetupWindowController(model: model) }
+        guard let controller = helperSetupWindow, let window = controller.window else { return }
+        present(window); controller.monitorApproval()
     }
     func showSettings() {
         guard let model else { return }
@@ -110,7 +109,7 @@ struct FandyApp: App {
             guard let window else { return }; NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
         }
     }
-    func applicationWillTerminate(_ notification: Notification) { shortcutLoop?.cancel(); shortcuts?.stop() }
+    func applicationWillTerminate(_ notification: Notification) { helperSetupWindow?.close(); shortcutLoop?.cancel(); shortcuts?.stop() }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model else { return .terminateNow }
         if model.canTerminate { return .terminateNow }

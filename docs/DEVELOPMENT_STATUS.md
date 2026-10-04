@@ -1,4 +1,14 @@
-# Current checkpoint — 2026-10-04: remembered default and helper approval
+# Current checkpoint — 2026-10-04: bounded Profiles window and dedicated setup
+
+0.2.0 build 5 fixes tiny Profiles-window startup/layout by assigning native sizing after hosting attachment and enforcing a 960×560 content minimum (initial 1040×720). Hidden-window layout/resize tests cover it without visual automation. Plain everyday profiles no longer display Cancel. Empty schedule days show no synthetic System entry; the overview includes configured application-open/close/duration conditions and current overrides at the bottom.
+
+First-run approval uses a dedicated Set Up Fandy window, naming Background App Activity and opening native System Settings through ServiceManagement. Approval closes the window automatically; Fandy Settings is not opened. Login remains default-on/native-registered; explicit saved disable preferences are respected. Permission and hardware gating/XPC/SMC protocols are unchanged.
+
+365 Swift tests / 46 tool tests and the signed arm64 Release build pass. Updated Test DMG/checksum/report: `build/Distribution/Window-Setup-Final-0.2.0-build5`; only app + Applications. SHA-256 `73c5c719fbf92ddab6b6c891a9f8bcbea22daa4bae98b578b4ef123e2f3eec61`. Development-signed, unnotarized; existing distribution credentials and hardware-calibration limits remain. See [delivery](WINDOW_SETUP_DELIVERY.md). Existing profiles, helper/login approval, signing configuration and Cool Chassis default are preserved by the verified release/unregister/replacement path.
+
+---
+
+# Previous checkpoint — 2026-10-04: remembered default and helper approval
 
 0.2.0 build 4 remembers an everyday profile across Quit/reopen after verified System/fresh eligibility. Schedules temporarily override it and return to it at their end/gaps; a deliberate selection supersedes the current occurrence. Until Changed is reversible. Timers/process watches remain nonpersistent. Concurrent saves retain newer selections, deleted defaults become System, and faults/wake retain conservative recovery.
 

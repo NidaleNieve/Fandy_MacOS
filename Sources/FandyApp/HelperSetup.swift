@@ -7,7 +7,7 @@ extension AppModel {
     var needsHelperSetup: Bool { !simulation && capabilities.canRestore && helperSetupStatus != .enabled }
     var helperSetupMessage: String {
         helperSetupError ?? (helperSetupStatus == .requiresApproval
-            ? "Allow Fandy in Login Items & Extensions to enable fan control."
+            ? "Allow Fandy under Background App Activity in System Settings to enable fan control."
             : "Enable Fandy’s background helper to use fan profiles.")
     }
     func refreshHelperSetup() {

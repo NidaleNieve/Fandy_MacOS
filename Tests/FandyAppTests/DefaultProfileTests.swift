@@ -91,7 +91,7 @@ private final class ScheduleClock: @unchecked Sendable {
     let capabilities = HardwareCapabilities(model: "Test", stage: .restorationQualification, topology: .verified)
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, capabilities: capabilities,
                          helperAvailable: { false }, helperRegistrationStatus: { .requiresApproval })
-    #expect(model.needsHelperSetup && model.helperSetupMessage.contains("Login Items"))
+    #expect(model.needsHelperSetup && model.helperSetupMessage.contains("Background App Activity"))
     let menu = NSMenu(), presenter = StatusMenu(model: model, install: false); presenter.rebuild(menu)
     let rows = menu.items.filter { model.profiles.map(\.name).contains($0.title) }
     #expect(rows.filter { $0.title != "System" }.allSatisfy { !$0.isEnabled && $0.image != nil })
