@@ -25,7 +25,7 @@ Before initial publication, all 38 reachable Git commits and 629 unique blobs we
 
 ## Screenshots
 
-The README shows two focused Retina captures: Fandy's actual native menu and its shipped chip curve editor. Each uses an isolated simulation model with built-in profiles and demo readings, separate from the installed controller. No personal profiles or schedules are shown. PNG ancillary metadata was stripped, and both images were visually reviewed.
+The README uses the owner's supplied screenshots of Cool Chassis: its chip curve editor and native menu with live temperature readings. Rounded corner masks preserve the original screenshot content and resolution; the menu's surrounding desktop margin is cropped. No personal information or schedules are visible. PNG ancillary metadata was stripped, and both images were visually reviewed.
 
 The public-content checker permits only specifically reviewed image paths and validates PNG structure, checksums and allowed non-text chunks. Other binary artifacts remain rejected. The images are shown separately at compact widths; customizable temperature readings inside the menu are documented explicitly.
 

@@ -38,8 +38,7 @@ Fandy is a native menu-bar fan controller and temperature monitor. View chip and
 Create and edit custom profiles with intuitive graphs for chip and chassis temperatures. Drag curve points or set a target temperature in **Edit Profiles…**.
 
 <p align="center">
-  <img src="docs/images/curve.png" width="440" alt="Fandy’s editable Gaming chip fan curve">
-  <br><sub>Actual app captures with demo readings.</sub>
+  <img src="docs/images/curve.png" width="440" alt="Fandy’s editable Cool Chassis chip fan curve">
 </p>
 
 ## Fit it around your day
