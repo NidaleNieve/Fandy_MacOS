@@ -62,6 +62,22 @@ class DistributionTests(unittest.TestCase):
                     DISTRIBUTE.PACKAGE.package(Path(directory) / 'Fandy.app', output, release_staging=True)
             self.assertFalse(output.exists())
 
+    def test_distribution_resigning_uses_explicit_authenticated_identifier(self):
+        with patch.object(DISTRIBUTE.PACKAGE, 'run') as run:
+            DISTRIBUTE.sign(Path('FandyFanHelper'), 'fixture-hash', 'is.dsr.fandy.fan-helper')
+            args = run.call_args.args[0]
+            self.assertEqual(args[args.index('--identifier') + 1], 'is.dsr.fandy.fan-helper')
+            self.assertIn('--timestamp', args)
+            self.assertIn('runtime', args)
+
+    def test_nonobject_notary_response_is_rejected_without_tool_output(self):
+        for output in [b'null', b'[]', b'false', b'private invalid tool output']:
+            result = subprocess.CompletedProcess([], 0, output, b'private')
+            with patch.object(DISTRIBUTE.subprocess, 'run', return_value=result):
+                with self.assertRaises(ValueError) as error:
+                    DISTRIBUTE.notarize(Path('candidate.dmg'), 'local-profile')
+                self.assertNotIn('private invalid', str(error.exception))
+
     def test_blank_or_multiline_profile_is_rejected_before_signing(self):
         for profile in ['', ' ', 'a\nb']:
             with self.assertRaises(ValueError):

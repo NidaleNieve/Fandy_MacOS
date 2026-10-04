@@ -5,11 +5,11 @@ Version **0.2.0 (2)**, arm64, deployment target macOS 15. The native signed Rele
 ## Software verification
 
 - 340 Swift tests pass: 48 hardware, 191 core, 101 app-model/editor tests, one job and no parallel execution.
-- 44 Python tool tests pass, including release metadata, notarization rejection and inability to publish a release without a distribution identity.
+- 46 Python tool tests pass, including release metadata, notarization rejection and inability to publish a release without a distribution identity.
 - New synthetic fixtures cover all five chip generations, variant omission/frozen membership, missing CPU cluster, independent average/maximum groups, differing fan limits, one/two fans, lowercase/uppercase aliases, fpe2/float metadata, protected mode 3, direct/Ftst transaction order, bounded timeout/cancellation, corrupt baseline/metadata, partial writes, failed global clearing and source-supported restart release.
 - Existing authentication, malformed commands, watchdog, curves, scheduling/import, persistence and lifecycle tests are retained. Capabilities are compiled; imported configuration cannot grant hardware authority.
 - Signed app/helper identity/team, hardened runtime, absence of debug entitlement, arm64-only payload, private paths/files, disk integrity and mounted contents pass packaging validation.
-- Native unsigned Release CI jobs are configured for macos-15 and macos-latest, alongside software and sanitizer jobs. These checks are not physical hardware qualification. Results must be inspected separately after push.
+- Native unsigned Release CI jobs are configured for macos-15 and macos-latest, alongside software and sanitizer jobs. These checks are not physical hardware qualification. Initial remote software tests and latest-macOS Release compilation passed. The macOS 15 compiler identified an unannotated AppKit clock coordinator callback; explicit main-actor isolation fixes the older-SDK error. The corrected remote build and sanitizer results are tracked below.
 
 ## Local M5 regression
 

@@ -30,12 +30,12 @@ def notarize(path, profile):
         report = json.loads(result.stdout)
     except (ValueError, TypeError):
         raise ValueError('Notarization failed; inspect the local keychain profile privately') from None
-    if result.returncode or report.get('status') != 'Accepted':
+    if result.returncode or not isinstance(report, dict) or report.get('status') != 'Accepted':
         raise ValueError('Apple did not accept the notarization submission; no release was published')
 
 
-def sign(path, identity):
-    PACKAGE.run(['codesign', '--force', '--sign', identity, '--options', 'runtime', '--timestamp', path])
+def sign(path, identity, identifier):
+    PACKAGE.run(['codesign', '--force', '--sign', identity, '--options', 'runtime', '--timestamp', '--identifier', identifier, path])
 
 
 def distribute(app, output, profile):
@@ -51,8 +51,8 @@ def distribute(app, output, profile):
         work = Path(directory)
         staged = work / 'Fandy.app'
         PACKAGE.run(['ditto', '--noqtn', app, staged])
-        sign(staged / PACKAGE.HELPER, identity)
-        sign(staged, identity)
+        sign(staged / PACKAGE.HELPER, identity, 'is.dsr.fandy.fan-helper')
+        sign(staged, identity, 'is.dsr.fandy')
         PACKAGE.verify_app(staged)
         team, kind = PACKAGE.signature(staged, 'is.dsr.fandy')
         if team != original_team or kind != 'Developer ID Application':
@@ -62,7 +62,7 @@ def distribute(app, output, profile):
         notarize(archive, profile)
         PACKAGE.run(['xcrun', 'stapler', 'staple', staged])
         candidate = PACKAGE.package(staged, work / 'image', release_staging=True)
-        sign(candidate, identity)
+        sign(candidate, identity, 'is.dsr.fandy.disk-image')
         notarize(candidate, profile)
         PACKAGE.run(['xcrun', 'stapler', 'staple', candidate])
         PACKAGE.run(['xcrun', 'stapler', 'validate', candidate])

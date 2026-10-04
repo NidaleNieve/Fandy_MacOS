@@ -2,7 +2,7 @@
 
 0.2.0 adds compiled M1–M5 MacBook Pro reference support, preserving the tested Mac17,9 direct path. DeviceRegistry resolves identity and generation-specific source groups; selected membership/types are frozen. FanInterface admits only reviewed one/two-fan metadata and float/fpe2 encodings. ReferenceFanTransaction implements direct and bounded Ftst handover; every-fan release and global flag verification are independent of sensor health. Ingress cancellation survives queue and hardware-admission races. Monitoring retains temperatures when fan metadata fails. Imported settings and XPC requests cannot grant capability.
 
-340 Swift / 44 tool tests pass; signed arm64 Release build passes. Final M5 profile, edit, rapid-switch, quit, disconnect, heartbeat and controller SIGKILL checks pass; detailed results, performance and limits are in [release verification](COMPATIBILITY_RELEASE_VERIFICATION.md), with [compatibility matrix](COMPATIBILITY.md).
+340 Swift / 46 tool tests pass; signed arm64 Release build passes. Final M5 profile, edit, rapid-switch, quit, disconnect, heartbeat and controller SIGKILL checks pass; detailed results, performance and limits are in [release verification](COMPATIBILITY_RELEASE_VERIFICATION.md), with [compatibility matrix](COMPATIBILITY.md).
 
 The installed bundle remains `build/MonitoringDSR/Fandy.app`; its helper and login registration are enabled. The full bundle was replaced only after verified release/unregister; the pre-update app is backed up in ignored build storage. Diagnostics use temporary profile stores. The delivered running app must be left in System. No screenshots or GUI automation were used.
 

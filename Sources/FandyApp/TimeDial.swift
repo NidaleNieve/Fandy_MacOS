@@ -33,7 +33,7 @@ struct TimeDial: NSViewRepresentable {
             picker.dateValue = value
         }
     }
-    final class Coordinator: NSObject {
+    @MainActor final class Coordinator: NSObject {
         var hour: Binding<Int>
         var minute: Binding<Int>
         init(hour: Binding<Int>, minute: Binding<Int>) { self.hour = hour; self.minute = minute }
