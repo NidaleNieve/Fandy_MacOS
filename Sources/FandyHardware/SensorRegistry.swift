@@ -5,8 +5,16 @@ public struct SensorMapping: Sendable {
     public var role: SensorRole
     public var keys: [String]
     public var reduction: SensorReduction
-    public init(role: SensorRole, keys: [String], reduction: SensorReduction = .average) {
+    public var types: [String: String]
+    public init(role: SensorRole, keys: [String], reduction: SensorReduction = .average, types: [String: String] = [:]) {
         self.role = role; self.keys = keys; self.reduction = reduction
+        self.types = types
+    }
+    public static func usableTemperature(_ sample: DiscoveredSensor) -> Bool {
+        guard sample.error == nil, (sample.type == "flt " && sample.size == 4 || sample.type == "sp78" && sample.size == 2),
+              sample.bytes.count == sample.size, let value = sample.value,
+              SMCDecoder.decode(type: sample.type, bytes: sample.bytes) == value else { return false }
+        return value.isFinite && value > 0 && value < 150
     }
     /// Every reviewed member is mandatory; incomplete groups never become partial averages.
     public func reading(sequence: UInt64, qualified: Bool, now: Double,
@@ -17,7 +25,8 @@ public struct SensorMapping: Sendable {
         }
         for key in keys {
             guard let sample = try? read(key), sample.key == key, sample.error == nil,
-                  sample.type == "flt ", sample.size == 4, sample.bytes.count == 4,
+                  sample.type == (types[key] ?? "flt "),
+                  sample.size == (sample.type == "sp78" ? 2 : 4), sample.bytes.count == sample.size,
                   let value = sample.value, value.isFinite, value > 0, value < 150,
                   let completed = sample.sampledAt, completed.isFinite, completed >= now else {
                 return SensorReading(role, nil, at: now, sequence: sequence, health: .missing)
@@ -100,36 +109,45 @@ public enum SensorRegistry {
 }
 public final class HardwareSnapshotReader: @unchecked Sendable {
     // Immutable membership: every acquisition still reads every required key.
-    private static let acquisitionKeys = Set(SensorRegistry.mappings.flatMap(\.keys)).sorted()
+    public let device: ResolvedDevice
     private let lock = NSLock()
     private let reader: SMCReader
     private var sequence: UInt64 = 0
-    public init() throws { reader = try SMCReader() }
+    public init(device: ResolvedDevice = DeviceRegistry.current) throws { self.device = device; reader = try SMCReader() }
     public func snapshot() throws -> HardwareSnapshot {
         lock.lock(); defer { lock.unlock() }
-        guard Self.machineModel() == SensorRegistry.model else { throw ControlError.hardwareUnqualified }
         sequence += 1
         let started = ProcessInfo.processInfo.systemUptime
         // Cache each key once per acquisition; averages and maxima can have independent groups.
         var samples: [String: DiscoveredSensor] = [:]
-        for key in Self.acquisitionKeys {
+        for key in device.acquisitionKeys {
             samples[key] = try? reader.read(key)
         }
-        let sensors = SensorRegistry.mappings.map { mapping in
-            mapping.reading(sequence: sequence, qualified: SensorRegistry.capabilities.verifiedRoles.contains(mapping.role),
+        let sensors = device.mappings.map { mapping in
+            mapping.reading(sequence: sequence, qualified: device.capabilities.verifiedRoles.contains(mapping.role),
                             now: started, read: { key in
                 guard let sample = samples[key] else { throw HardwareError.invalidMetadata }; return sample
             })
         }
         let pressure: ThermalPressure = switch ProcessInfo.processInfo.thermalState { case .nominal: .nominal; case .fair: .fair; case .serious: .serious; case .critical: .critical; @unknown default: .unknown }
-        let fans = try reader.fans()
-        guard Set(fans.map(\.id)) == Set(SensorRegistry.observedFanIDs) else { throw ControlError.invalidFan }
-        for fan in fans {
-            guard let key = SensorRegistry.observedModeKeys[fan.id] else { throw ControlError.invalidFan }
-            let mode = try reader.read(key)
-            guard mode.type == "ui8 ", mode.size == 1, mode.value == Double(fan.mode.rawValue) else { throw ControlError.invalidFan }
+        // Monitoring survives unavailable/unsupported fan metadata. Empty fans cannot
+        // pass validateFans or obtain a lease; temperatures remain independently useful.
+        var fans = (try? reader.fans()) ?? []
+        if fans.contains(where: { $0.mode == .system }) && device.fanInterface?.forceTestAvailable != true {
+            fans = [] // Protected mode 3 is supported only by a reviewed legacy recipe.
         }
-        return HardwareSnapshot(at: ProcessInfo.processInfo.systemUptime, sensors: sensors, fans: fans, pressure: pressure)
+        var handover: Bool?
+        if device.fanInterface?.forceTestAvailable == true || (device.identity.family != .m5 && device.identity.supportedNotebook) {
+            do {
+                let flag = try reader.read("Ftst"); try FanInterface.validateFlag(flag)
+                handover = flag.value == 1
+            } catch HardwareError.smc(let code) where UInt32(bitPattern: code) == 0xFAD00084 && device.fanInterface?.forceTestAvailable != true {
+                handover = false
+            } catch { fans = [] } // Unknown global ownership cannot claim automatic control.
+        }
+        var snapshot = HardwareSnapshot(at: ProcessInfo.processInfo.systemUptime, sensors: sensors, fans: fans, pressure: pressure)
+        snapshot.fanHandoverActive = handover
+        return snapshot
     }
 }
 

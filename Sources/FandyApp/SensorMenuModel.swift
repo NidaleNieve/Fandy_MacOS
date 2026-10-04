@@ -38,7 +38,7 @@ actor DisplaySensorReader {
 @MainActor @Observable final class SensorMenuModel {
     private let reader = DisplaySensorReader()
     private(set) var choices: [MenuSensor] = SensorRole.allCases.map {
-        MenuSensor(id: "role:\($0.rawValue)", name: SensorRegistry.capabilities.sensorName($0), keys: [], role: $0, estimate: [.cpuAverage, .gpuAverage, .cpuPeak, .gpuPeak].contains($0))
+        MenuSensor(id: "role:\($0.rawValue)", name: DeviceRegistry.current.capabilities.sensorName($0), keys: [], role: $0, estimate: [.cpuAverage, .gpuAverage, .cpuPeak, .gpuPeak].contains($0))
     }
     private(set) var displayed: [String: String] = [:]
     private var refreshTask: Task<Void, Never>?
@@ -61,6 +61,14 @@ actor DisplaySensorReader {
                                             ("tp-region", "Tp region average · estimate", SensorRegistry.cpuRegionCandidates.filter { $0.hasPrefix("Tp") }),
                                             ("tm-region", "Tm region average · estimate", SensorRegistry.cpuRegionCandidates.filter { $0.hasPrefix("Tm") })] where Set(members).isSubset(of: keys) {
                     choices.append(MenuSensor(id: "group:" + id, name: name, keys: members, role: nil, estimate: true))
+                }
+            } else if DeviceRegistry.current.identity.supportedNotebook {
+                let groups = DeviceRegistry.candidates(for: DeviceRegistry.current.identity)
+                let available = Set(DeviceRegistry.current.acquisitionKeys)
+                for (id, name, candidates) in [("efficiency", DeviceRegistry.current.identity.family == .m5 ? "Super-core region average · estimate" : "Efficiency-core region average · estimate", groups.efficiency),
+                    ("performance", "Performance-core region average · estimate", groups.performance)] {
+                    let members = candidates.filter { available.contains($0) }
+                    if !members.isEmpty { choices.append(MenuSensor(id: "group:" + id, name: name, keys: members, role: nil, estimate: true)) }
                 }
             }
             discovered = true; discoveryError = nil

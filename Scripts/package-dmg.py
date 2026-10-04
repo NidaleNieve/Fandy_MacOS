@@ -19,14 +19,18 @@ This Apple Development-signed build is not notarized. Gatekeeper may prevent it
 from opening on another Mac. A broadly distributable release requires Developer ID
 signing and Apple notarization; this disk image does not bypass macOS protection.
 
-Requires Apple Silicon and macOS 15 or later. Physical fan control is currently
-qualified only for Mac17,9 (M5 Pro); other Apple Silicon models are monitoring-only.
+Requires Apple Silicon and macOS 15 or later. M1–M5 MacBook Pros are reference-supported when their detected fan interface and
+required sensors pass runtime checks. Mac17,9 (M5 Pro) has been physically tested.
+Other models have not been physically tested by Fandy. Unsupported hardware stays
+under Apple control; missing chassis inputs disable only dependent profiles.
 Do not run competing fan controllers while using Fandy's custom profiles.
 
 Fandy starts in System with macOS controlling the fans. Custom profiles require
 the bundled fan helper; approve Fandy in Login Items & Extensions when macOS asks.
-System returns both fans to Apple automatic control. Quit does the same, and a
-helper watchdog handles loss of the controller. A stopped/blocked helper cannot
+System returns all fans to Apple automatic control. Quit does the same, and a
+helper watchdog handles loss of the controller. On older interfaces, Ftst transfers
+normal thermal-controller ownership to the helper; emergency behavior is not
+guaranteed by Fandy. A stopped/blocked helper cannot
 run its watchdog; restart recovery is the fallback.
 
 No accounts, telemetry or networking. Profile/configuration files can be exported
@@ -112,8 +116,30 @@ def verify_app(app):
     return info, kind
 
 
-def package(app, output):
+def compatibility_manifest():
+    # This is release metadata, never hardware authority. The signed Swift registry
+    # is the sole source of the notebook roster and reference revision.
+    source = (ROOT / 'Sources/FandyHardware/DeviceRegistry.swift').read_text()
+    families = dict((f'M{family}', re.findall(r'"(Mac[^" ]+)"', models))
+                    for family, models in re.findall(r'\(\.m([1-5]), \[(.*?)\]\)', source))
+    if set(families) != {'M1', 'M2', 'M3', 'M4', 'M5'} or any(not x for x in families.values()):
+        raise ValueError('Compiled device registry cannot be represented in release metadata')
+    revision = re.search(r'statsRevision = "([0-9a-f]{40})"', source)
+    if not revision:
+        raise ValueError('Missing pinned source revision')
+    return {'locallyTested': ['Mac17,9'], 'referenceSupportedFamilies': families,
+            'statsRevision': revision[1], 'runtimeChecksRequired': True,
+            'interfaces': ['direct mode', 'bounded Ftst handover'],
+            'otherHardwarePhysicallyTested': False}
+
+
+def package(app, output, release_staging=False):
     info, kind = verify_app(app)
+    if release_staging:
+        if kind != 'Developer ID Application':
+            raise ValueError('Release staging requires Developer ID Application signing')
+        run(['xcrun', 'stapler', 'validate', app])
+        run(['spctl', '--assess', '--type', 'execute', app])
     output.mkdir(parents=True, exist_ok=True)
     channel = 'Test' if kind == 'Apple Development' else 'Unnotarized'
     name = f"Fandy-{info['CFBundleShortVersionString']}-arm64-{channel}.dmg"
@@ -126,7 +152,11 @@ def package(app, output):
         run(['ditto', '--noqtn', app, staging / 'Fandy.app'])
         (staging / 'Applications').symlink_to('/Applications')
         readme = README
-        if kind != 'Apple Development':
+        if release_staging:
+            readme = readme.replace('test build', 'release').replace(
+                'This Apple Development-signed build is not notarized. Gatekeeper may prevent it\nfrom opening on another Mac. A broadly distributable release requires Developer ID\nsigning and Apple notarization; this disk image does not bypass macOS protection.',
+                'Developer ID signed and notarized by Apple. Requires no developer tools.')
+        elif kind != 'Apple Development':
             readme = readme.replace('test build', 'unnotarized build').replace('Apple Development-signed', 'Developer ID-signed')
         (staging / 'Read Me.txt').write_text(readme)
         verify_app(staging / 'Fandy.app')
@@ -151,7 +181,7 @@ def package(app, output):
     checksum = hashlib.sha256(dmg.read_bytes()).hexdigest()
     (output / (name + '.sha256')).write_text(f'{checksum}  {name}\n')
     manifest = {'version': info['CFBundleShortVersionString'], 'build': info['CFBundleVersion'],
-                'architecture': 'arm64', 'minimumMacOS': '15.0', 'fanControlModels': ['Mac17,9'],
+                'architecture': 'arm64', 'minimumMacOS': '15.0', 'compatibility': compatibility_manifest(),
                 'signatureClass': kind, 'notarized': False, 'sha256': checksum,
                 'verified': ['app/helper signatures', 'matching team', 'hardened runtime', 'no debug entitlement',
                              'privacy payload check', 'disk image integrity', 'read-only mounted payload']}

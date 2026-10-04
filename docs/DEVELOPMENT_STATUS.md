@@ -1,3 +1,24 @@
+# Current checkpoint — 2026-10-04: Apple Silicon registry and release pipeline
+
+0.2.0 adds compiled M1–M5 MacBook Pro reference support, preserving the tested Mac17,9 direct path. DeviceRegistry resolves identity and generation-specific source groups; selected membership/types are frozen. FanInterface admits only reviewed one/two-fan metadata and float/fpe2 encodings. ReferenceFanTransaction implements direct and bounded Ftst handover; every-fan release and global flag verification are independent of sensor health. Ingress cancellation survives queue and hardware-admission races. Monitoring retains temperatures when fan metadata fails. Imported settings and XPC requests cannot grant capability.
+
+340 Swift / 44 tool tests pass; signed arm64 Release build passes. Final M5 profile, edit, rapid-switch, quit, disconnect, heartbeat and controller SIGKILL checks pass; detailed results, performance and limits are in [release verification](COMPATIBILITY_RELEASE_VERIFICATION.md), with [compatibility matrix](COMPATIBILITY.md).
+
+The installed bundle remains `build/MonitoringDSR/Fandy.app`; its helper and login registration are enabled. The full bundle was replaced only after verified release/unregister; the pre-update app is backed up in ignored build storage. Diagnostics use temporary profile stores. The delivered running app must be left in System. No screenshots or GUI automation were used.
+
+Test DMG/checksum/verification.json: `build/Distribution/Compatibility-0.2.0`. It is explicitly Apple Development signed, unnotarized. **The remaining release blocker is a locally installed Developer ID Application certificate and a supplied notarytool keychain profile name.** An async setup question was sent; no password/API key should be shared. `python3 Scripts/distribute.py --keychain-profile PROFILE_NAME` performs the staged app+image notarization/stapling/Gatekeeper workflow and publishes only after all checks. Build signing choices remain ignored; no credential files are introduced. See [distribution workflow](DISTRIBUTION.md).
+
+Next steps, without restarting broad research:
+
+1. Inspect GitHub verification results after source push; correct actual compilation failures if any. Remote compilation is not physical compatibility proof.
+2. Once local distribution certificate/profile are ready, run Scripts/distribute.py, verify final release ticket/Gatekeeper/mounted payload/checksum, and deliver the final DMG. The test artifact must not be relabeled notarized.
+3. Root-helper SIGKILL retest remains pending because noninteractive administrator authorization was unavailable. Earlier local restart evidence is retained; source-supported legacy startup/global release is tested synthetically. Physical sleep/wake remains pending. Do not claim a blocked/dead watchdog can recover.
+4. Other Macs are reference-supported, not locally tested. Comfort inputs may be absent and only dependent profiles must stay unavailable. No friend developer setup or diagnostic qualification session is required for normal supported operation.
+
+Files: Sources/FandyHardware/DeviceRegistry.swift, ReferenceSensorKeys.swift, FanInterface.swift, ReferenceFanTransaction.swift; Sources/FandyHelper/FanHardware.swift and main.swift; core restoration/status and GUI monitoring integration; Tests/FandyHardwareTests/CompatibilityTests.swift; Scripts/distribute.py and package-dmg.py. Stats arrays are MIT-adapted with pinned revision and bundled attribution. Raw references/measurements/signing remain ignored.
+
+---
+
 # Current checkpoint — 2026-10-04: profile layout and native clock
 
 Pause Schedule is a separate tab, with a separator below the tab selector. Schedule priority is a bottom tip. Chip/Chassis collapse independently; target and minimum airflow appear in graphs as a dashed request envelope using production math, without overwriting nodes. Target controls are lower, airflow has Reset, point buttons match, sidebar backgrounds are consistent, and context menus add identity-specific duplicate/export/remove. The transient unsaved line is removed. Inline For/Until uses a native segmented picker, stable positions, centered fields and AppKit's clock.

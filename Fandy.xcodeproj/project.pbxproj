@@ -352,6 +352,18 @@
 			"path" = "Sources/FandyDiscovery/main.swift";
 			"sourceTree" = "<group>";
 		};
+		"7B1C300C779D9459C034B004" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/DeviceRegistry.swift";
+			"sourceTree" = "<group>";
+		};
+		"8253352BB713CD2F539FD9A3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/FanInterface.swift";
+			"sourceTree" = "<group>";
+		};
 		"8E20A7F12E2E8568005EC514" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -362,6 +374,18 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyHardware/RecoveryObservationReader.swift";
+			"sourceTree" = "<group>";
+		};
+		"7B3692D248BEA320441522FB" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/ReferenceFanTransaction.swift";
+			"sourceTree" = "<group>";
+		};
+		"BEC3B62E0DAC1FCB9B8A7087" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/ReferenceSensorKeys.swift";
 			"sourceTree" = "<group>";
 		};
 		"031749FCE3DFED0C14D7F2D5" = {
@@ -518,8 +542,12 @@
 				74A6605E5BC8A76E53AD7E30,
 				FE7D214DC9CDDA36563C9C4F,
 				7D4FCEE70A0EA2D08A3E0A93,
+				7B1C300C779D9459C034B004,
+				8253352BB713CD2F539FD9A3,
 				8E20A7F12E2E8568005EC514,
 				4FDBCF91491CF8F6194073A8,
+				7B3692D248BEA320441522FB,
+				BEC3B62E0DAC1FCB9B8A7087,
 				031749FCE3DFED0C14D7F2D5,
 				9BB8432D0B42288D0ECD032D,
 				36CDDBD597C201712771CAE8,

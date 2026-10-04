@@ -76,8 +76,8 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .unregister: try await HelperManager.uninstallObservation(client: client)
             case .status, .check, .productionSecurity: break
             case .registerRestoration:
-                guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
-                      SensorRegistry.capabilities.canRestore else { throw ControlError.unauthorized }
+                guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(DeviceRegistry.current.capabilities.stage),
+                      DeviceRegistry.current.capabilities.canRestore else { throw ControlError.unauthorized }
                 try HelperManager.install()
             case .unregisterRestoration: try await HelperManager.uninstall(client: client)
             case .statusRestoration: break
@@ -92,9 +92,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
             }
             let state = HelperManager.service.status
             var report: [String: Any] = ["action": action.rawValue, "registration": name(state), "loginRegistration": name(SMAppService.mainApp.status),
-                "physicalWritesEnabled": SensorRegistry.capabilities.canRestore,
-                "manualWritesEnabled": SensorRegistry.capabilities.canControl]
-            report["recoveryTrialsEnabled"] = SensorRegistry.capabilities.canQualifyRecovery
+                "physicalWritesEnabled": DeviceRegistry.current.capabilities.canRestore,
+                "manualWritesEnabled": DeviceRegistry.current.capabilities.canControl]
+            report["recoveryTrialsEnabled"] = DeviceRegistry.current.capabilities.canQualifyRecovery
             if state == .enabled {
                 if action == .productionSecurity { report["checks"] = try await client.checkProductionProtocol() }
                 if action == .check { report["checks"] = try await client.checkObservationProtocol() }
@@ -116,7 +116,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
         } catch {
             if (action == .register || action == .registerRestoration) && HelperManager.service.status == .requiresApproval {
                 emit(["action": action.rawValue, "registration": "requiresApproval", "approvalRequired": true,
-                      "physicalWritesEnabled": SensorRegistry.capabilities.canRestore])
+                      "physicalWritesEnabled": DeviceRegistry.current.capabilities.canRestore])
                 return 2
             }
             emit(["action": action.rawValue, "registration": name(HelperManager.service.status), "error": error.localizedDescription])
@@ -129,7 +129,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
         let client = FanXPCClient()
         var writeAdmitted = false
         do {
-            guard SensorRegistry.capabilities.canQualifyCurves, HelperManager.installed else { throw ControlError.hardwareUnqualified }
+            guard DeviceRegistry.current.capabilities.canQualifyCurves, HelperManager.installed else { throw ControlError.hardwareUnqualified }
             let reader = try SMCReader()
             // Distinct completed acquisitions; an artificial delay here can let a spinning
             // automatic baseline stop before the transaction we intend to qualify.
@@ -137,7 +137,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
             let status = try await client.status()
             guard status.capabilities?.canQualifyCurves == true, status.automaticVerified,
                   let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
-            let policy = SensorRegistry.capabilities.chipPolicy
+            let policy = DeviceRegistry.current.capabilities.chipPolicy
             try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: policy.required)
             let floors = try snapshot.fans.map { fan -> FanTarget in
                 let rpm = max(fan.minimumRPM, fan.actualRPM) + 200
@@ -214,13 +214,13 @@ enum HelperDiagnosticAction: String, CaseIterable {
     private static func checkSpinningCurve() async -> Int32 {
         let client = FanXPCClient()
         do {
-            guard SensorRegistry.capabilities.canQualifyCurves else { throw ControlError.hardwareUnqualified }
+            guard DeviceRegistry.current.capabilities.canQualifyCurves else { throw ControlError.hardwareUnqualified }
             let reader = try SMCReader()
             for _ in 0..<5 { _ = try await client.status() }
             for generation in 1...2 {
                 let status = try await client.status()
                 guard status.automaticVerified, let snapshot = status.snapshot else { throw ControlError.restorationUnverified }
-                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: SensorRegistry.capabilities.chipPolicy.required)
+                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: DeviceRegistry.current.capabilities.chipPolicy.required)
                 if generation == 2 {
                     guard snapshot.fans.allSatisfy({ $0.mode == .automatic && $0.actualRPM > 0 }) else { throw ControlError.invalidProfile("No spinning automatic baseline available.") }
                 }
@@ -233,7 +233,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
                 let started = ProcessInfo.processInfo.systemUptime
                 var reached = false
                 repeat {
-                    try await client.apply(targets, generation: UInt64(generation), required: SensorRegistry.capabilities.chipPolicy.required)
+                    try await client.apply(targets, generation: UInt64(generation), required: DeviceRegistry.current.capabilities.chipPolicy.required)
                     let fans = try reader.fans()
                     guard fans.allSatisfy({ $0.mode == .manual }) else { throw ControlError.restorationUnverified }
                     reached = reached || fans.allSatisfy { fan in targets.contains { $0.fanID == fan.id && fan.actualRPM >= $0.rpm - 150 } }
@@ -308,7 +308,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
     }
     private static func requireRestorationHelper(_ client: FanXPCClient) async throws {
         let status = try await client.status()
-        guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(SensorRegistry.capabilities.stage),
+        guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(DeviceRegistry.current.capabilities.stage),
               !status.observationOnly,
               [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(status.capabilities?.stage ?? .observation),
               status.capabilities?.forMachine(HardwareSnapshotReader.machineModel()).canRestore == true else { throw ControlError.unauthorized }

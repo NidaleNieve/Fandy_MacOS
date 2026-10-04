@@ -51,7 +51,11 @@ public struct SensorReading: Codable, Sendable, Equatable {
         return celsius
     }
 }
-public enum FanMode: Int, Codable, Sendable { case automatic = 0, manual = 1, system = 3, unknown = -1 }
+public enum FanMode: Int, Codable, Sendable {
+    case automatic = 0, manual = 1, system = 3, unknown = -1
+    /// Mode 3 is observed Apple ownership on reference-supported interfaces.
+    public var isAutomatic: Bool { self == .automatic || self == .system }
+}
 public struct Fan: Codable, Sendable, Equatable, Identifiable {
     public let id: Int
     public var minimumRPM: Double
@@ -81,6 +85,8 @@ public struct HardwareSnapshot: Codable, Sendable, Equatable {
     public var sensors: [SensorReading]
     public var fans: [Fan]
     public var thermalPressure: ThermalPressure
+    public var fanHandoverActive: Bool? = nil
+    public var appleOwnershipObserved: Bool { !fans.isEmpty && fans.allSatisfy { $0.mode.isAutomatic } && fanHandoverActive != true }
     public init(at: TimeInterval, sensors: [SensorReading], fans: [Fan], pressure: ThermalPressure = .nominal, id: UUID = UUID()) {
         self.id = id; sampledAt = at; self.sensors = sensors; self.fans = fans; thermalPressure = pressure
     }

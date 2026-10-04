@@ -1,3 +1,5 @@
+> Version 0.2.0 compatibility update: the exact Mac17,9 backend remains locally tested. Other M1–M5 MacBook Pros use compiled reference-supported recipes after independent identity, fan metadata and required-sensor checks. Earlier Mac17,9-only qualification descriptions below are historical evidence for that recipe, not a restriction on the new registry. See [compatibility](docs/COMPATIBILITY.md) and [distribution](docs/DISTRIBUTION.md).
+
 > Current delivery: [real temperature profiles and measured recovery](docs/TEMPERATURE_PROFILE_STATUS.md). The signed production policy uses a fixed chip envelope and five operational chassis inputs; exact CPU/GPU averages remain estimates, and Top is explicitly proximity.
 
 # Security
@@ -93,3 +95,7 @@ Launch-at-login preference uses ServiceManagement in the genuine normal app only
 ## Shortcuts and profile activation defaults
 
 Global shortcuts register explicit user-selected combinations through Carbon; no global keyboard monitor, event tap, Accessibility or Input Monitoring is requested. Recording is confined to a focused Fandy control, temporarily unregisters shortcuts, and logs no keys. Portable bindings validate modifier/key bounds and duplicate combinations. Application defaults store a bundle identity/name; activation resolves a fresh running process and watches PID plus kernel start time. They cannot execute an application or command. Full settings include shortcuts, and individual profile files include activation defaults, with the same strict input bounds/allowlists. Startup recovery and UI selection changes do not alter the five-method root interface or hardware authority.
+
+## Reference-supported authority
+
+DeviceRegistry is compiled into both signed processes. Runtime detection resolves only source-listed recipes; imported profiles/preferences and caller data cannot add models, change evidence, keys, mode sequences or qualification. The existing five-method authenticated XPC interface is unchanged. Legacy force/test operations are internal fixed-key operations, never arbitrary key APIs. XPC ingress cancellation revokes queued and acquiring transactions before System release; the safety queue remains the sole physical writer. Developer ID app/helper signatures must retain the same signing team and identifiers. Distribution builds refuse helper registration outside /Applications/Fandy.app.

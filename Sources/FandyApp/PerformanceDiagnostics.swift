@@ -44,7 +44,7 @@ struct LatencySummary: Codable, Equatable {
                 await model.tick()
                 ticks.append(ProcessInfo.processInfo.systemUptime - began)
                 guard model.powerTransitionCount == powerGeneration, model.hardwareError == nil, model.isSelected(comfort ? "cool-chassis" : "system"), let snapshot = model.snapshot else { throw ControlError.helperUnavailable }
-                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: SensorRegistry.capabilities.chipPolicy.required.union(SensorRole.comfort))
+                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: DeviceRegistry.current.capabilities.chipPolicy.required.union(SensorRole.comfort))
                 if ticks.count % 30 == 0 {
                     let row: [String: Any] = ["event": "performanceSample", "session": comfort ? "comfort" : "system", "ticks": ticks.count,
                         "modes": snapshot.fans.map { $0.mode.rawValue }, "rpm": snapshot.fans.map { $0.actualRPM },
@@ -66,12 +66,16 @@ struct LatencySummary: Codable, Equatable {
     static func run() async -> Int32 {
         do {
             let reader = try HardwareSnapshotReader(), client = FanXPCClient()
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyResponsiveness-\(UUID().uuidString)")
+            let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false)
+            defer { model.stop(); try? FileManager.default.removeItem(at: root) }
             var acquisition: [Double] = [], rpc: [Double] = [], evaluation: [Double] = []
+            var tick: [Double] = [], mainActorLag: [Double] = []
             for _ in 0..<20 {
                 var started = ProcessInfo.processInfo.systemUptime
                 let snapshot = try reader.snapshot()
                 acquisition.append(ProcessInfo.processInfo.systemUptime - started)
-                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: SensorRegistry.capabilities.chipPolicy.required.union(SensorRole.comfort))
+                try snapshot.validate(now: ProcessInfo.processInfo.systemUptime, required: DeviceRegistry.current.capabilities.chipPolicy.required.union(SensorRole.comfort))
                 guard snapshot.fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
                 started = ProcessInfo.processInfo.systemUptime
                 let status = try await client.status()
@@ -81,15 +85,31 @@ struct LatencySummary: Codable, Equatable {
                 started = ProcessInfo.processInfo.systemUptime
                 for _ in 0..<10 {
                     _ = try ProfileEngine().evaluate(BuiltInProfiles.coolChassis, snapshot: snapshot,
-                        now: ProcessInfo.processInfo.systemUptime, chipPolicy: SensorRegistry.capabilities.chipPolicy)
+                        now: ProcessInfo.processInfo.systemUptime, chipPolicy: DeviceRegistry.current.capabilities.chipPolicy)
                 }
                 evaluation.append((ProcessInfo.processInfo.systemUptime - started) / 10)
+                // Sample dispatch delay during the real asynchronous GUI-model polling
+                // path. The synchronous read-only discovery measurement above is excluded.
+                let probe = Task.detached { () -> [Double] in
+                    var delays: [Double] = []
+                    for _ in 0..<20 {
+                        let submitted = ProcessInfo.processInfo.systemUptime
+                        delays.append(await MainActor.run { ProcessInfo.processInfo.systemUptime - submitted })
+                        try? await Task.sleep(for: .milliseconds(5))
+                    }
+                    return delays
+                }
+                started = ProcessInfo.processInfo.systemUptime
+                await model.tick(); tick.append(ProcessInfo.processInfo.systemUptime - started)
+                guard model.hardwareError == nil, model.machine.state == .system else { throw ControlError.invalidSnapshot }
+                mainActorLag.append(contentsOf: await probe.value)
                 try await Task.sleep(for: .seconds(1))
             }
             let sensor = try LatencySummary(seconds: acquisition), helper = try LatencySummary(seconds: rpc), engine = try LatencySummary(seconds: evaluation)
-            let passed = sensor.p95Milliseconds < 100 && helper.p95Milliseconds < 250 && engine.p95Milliseconds < 10
-            struct Report: Encodable { let performanceCheck: String; let sensorAcquisition: LatencySummary; let helperStatus: LatencySummary; let profileEvaluation: LatencySummary }
-            var bytes = try JSONEncoder().encode(Report(performanceCheck: passed ? "passed" : "budgetExceeded", sensorAcquisition: sensor, helperStatus: helper, profileEvaluation: engine)); bytes.append(10)
+            let modelTick = try LatencySummary(seconds: tick), dispatch = try LatencySummary(seconds: mainActorLag)
+            let passed = sensor.p95Milliseconds < 100 && helper.p95Milliseconds < 250 && engine.p95Milliseconds < 10 && dispatch.p95Milliseconds < 50
+            struct Report: Encodable { let performanceCheck: String; let sensorAcquisition: LatencySummary; let helperStatus: LatencySummary; let profileEvaluation: LatencySummary; let monitoringTick: LatencySummary; let mainActorDispatch: LatencySummary }
+            var bytes = try JSONEncoder().encode(Report(performanceCheck: passed ? "passed" : "budgetExceeded", sensorAcquisition: sensor, helperStatus: helper, profileEvaluation: engine, monitoringTick: modelTick, mainActorDispatch: dispatch)); bytes.append(10)
             FileHandle.standardOutput.write(bytes)
             return passed ? 0 : 1
         } catch {

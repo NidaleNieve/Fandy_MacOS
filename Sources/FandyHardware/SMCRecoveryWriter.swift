@@ -55,7 +55,7 @@ public enum SMCRecoveryWriter {
         var validation = fan; validation.mode = .automatic
         try prepare(target: target, fan: validation, metadata: metadata, transport: transport)
     }
-    fileprivate static func write(key: String, type: String, attributes: UInt8, bytes: [UInt8], transport: any SMCStructTransport) throws {
+    static func write(key: String, type: String, attributes: UInt8, bytes: [UInt8], transport: any SMCStructTransport) throws {
         var input = [UInt8](repeating: 0, count: 80)
         let number = key.utf8.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         for index in 0..<4 { input[index] = UInt8(truncatingIfNeeded: number >> (index * 8)) }

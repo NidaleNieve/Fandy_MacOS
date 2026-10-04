@@ -127,9 +127,11 @@ import Testing
     #expect(status.restoration?.fans.allSatisfy { $0.initialMode == .automatic && $0.commandSucceeded == true && $0.immediateMode == .automatic && $0.observedMode == .automatic } == true)
     #expect(status.restoration?.fans.allSatisfy(\.releasedManual) == false)
 }
-@Test func firmwareSystemStateIsUnqualifiedOwnership() {
+@Test func firmwareSystemStateRepresentsAppleUnlessGlobalHandoverIsActive() {
     var snapshot = fixture(); snapshot.fans[0].mode = .system
-    #expect(FanOwnership.observe(snapshot, now: 10) == .unknown)
+    #expect(FanOwnership.observe(snapshot, now: 10) == .appleObserved)
+    snapshot.fanHandoverActive = true
+    #expect(FanOwnership.observe(snapshot, now: 10) == .manualObserved)
 }
 
 @Test func restorationRetainsImmediateReadbackWhenFinalReadDetectsConflict() throws {
@@ -359,4 +361,16 @@ import Testing
     #expect(lease.expiresAt == spy.now + 15)
     let old = Data("{\"id\":\"11111111-1111-1111-1111-111111111111\",\"owner\":\"22222222-2222-2222-2222-222222222222\",\"generation\":1,\"renewedAt\":10,\"required\":[]}".utf8)
     #expect(try Wire.decode(ControlLease.self, from: old).expiresAt == nil)
+}
+
+@Test func qualifiedHelperRetainsMonitoringWhenFanMetadataIsLost() {
+    let spy = FanSpy()
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(), read: {
+        var snapshot = spy.snapshot(); snapshot.fans = []; return snapshot
+    }, clock: { 10 })
+    #expect(coordinator.startup())
+    let status = coordinator.status()
+    #expect(status.snapshot?.sensors.isEmpty == false)
+    #expect(status.snapshot?.fans.isEmpty == true); #expect(!status.automaticVerified)
+    #expect(status.fault != nil)
 }

@@ -284,10 +284,11 @@ struct SettingsView: View {
                 }
                 Text(model.capabilities.stage == .qualifiedControl ? "Eligible profiles control real fans. System restores Apple automatic control." : model.capabilities.canRestore ? "System and Max are available. Temperature profiles await their required inputs and activation test." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Hardware verification") {
+                    LabeledContent("Compatibility", value: model.capabilities.compatibilityEvidence == .locallyTested ? "Locally tested" : model.capabilities.compatibilityEvidence == .referenceSupported ? "Reference supported" : "Monitoring only")
                     LabeledContent("Control inputs", value: "\(model.capabilities.verifiedRoles.intersection(model.capabilities.requiredControlRoles).count) / \(model.capabilities.requiredControlRoles.count) reviewed")
                     LabeledContent("Chip control", value: model.capabilities.chipPolicy == .conservativeEnvelope ? "Conservative envelope" : "CPU/GPU peaks")
-                    LabeledContent("Automatic handback", value: model.capabilities.automaticRestoration == .verified ? "Verified" : "Pending")
-                    LabeledContent("Manual control and recovery", value: model.capabilities.manualTransaction == .verified ? "Verified" : "Pending")
+                    LabeledContent("Automatic handback", value: model.capabilities.automaticRestoration == .verified ? "Locally verified" : model.capabilities.automaticRestoration.supported ? "Reference supported" : "Unavailable")
+                    LabeledContent("Manual control and recovery", value: model.capabilities.manualTransaction == .verified ? "Locally verified" : model.capabilities.manualTransaction.supported ? "Reference supported" : "Unavailable")
                 }.accessibilityIdentifier("settings.hardwareVerification")
                 Text("Startup and wake begin in System. No telemetry or networking.").font(.caption).foregroundStyle(.secondary)
             }

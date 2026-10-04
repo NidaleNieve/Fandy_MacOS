@@ -84,6 +84,8 @@ private actor MonitoringClient: PrivilegedFanClient {
     var failed = false
     var restoreFailed = false
     var reportedReleaseFailed = false
+    var missingFans = false
+    func removeFanTelemetry() { missingFans = true }
     func setReportedReleaseFailed() { reportedReleaseFailed = true }
     func setRestoreFailed(_ failed: Bool) { restoreFailed = failed }
     func setFailed() { failed = true }
@@ -94,7 +96,9 @@ private actor MonitoringClient: PrivilegedFanClient {
             let report = try Wire.decode(RestorationReport.self, from: Data("{\"fans\":[{\"fanID\":0,\"initialMode\":0,\"commandSucceeded\":false,\"immediateMode\":0,\"observedMode\":0,\"failure\":\"write failed\"}]}".utf8))
             return HelperStatus(automaticVerified: false, snapshot: monitoringFixture(), fault: "write failed", restoration: report)
         }
-        return HelperStatus(automaticVerified: true, observationOnly: true, snapshot: monitoringFixture())
+        var reading = monitoringFixture()
+        if missingFans { reading.fans = [] }
+        return HelperStatus(automaticVerified: !missingFans, observationOnly: true, snapshot: reading)
     }
     func apply(_ targets: [FanTarget], generation: UInt64) { applies += 1 }
     func apply(_ targets: [FanTarget], generation: UInt64, required: Set<SensorRole>) { applies += 1 }
@@ -454,4 +458,17 @@ private actor EnvelopeClient: PrivilegedFanClient {
     await client.setRestoreFailed(false); model.select("system")
     while model.machine.state != .system { await Task.yield() }
     #expect(model.hardwareError == nil && model.isSelected("system"))
+}
+
+@MainActor @Test func unavailableFanInterfaceRetainsIndependentTemperatureDisplay() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let client = MonitoringClient(); await client.removeFanTelemetry()
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+        client: client, capabilities: HardwareCapabilities(model: "Test"), helperAvailable: { true }, clock: { 10 })
+    await model.tick()
+    #expect(model.snapshot?.sensors.first { $0.role == .trackpad }?.celsius == 27)
+    #expect(model.ownership == .unknown); #expect(!model.canActivate(BuiltInProfiles.gaming))
+    #expect(model.hardwareError?.contains("temperature monitoring remains available") == true)
+    #expect(await client.counts().0 == 0)
 }

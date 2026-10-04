@@ -85,7 +85,7 @@ import ServiceManagement
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
-        self.capabilities = capabilities ?? SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel())
+        self.capabilities = capabilities ?? DeviceRegistry.current.capabilities
         self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : self.capabilities.chipPolicy)
         self.clock = clock; self.wallClock = wallClock; self.applicationCatalog = applicationCatalog; self.powerCenter = powerCenter
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -126,6 +126,7 @@ import ServiceManagement
             "model": HardwareSnapshotReader.machineModel(),
             "controllerState": machine.state.rawValue, "helperHealth": helperHealth.rawValue,
             "hardwareStage": capabilities.stage.rawValue, "ownership": ownership.rawValue,
+            "compatibilityEvidence": capabilities.compatibilityEvidence.rawValue,
             "simulation": simulation, "unsavedChanges": unsavedChanges,
             "failureCodes": [hardwareError == nil ? nil : "monitoring_or_control_error", saveError == nil ? nil : "persistence_error"].compactMap { $0 }
         ]
@@ -231,6 +232,7 @@ import ServiceManagement
         guard !busy, !quitting else { return }
         refreshApplicationAvailability(); expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
         var restorationReport: RestorationReport?
+        var monitoringReading: HardwareSnapshot?
         do {
             if simulation {
                 await mock.setScenario(scenario)
@@ -248,6 +250,8 @@ import ServiceManagement
                     let status = try await client.status()
                     guard token == lifecycleToken, !quitting else { return }
                     restorationReport = status.restoration
+                    monitoringReading = status.snapshot
+                    monitoringReading?.fans = []
                     // Automatic-looking telemetry cannot erase a failed release transaction.
                     // An idle external manual mode is a separate ownership conflict; it does
                     // not automatically request another release merely because status was read.
@@ -267,16 +271,16 @@ import ServiceManagement
                 }
                 expireActivation(); expireScheduledOccurrence()
                 guard token == lifecycleToken else { return }
-                try reading.validateFans(now: clock())
+                if !reading.fans.isEmpty || machine.selected.kind != .system { try reading.validateFans(now: clock()) }
                 snapshot = reading
-                if capabilities.canRestore {
+                if capabilities.canRestore && !reading.fans.isEmpty {
                     if machine.selected.kind != .system {
                         guard capabilities.canControl, helperHealth == .controlReady else { throw ControlError.helperUnavailable }
                         try freshness.check(reading, required: machine.selected.requiredSensors(chipPolicy: machine.chipPolicy), now: clock())
                     }
                     await stepController(reading, now: clock())
                 }
-                hardwareError = observedBlocker
+                hardwareError = observedBlocker ?? (reading.fans.isEmpty ? "Fan interface unavailable; temperature monitoring remains available." : nil)
             }
             tickCount += 1
             evaluateSchedule()
@@ -288,7 +292,7 @@ import ServiceManagement
             sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: nil)
             if simulation { await execute(machine.fail(error)) }
             else {
-                hardwareError = error.localizedDescription; snapshot = nil; helperHealth = .fault
+                hardwareError = error.localizedDescription; snapshot = monitoringReading; helperHealth = .fault
                 if capabilities.canRestore && helperAvailable() {
                     await execute(machine.observationFailed(error, restoration: restorationReport))
                 }
@@ -323,7 +327,7 @@ import ServiceManagement
                         guard token == lifecycleToken else { return }
                         try reading.validateFans(now: clock())
                         snapshot = reading
-                        machine.restored(generation: generation, verified: reading.fans.allSatisfy { $0.mode == .automatic })
+                        machine.restored(generation: generation, verified: reading.appleOwnershipObserved)
                         if machine.state == .system { hardwareError = nil }
                     } catch { guard token == lifecycleToken else { return }; machine.restored(generation: generation, verified: false); hardwareError = error.localizedDescription }
                 }

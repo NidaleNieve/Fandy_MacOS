@@ -26,7 +26,7 @@ Open `Fandy.xcodeproj` and use the shared **Fandy** scheme. It has two native ta
 
 The app starts in the menu bar with its editor closed, in **System**, with **real hardware monitoring** enabled. Simulation is an explicit development option in Settings or the `--simulation` launch argument. Click the fan menu icon to select a profile in one click. **Edit Profiles…** opens the compact native editor. Drag a node or choose it with the native point selector; press Return to apply exact °C/% values. Decimal-comma input is supported for those locales. Add/remove nodes or reset the curve as needed. Invalid changes are marked “Not applied” and keep the last valid profile running. Invalid drafts stay visible but never replace the validated profile. Trackpad, Actuator and Airflow have separate comfort curves because their temperatures use different scales. Built-ins remain available; System and Max are immutable; other built-ins can be reset. Custom profiles support creation, duplication, renaming, deletion and reordering.
 
-Settings includes deterministic comfortable, warm chassis, gaming, GPU hot, sensor failure, stale sensor, disconnected helper and overheating scenarios. Real monitoring is the default. Reviewed control inputs are distinguished from informational CPU/GPU estimates and unresolved proximity candidates. Selecting a profile in the editor calculates a shadow demand, labeled as a preview with no fan commands. Unqualified profiles cannot activate from the menu or editor. Preview values never enter a control lease, and stale/missing inputs make the preview unavailable. A System checkmark is withheld if another application is visibly using manual fan mode. Selecting System requests verified automatic restoration. Firmware mode 3 is unqualified on this model and does not receive an Apple-ownership checkmark.
+Settings includes deterministic comfortable, warm chassis, gaming, GPU hot, sensor failure, stale sensor, disconnected helper and overheating scenarios. Real monitoring is the default. Reviewed control inputs are distinguished from informational CPU/GPU estimates and unresolved proximity candidates. Selecting a profile in the editor calculates a shadow demand, labeled as a preview with no fan commands. Unqualified profiles cannot activate from the menu or editor. Preview values never enter a control lease, and stale/missing inputs make the preview unavailable. A System checkmark is withheld if another application is visibly using manual fan mode. Selecting System requests verified automatic restoration. Firmware mode 3 remains unqualified on Mac17,9; source-supported legacy interfaces recognize it only with verified global handover release.
 
 ## Package a test DMG
 
@@ -37,7 +37,7 @@ python3 Scripts/package-dmg.py
 
 The image appears in `build/Distribution`, alongside its SHA-256 checksum and verification report. Packaging checks the app/helper identities, matching signing team, hardened runtime, absence of debugging entitlement, arm64 architecture and private files/paths. It verifies the image and mounts it read-only to check the actual payload; it never launches the app or registers a helper. Release builds strip local debug symbols before signing and map developer source paths. Build products, DMGs and private signing configuration remain excluded from Git.
 
-The current artifact is an **Apple Development-signed, unnotarized test build**. Gatekeeper may block it on another Mac. Broad distribution requires Developer ID Application signing and Apple notarization. macOS 15+ on Apple Silicon is supported for monitoring; physical fan control is currently qualified only for **Mac17,9**. See [packaging verification and limits](docs/INLINE_MENU_AND_DMG.md).
+The current artifact is an **Apple Development-signed, unnotarized test build**. Gatekeeper may block it on another Mac. Broad distribution requires Developer ID Application signing and Apple notarization. macOS 15+ on Apple Silicon is supported for monitoring; fan control supports **M1–M5 MacBook Pros** through a compiled, reference-backed registry and runtime metadata/sensor checks. **Mac17,9 is locally tested**; other variants are reference-supported, not physically tested. See [compatibility and limits](docs/COMPATIBILITY.md). See [packaging verification and limits](docs/INLINE_MENU_AND_DMG.md).
 
 ## Profiles
 
@@ -50,7 +50,7 @@ The current artifact is an **Apple Development-signed, unnotarized test build**.
 | Gaming | Progressively stronger chip cooling around 77–85°C. |
 | School | Gentler comfort demand with automatic mode at idle. |
 
-All six built-ins and eligible custom curves are operational on the qualified model. These are initial policies, not acoustically or thermally calibrated defaults. The immutable chip guard remains active for every custom profile. Neither System+ nor the comfort profiles multiply Apple's hidden demand. Manual 0% means a fan's reported spinning minimum; stopped fans are possible in Apple automatic mode.
+All six built-ins and eligible custom curves are operational on Mac17,9. On reference-supported notebooks, chip profiles require complete generation-specific CPU/GPU groups, and comfort profiles additionally require all five comfort inputs. These are initial policies, not acoustically or thermally calibrated defaults. The immutable chip guard remains active for every custom profile. Neither System+ nor the comfort profiles multiply Apple's hidden demand. Manual 0% means a fan's reported spinning minimum; stopped fans are possible in Apple automatic mode.
 
 ## Read-only discovery
 
@@ -101,3 +101,7 @@ Settings provide launch at login (enabled by default, with an explicit disable o
 Select a profile normally to use it until changed. **Activate for/until** adds a duration, next clock time or running-application condition to the active profile. **Resume Schedule** ends that override and returns to weekly automation through System.
 
 Each profile's Schedule section supports multiple daily ranges, overnight continuation, pauses and conflict review. Import Schedule from Text includes a copyable chatbot format prompt and errors. Settings export/import replaces profiles, schedules and preferences; individual exports include their schedules. Runtime timers and hardware qualification are never transferred. See [scheduling delivery and format](docs/SCHEDULING_DELIVERY.md).
+
+## Developer ID distribution
+
+The notarization pipeline is documented in [Distribution](docs/DISTRIBUTION.md). It requires a local Developer ID Application certificate and notarytool keychain profile, signs and notarizes both app and image, and publishes only after tickets, Gatekeeper, mounted contents and checksums pass. Development images remain explicitly unnotarized.

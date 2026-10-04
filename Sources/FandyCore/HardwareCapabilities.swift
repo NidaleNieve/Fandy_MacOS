@@ -3,7 +3,13 @@ import Foundation
 public enum HardwareStage: String, Codable, Sendable {
     case observation, restorationQualification, recoveryQualification, manualQualification, maximumControl, curveQualification, qualifiedControl
 }
-public enum QualificationState: String, Codable, Sendable { case pending, verified }
+public enum QualificationState: String, Codable, Sendable {
+    case pending, verified, referenceSupported
+    public var supported: Bool { self != .pending }
+}
+public enum CompatibilityEvidence: String, Codable, Sendable {
+    case locallyTested, referenceSupported, unsupported
+}
 public struct SensorEvidence: Codable, Sendable, Equatable {
     public let role: SensorRole
     public let keys: [String]
@@ -25,12 +31,16 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     public let automaticRestoration: QualificationState
     public let manualTransaction: QualificationState
     public let chipControl: ChipControlPolicy?
+    public let evidence: CompatibilityEvidence?
+    public var compatibilityEvidence: CompatibilityEvidence { evidence ?? (stage == .observation ? .unsupported : .locallyTested) }
     public var chipPolicy: ChipControlPolicy { chipControl ?? .cpuGPU }
     public init(model: String, stage: HardwareStage = .observation, sensors: [SensorEvidence] = [], topology: QualificationState = .pending,
-                automaticRestoration: QualificationState = .pending, manualTransaction: QualificationState = .pending, chipControl: ChipControlPolicy? = nil) {
+                automaticRestoration: QualificationState = .pending, manualTransaction: QualificationState = .pending, chipControl: ChipControlPolicy? = nil,
+                evidence: CompatibilityEvidence? = nil) {
         self.model = model; self.stage = stage; self.sensors = sensors; self.topology = topology
         self.automaticRestoration = automaticRestoration; self.manualTransaction = manualTransaction
         self.chipControl = chipControl
+        self.evidence = evidence
     }
     public static let requiredRoles = Set([SensorRole.cpuAverage, .gpuAverage, .cpuPeak, .gpuPeak, .trackpad, .actuator,
                                            .airflowLeft, .airflowTop, .airflowRight, .charger, .powerSupply, .wireless])
@@ -39,7 +49,7 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     }
     public var verifiedRoles: Set<SensorRole> {
         Set(sensors.filter { evidence in
-            evidence.state == .verified && !evidence.keys.isEmpty && !evidence.source.isEmpty &&
+            evidence.state.supported && !evidence.keys.isEmpty && !evidence.source.isEmpty &&
             evidence.keys.allSatisfy { $0.utf8.count == 4 && $0.utf8.allSatisfy { (32...126).contains($0) } } &&
             sensors.filter { $0.role == evidence.role }.count == 1
         }.map(\.role))
@@ -48,9 +58,9 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     public var requiredControlRoles: Set<SensorRole> { chipPolicy.required.union(SensorRole.comfort) }
     // Release authority is independent of temperature health and identity. The user-approved
     // restoration-first stage cannot enter manual mode, even with fully qualified sensors.
-    public var canRestore: Bool { stage != .observation && topology == .verified }
+    public var canRestore: Bool { stage != .observation && topology.supported }
     public var canControl: Bool {
-        [.maximumControl, .curveQualification, .qualifiedControl].contains(stage) && canRestore && automaticRestoration == .verified && manualTransaction == .verified
+        [.maximumControl, .curveQualification, .qualifiedControl].contains(stage) && canRestore && automaticRestoration.supported && manualTransaction.supported
     }
     public func permits(_ profile: Profile) -> Bool {
         guard canControl else { return false }
@@ -85,9 +95,9 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
         if stage == .observation { result.append("This build permits monitoring only.") }
         let missing = requiredControlRoles.subtracting(verifiedRoles)
         if !missing.isEmpty { result.append("Control inputs await qualification: " + missing.sorted { $0.rawValue < $1.rawValue }.map(sensorName).joined(separator: ", ")) }
-        if topology != .verified { result.append("Fan topology awaits restoration qualification.") }
-        if automaticRestoration != .verified { result.append("Physical automatic restoration has not passed.") }
-        if manualTransaction != .verified { result.append("Physical manual control and recovery have not passed.") }
+        if !topology.supported { result.append("Fan topology is unsupported.") }
+        if !automaticRestoration.supported { result.append("Automatic restoration is unsupported.") }
+        if !manualTransaction.supported { result.append("Manual control and recovery are unsupported.") }
         return result
     }
 }
@@ -95,8 +105,8 @@ public enum FanOwnership: String, Sendable {
     case appleObserved, manualObserved, unknown
     public static func observe(_ snapshot: HardwareSnapshot?, now: Double) -> Self {
         guard let snapshot, (try? snapshot.validateFans(now: now)) != nil else { return .unknown }
-        guard snapshot.fans.allSatisfy({ $0.mode == .automatic || $0.mode == .manual }) else { return .unknown }
-        return snapshot.fans.allSatisfy { $0.mode == .automatic } ? .appleObserved : .manualObserved
+        guard snapshot.fans.allSatisfy({ $0.mode.isAutomatic || $0.mode == .manual }) else { return .unknown }
+        return snapshot.appleOwnershipObserved ? .appleObserved : .manualObserved
     }
 }
 public enum HelperHealth: String, Sendable { case unavailable, monitoring, controlReady, fault }

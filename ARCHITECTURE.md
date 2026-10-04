@@ -1,3 +1,5 @@
+> Version 0.2.0 compatibility update: the exact Mac17,9 backend remains locally tested. Other M1–M5 MacBook Pros use compiled reference-supported recipes after independent identity, fan metadata and required-sensor checks. Earlier Mac17,9-only qualification descriptions below are historical evidence for that recipe, not a restriction on the new registry. See [compatibility](docs/COMPATIBILITY.md) and [distribution](docs/DISTRIBUTION.md).
+
 > Current delivery: [real temperature profiles and measured recovery](docs/TEMPERATURE_PROFILE_STATUS.md). The signed production policy uses a fixed chip envelope and five operational chassis inputs; exact CPU/GPU averages remain estimates, and Top is explicitly proximity.
 
 # Architecture
@@ -111,3 +113,7 @@ Ordinary menu actions use NSMenuItem; only readouts and exceptional long titles 
 
 
 Optional TemperatureTarget metadata contributes a bounded proportional request to ProfileEngine's maximum-demand composition. Target input membership extends requiredSensors and uses the same qualified CurveInput temperature selector. Targets never bypass chip guard or helper admission. Name-only edits use a validated metadata update that preserves controller generation and policy; general edits retain the existing control update path.
+
+## Compiled compatibility layer
+
+DeviceIdentity verifies arm64, notebook roster and chip family/variant separately. DeviceRegistry resolves generation-specific source tables once, freezing selected members/types and separating display averages from control maxima. Readable temperatures survive fan metadata failure. FanInterface discovers count, independent keys, bounds/target encodings and global handover metadata. ReferenceFanTransaction implements bounded direct/force-test sequences through an injected transport, clock, safety check and cancellation fence; AppleFanHardware retains the tested Mac17,9 writer and selects the reference adapter only for other reviewed models. FanRestoration owns per-fan attempts, global release and independent readback. Raw discovery and extra display-only sensors remain outside control authority.

@@ -72,19 +72,21 @@ public final class HelperCoordinator {
     public func status() -> HelperStatus {
         if !writesPermitted { return observationStatus() }
         // Status never renews a lease. It also detects a conflicting controller changing ownership.
+        var observedSnapshot: HardwareSnapshot?
         do {
             let snapshot: HardwareSnapshot
             if safety.lease == nil {
                 snapshot = try read()
+                observedSnapshot = snapshot
                 try snapshot.validateFans(now: clock())
                 do { try recordHealthy(snapshot) } catch { healthy = 0; samples = [] }
             } else { snapshot = try acquire() }
             if safety.lease != nil {
                 try safety.requireLiveLease(at: clock())
-                guard snapshot.fans.allSatisfy({ fan in targets.isEmpty ? fan.mode == .automatic : ownsTarget(fan) }) else { throw ControlError.restorationUnverified }
+                guard snapshot.fans.allSatisfy({ fan in targets.isEmpty ? fan.mode.isAutomatic : ownsTarget(fan) }) else { throw ControlError.restorationUnverified }
             }
             if safety.lease == nil {
-                let automatic = !safety.restoring && snapshot.fans.allSatisfy { $0.mode == .automatic }
+                let automatic = !safety.restoring && snapshot.appleOwnershipObserved
                 safety.observeIdleOwnership(automatic)
                 fault = automatic ? nil : ControlError.restorationUnverified.localizedDescription
             }
@@ -92,14 +94,21 @@ public final class HelperCoordinator {
         } catch {
             if safety.lease != nil { _ = restore() }
             else { safety.observationFailed() }
-            return HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, fault: error.localizedDescription, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
+            // Keep independently readable temperatures, but never expose invalid/stale fan
+            // telemetry as proof of ownership after the failed validation.
+            observedSnapshot?.fans = []
+            return HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, snapshot: observedSnapshot, fault: error.localizedDescription, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
         }
     }
     private func observationStatus() -> HelperStatus {
         do {
             let snapshot = try read()
+            if snapshot.fans.isEmpty {
+                return HelperStatus(automaticVerified: false, observationOnly: true, snapshot: snapshot,
+                    fault: "Fan interface unavailable; temperature monitoring remains available.", capabilities: capabilities)
+            }
             try snapshot.validateFans(now: clock())
-            let automatic = snapshot.fans.allSatisfy { $0.mode == .automatic }
+            let automatic = snapshot.appleOwnershipObserved
             return HelperStatus(automaticVerified: automatic, observationOnly: true, snapshot: snapshot,
                                 fault: automatic ? nil : "External manual fan control observed; observation helper cannot change it.", capabilities: capabilities)
         } catch {
@@ -112,7 +121,7 @@ public final class HelperCoordinator {
         guard request.version == Wire.version, request.required.count <= SensorRole.allCases.count else { throw ControlError.malformedMessage }
         let snapshot = try acquire()
         guard healthy >= (request.required.isEmpty ? 1 : 5) else { throw ControlError.invalidSnapshot }
-        guard snapshot.fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+        guard snapshot.appleOwnershipObserved else { throw ControlError.restorationUnverified }
         targets = []
         let qualifying = capabilities.stage == .curveQualification && !request.required.isEmpty
         if qualifying {
@@ -151,6 +160,7 @@ public final class HelperCoordinator {
                 guard deadline - clock() >= 2 else { throw ControlError.staleSession }
             }
             try safety.requireLiveLease(at: clock())
+            io.setControlRequirements(safety.lease?.required ?? [])
             try FanRestoration.apply(validated, using: io)
             try safety.requireLiveLease(at: clock())
             _ = try acquire() // Required sensors and bounds must still be healthy after I/O.
@@ -197,7 +207,7 @@ public final class HelperCoordinator {
             let snapshot = try acquire()
             try safety.requireLiveLease(at: clock())
             if targets.isEmpty {
-                guard snapshot.fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+                guard snapshot.appleOwnershipObserved else { throw ControlError.restorationUnverified }
                 return
             }
             guard snapshot.fans.allSatisfy({ ownsTarget($0) }) else { throw ControlError.restorationUnverified }

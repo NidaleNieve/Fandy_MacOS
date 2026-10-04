@@ -81,11 +81,11 @@ public final class SMCReader: @unchecked Sendable {
     }
     public func fans() throws -> [Fan] {
         let count = try read("FNum")
-        guard count.type == "ui8 ", let number = count.value, (1...8).contains(number), number.rounded() == number else { throw HardwareError.invalidMetadata }
+        guard count.type == "ui8 ", let number = count.value, (0...8).contains(number), number.rounded() == number else { throw HardwareError.invalidMetadata }
         return try (0..<Int(number)).map { id in
             func rpm(_ suffix: String) throws -> Double {
                 let reading = try read("F\(id)\(suffix)")
-                guard reading.type == "flt ", reading.size == 4, let value = reading.value else { throw HardwareError.invalidMetadata }
+                guard (reading.type == "flt " && reading.size == 4 || reading.type == "fpe2" && reading.size == 2), let value = reading.value else { throw HardwareError.invalidMetadata }
                 return value
             }
             let mode = try read(fanModeKey(id))

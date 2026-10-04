@@ -35,11 +35,11 @@ import FandyHardware
         connection.interruptionHandler=connection.invalidationHandler
         self.connection=connection;connection.resume();return connection
     }
-    private func dataCall(_ call: (any FanHelperXPC, @escaping (Data?,String?)->Void) -> Void) async throws -> Data {
+    private func dataCall(timeout: Double = 3, _ call: (any FanHelperXPC, @escaping (Data?,String?)->Void) -> Void) async throws -> Data {
         let connection=try connect()
         return try await withCheckedThrowingContinuation { continuation in
             let gate=ReplyGate<Data>(continuation)
-            DispatchQueue.main.asyncAfter(deadline:.now()+3) { if gate.finish(.failure(ControlError.helperUnavailable)) { connection.invalidate() } }
+            DispatchQueue.main.asyncAfter(deadline:.now()+timeout) { if gate.finish(.failure(ControlError.helperUnavailable)) { connection.invalidate() } }
             guard let proxy=connection.remoteObjectProxyWithErrorHandler({ @Sendable _ in gate.finish(.failure(ControlError.helperUnavailable)) }) as? any FanHelperXPC else { gate.finish(.failure(ControlError.helperUnavailable));return }
             call(proxy) { @Sendable data,error in
                 if let error { gate.finish(.failure(ControlError.invalidProfile(error))) }
@@ -57,7 +57,7 @@ import FandyHardware
         latest=status;return status
     }
     func recovery(_ request: RecoveryTrialRequest) async throws -> RecoveryTrialStatus {
-        guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canQualifyRecovery else {
+        guard DeviceRegistry.current.capabilities.canQualifyRecovery else {
             throw ControlError.hardwareUnqualified
         }
         _ = try connect(); let connectionID = connectionToken
@@ -75,19 +75,19 @@ import FandyHardware
     /// Fixed adversarial messages are sent only to a confirmed observation-only helper.
     /// No caller chooses payloads, methods, fan targets or trust requirements.
     func checkObservationProtocol() async throws -> [String] {
-        guard !SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl else { throw ControlError.unauthorized }
+        guard !DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl else { throw ControlError.unauthorized }
         return try await checkRestrictedProtocol(observationOnly: true)
     }
     func checkRestorationProtocol() async throws -> [String] {
-        guard [.restorationQualification, .recoveryQualification].contains(SensorRegistry.capabilities.stage),
-              SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl,
-              !SensorRegistry.capabilities.canQualifyManual else { throw ControlError.unauthorized }
+        guard [.restorationQualification, .recoveryQualification].contains(DeviceRegistry.current.capabilities.stage),
+              DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl,
+              !DeviceRegistry.current.capabilities.canQualifyManual else { throw ControlError.unauthorized }
         return try await checkRestrictedProtocol(observationOnly: false)
     }
     /// Production-safe negative checks: no valid lease or target request is transmitted.
     func checkProductionProtocol() async throws -> [String] {
         let initial = try await status()
-        guard SensorRegistry.capabilities.stage == .qualifiedControl,
+        guard DeviceRegistry.current.capabilities.stage == .qualifiedControl,
               initial.capabilities?.stage == .qualifiedControl, initial.automaticVerified,
               initial.manualQualified, initial.recovery?.active != true else { throw ControlError.unauthorized }
         var checks = ["authenticatedStatus"]
@@ -119,7 +119,7 @@ import FandyHardware
     private func checkRestrictedProtocol(observationOnly: Bool) async throws -> [String] {
         let initial = try await status()
         guard initial.observationOnly == observationOnly, !initial.manualQualified,
-              initial.capabilities?.stage == SensorRegistry.capabilities.stage, initial.recovery?.active != true else { throw ControlError.unauthorized }
+              initial.capabilities?.stage == DeviceRegistry.current.capabilities.stage, initial.recovery?.active != true else { throw ControlError.unauthorized }
         var checks = ["authenticatedStatus"]
         let leases: [(String, Data)] = [
             ("malformedJSON", Data("not JSON".utf8)),
@@ -140,7 +140,7 @@ import FandyHardware
         let forgedTarget = try Wire.encode(TargetRequest(leaseID: UUID(), generation: 1, snapshotID: UUID(), targets: [FanTarget(Int.max, 30_001)]))
         try await Task.sleep(for: .milliseconds(300))
         do {
-            _ = try await dataCall { proxy, reply in proxy.applyTargets(forgedTarget, withReply: reply) }
+            _ = try await dataCall(timeout: 9) { proxy, reply in proxy.applyTargets(forgedTarget, withReply: reply) }
             throw ControlError.unauthorized
         } catch ControlError.invalidProfile { checks.append("forgedTargetRejected") }
         if observationOnly {
@@ -180,15 +180,15 @@ import FandyHardware
         guard rejected else { throw ControlError.unauthorized }
     }
     func apply(_ targets: [FanTarget], generation: UInt64) async throws {
-        try await apply(targets,generation:generation,required:SensorRegistry.capabilities.chipPolicy.required)
+        try await apply(targets,generation:generation,required:DeviceRegistry.current.capabilities.chipPolicy.required)
     }
     func apply(_ targets: [FanTarget], generation requested: UInt64, required: Set<SensorRole>) async throws {
-        guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).permits(required: required) else { throw ControlError.hardwareUnqualified }
+        guard DeviceRegistry.current.capabilities.permits(required: required) else { throw ControlError.hardwareUnqualified }
         let token = UUID(); operationToken = token
         if generation != requested || lease == nil {
             var status = try await status()
             try requireCurrent(token)
-            if SensorRegistry.capabilities.stage == .qualifiedControl, let current = lease,
+            if DeviceRegistry.current.capabilities.stage == .qualifiedControl, let current = lease,
                LeaseContinuation.permits(current, status: status, required: required, now: ProcessInfo.processInfo.systemUptime) {
                 // Editing or changing a profile with the same required inputs keeps the
                 // valid hardware lease. UI generations still fence stale acknowledgements.
@@ -224,7 +224,7 @@ import FandyHardware
         try requireCurrent(token)
         guard let lease else { throw ControlError.helperUnavailable }
         let request = try Wire.encode(TargetRequest(leaseID: lease.id, generation: lease.generation, snapshotID: snapshot.id, targets: targets))
-        _ = try await dataCall { proxy, reply in proxy.applyTargets(request, withReply: reply) }
+        _ = try await dataCall(timeout: 9) { proxy, reply in proxy.applyTargets(request, withReply: reply) }
         try requireCurrent(token)
     }
     private func requireCurrent(_ token: UUID) throws {
@@ -268,7 +268,8 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     static var service:SMAppService { .daemon(plistName:FandyIdentity.launchDaemonPlist) }
     static var installed:Bool { service.status == .enabled }
     static func install() throws {
-        guard SensorRegistry.capabilities.canRestore else { throw ControlError.hardwareUnqualified }
+        guard DeviceRegistry.current.capabilities.canRestore else { throw ControlError.hardwareUnqualified }
+        try requireInstalledLocation()
         switch service.status {
         case .notRegistered, .notFound: try service.register()
         case .enabled, .requiresApproval: break
@@ -277,7 +278,8 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     }
     static func installObservation() throws {
         // This path must stop working when a future build gains any physical write capability.
-        guard !SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl else { throw ControlError.unauthorized }
+        guard !DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl else { throw ControlError.unauthorized }
+        try requireInstalledLocation()
         switch service.status {
         case .notRegistered, .notFound: try service.register()
         case .enabled, .requiresApproval: break
@@ -285,7 +287,7 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
         }
     }
     static func uninstallObservation(client: FanXPCClient) async throws {
-        guard !SensorRegistry.capabilities.canRestore, !SensorRegistry.capabilities.canControl else { throw ControlError.unauthorized }
+        guard !DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl else { throw ControlError.unauthorized }
         if service.status == .enabled {
             let status = try await client.status()
             guard status.observationOnly, !status.manualQualified else { throw ControlError.unauthorized }
@@ -295,5 +297,19 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     static func uninstall(client:FanXPCClient) async throws {
         try await client.restoreAutomatic()
         try await service.unregister()
+    }
+    private static func requireInstalledLocation() throws {
+        let url = Bundle.main.bundleURL.resolvingSymlinksInPath()
+        // Development builds retain the existing helper workflow. Distribution copies
+        // must be installed before registration, including App Translocation paths.
+        var code: SecStaticCode?, information: CFDictionary?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code,
+              SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess else { throw ControlError.unauthorized }
+        let info = information as? [String: Any]
+        let certificates = info?[kSecCodeInfoCertificates as String] as? [SecCertificate] ?? []
+        let developerID = certificates.first.flatMap { SecCertificateCopySubjectSummary($0) as String? }?.hasPrefix("Developer ID Application:") == true
+        if developerID && url.path != "/Applications/Fandy.app" {
+            throw ControlError.invalidProfile("Move Fandy to Applications, then reopen it to enable fan control.")
+        }
     }
 }

@@ -7,7 +7,7 @@ enum LeaseAdmission {
               !status.observationOnly, status.fault == nil, status.recoveryBlocker == nil,
               status.restoration?.verified != false, let snapshot = status.snapshot,
               (try? snapshot.validateFans(now: now)) != nil else { return false }
-        return snapshot.fans.allSatisfy { $0.mode == .automatic }
+        return snapshot.appleOwnershipObserved
     }
 }
 

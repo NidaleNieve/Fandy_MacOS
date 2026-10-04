@@ -1,3 +1,5 @@
+> Version 0.2.0 compatibility update: the exact Mac17,9 backend remains locally tested. Other M1–M5 MacBook Pros use compiled reference-supported recipes after independent identity, fan metadata and required-sensor checks. Earlier Mac17,9-only qualification descriptions below are historical evidence for that recipe, not a restriction on the new registry. See [compatibility](docs/COMPATIBILITY.md) and [distribution](docs/DISTRIBUTION.md).
+
 > Current delivery: [real temperature profiles and measured recovery](docs/TEMPERATURE_PROFILE_STATUS.md). The signed production policy uses a fixed chip envelope and five operational chassis inputs; exact CPU/GPU averages remain estimates, and Top is explicitly proximity.
 
 # Safety
@@ -97,3 +99,7 @@ An actual verified handback clears a retained unverified-restoration fault; fail
 
 
 An optional temperature goal adds cooling demand and cannot reduce curves, floor or immutable chip safety. It uses the same fresh/qualified input requirements; target-sensor failure returns to System. It is not a precision thermostat or a guaranteed achievable temperature. Response bands are profile-control choices, not asserted Apple critical thresholds.
+
+## Legacy force-test interfaces
+
+Ftst transfers normal thermal-controller ownership; it is not an Apple-supported safety API. Acquire is bounded to seven seconds with cancellation, fresh sensor/guard and metadata checks. Every release attempts all fans, clears/readbacks Ftst, then independently reads all modes. Partial fan failure cannot suppress global release; global failure prevents a verified System claim. Lost handover is not reasserted. Mode 3 is recognized only by reviewed reference recipes; the tested Mac17,9 recipe is unchanged. No Apple emergency or helper-death recovery guarantee is asserted. A dead or blocked helper cannot execute its watchdog; restart restores before sensor discovery if launchd and hardware I/O cooperate.
