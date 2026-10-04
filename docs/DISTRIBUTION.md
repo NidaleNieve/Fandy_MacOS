@@ -2,23 +2,30 @@
 
 The release app and helper retain is.dsr.fandy / is.dsr.fandy.fan-helper and the existing signing team. Public source contains no signing team configuration, passwords, certificates, measurements or personal settings.
 
-Build with one job:
+A development-signed image can be produced with `python3 Scripts/package-dmg.py`. It is unnotarized and not Gatekeeper-ready.
+
+## One-time notarization setup
+
+1. In **Xcode → Settings → Accounts**, select your paid developer account/team, open **Manage Certificates…**, click **+**, and create **Developer ID Application**. Use the same team as the existing app and helper. Apple requires the Account Holder role for local Developer ID certificates; see [certificate guidance](https://developer.apple.com/help/account/certificates/create-developer-id-certificates).
+2. At [account.apple.com](https://account.apple.com), create an **app-specific password** under **Sign-In and Security**. See [Apple's instructions](https://support.apple.com/en-us/102654).
+3. From Terminal, run the command below. Enter your Apple Account, Team ID and app-specific password in its interactive prompts. Credentials are stored in the local Keychain, not in Git or the app.
+
+```sh
+xcrun notarytool store-credentials "FandyNotary"
+```
+
+Do not paste the password into chat, repository files or command-line arguments.
+
+## Build and notarize
 
 ```sh
 FANDY_BUILD_CONFIGURATION=Release Scripts/build.sh -jobs 1
+python3 Scripts/distribute.py --keychain-profile FandyNotary
 ```
 
-A development-signed test image can be produced with `python3 Scripts/package-dmg.py`. Its filename and verification report explicitly say Test / unnotarized. This is not a Gatekeeper-ready release.
+The script signs the helper and app, notarizes and staples both the app and DMG, and checks Gatekeeper and the final mounted payload. It requires exactly one valid Developer ID Application identity and preserves the trusted team. Output is `build/Distribution-Release/Fandy-VERSION-arm64.dmg`, its checksum and `verification.json`. It creates no verified release on failure and does not upload to GitHub. Use a new `--output` directory if that output already exists.
 
-For broad distribution, install a Developer ID Application certificate privately through Xcode's account certificate manager. Configure notarytool credentials into a local keychain profile using Apple's documented interactive/keychain workflow. Do not enter secrets in repository files, chat, shell history or command-line arguments. Fandy's normal application and helper never use notarization credentials or network access.
-
-```sh
-python3 Scripts/distribute.py --keychain-profile YOUR_LOCAL_PROFILE_NAME
-```
-
-The distribution script requires exactly one valid Developer ID Application identity and preserves the existing trusted team. It copies the Release app into temporary staging, signs helper before app with hardened runtime and a secure timestamp, verifies matching identities/architecture, submits an app archive, staples the app, constructs the drag-to-Applications image, signs and submits that image, staples it, verifies both tickets and Gatekeeper assessments, and checks the final mounted payload read-only. The final SHA-256 is computed after stapling. Only then is `build/Distribution-Release/Fandy-VERSION-arm64.dmg` published with its checksum and verification.json. A failed submission cannot publish a verified release. Apple tool output is not printed publicly because it can contain account information.
-
-The DMG contains only Fandy.app and an Applications shortcut. Attribution/license notices are inside the signed app. No debug symbols, raw logs, sensor recordings, signing configuration or developer paths are packaged. Installation into /Applications/Fandy.app is required before helper registration for Developer ID builds; mounted-image and translocated launches cannot register the service. First launch has System as its default. On supported hardware Fandy requests native SMAppService background-helper approval, explains it in a dedicated setup window that closes after approval, and provides a System Settings shortcut. Unapproved fan profiles are disabled with a red status indicator. Subsequent launches verify System and fresh eligibility before resuming the scheduled or remembered default profile.
+The DMG contains Fandy.app and an Applications shortcut, with license notices inside the app. Private settings, logs and signing configuration are excluded. Developer ID builds require installation in Applications before helper registration. Verify the genuinely distribution-signed app/helper connection and automatic restoration through normal installation before replacing the public release; the current live evidence uses Apple Development signing.
 
 Verify software with `Scripts/verify.sh`, or run the unsigned native compile check with `FANDY_BUILD_CONFIGURATION=Release Scripts/verify.sh --native-build`. CI adds macos-15 and macos-latest native Release compilation. CI results and actual runtime checks must be reported separately.
 

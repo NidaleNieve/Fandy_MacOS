@@ -4,7 +4,47 @@ import argparse
 import getpass
 from pathlib import Path
 import re
+import struct
 import subprocess
+import zlib
+
+# Only this reviewed, demo-data app rendering may be committed as a binary.
+PUBLIC_IMAGES = {'docs/images/profiles.png'}
+
+
+def png_problems(content):
+    if len(content) > 2 * 1024 * 1024 or not content.startswith(b'\x89PNG\r\n\x1a\n'):
+        return ['invalid public PNG']
+    position = 8
+    chunks = []
+    while position < len(content):
+        if position + 12 > len(content):
+            return ['invalid public PNG']
+        size = struct.unpack_from('>I', content, position)[0]
+        end = position + size + 12
+        if end > len(content):
+            return ['invalid public PNG']
+        kind = content[position + 4:position + 8]
+        payload = content[position + 8:end - 4]
+        checksum = struct.unpack_from('>I', content, end - 4)[0]
+        if zlib.crc32(kind + payload) != checksum:
+            return ['invalid public PNG']
+        if kind not in {b'IHDR', b'IDAT', b'IEND', b'sRGB', b'gAMA', b'cHRM', b'pHYs'}:
+            return ['unreviewed PNG metadata']
+        if kind == b'IHDR':
+            if chunks or size != 13:
+                return ['invalid public PNG']
+            width, height, depth, color, compression, filtering, interlace = struct.unpack('>IIBBBBB', payload)
+            if not (0 < width <= 4096 and 0 < height <= 3072 and depth == 8 and color in {2, 6}
+                    and compression == filtering == interlace == 0):
+                return ['invalid public PNG']
+        if kind == b'IEND' and (size != 0 or end != len(content)):
+            return ['invalid public PNG']
+        chunks.append(kind)
+        position = end
+    if not chunks or chunks[0] != b'IHDR' or chunks[-1] != b'IEND' or b'IDAT' not in chunks:
+        return ['invalid public PNG']
+    return []
 
 PRIVATE_SUFFIXES = ('.local.xcconfig', '.csv', '.jsonl', '.log', '.pem', '.key', '.p12', '.pfx',
                     '.mobileprovision', '.provisionprofile', '.cer', '.ips', '.crash')
@@ -29,6 +69,8 @@ def scan(path, content, signing_ids=(), username=''):
             file.name in PRIVATE_REPORTS or file.name == '.env' or file.name.startswith('.env.') or
             file.name.endswith(PRIVATE_SUFFIXES)):
         problems.append('private artifact')
+    if path in PUBLIC_IMAGES:
+        return problems + png_problems(content)
     if len(content) > 512 * 1024 or b'\0' in content:
         return problems + ['binary or oversized artifact']
     try:
@@ -71,7 +113,7 @@ def main():
     if failures:
         print('Public-content check failed. Sensitive values were not printed.')
         return 1
-    print(f'Public-content check passed: {sum(bool(path) for path in paths)} staged text files.')
+    print(f'Public-content check passed: {sum(bool(path) for path in paths)} staged files.')
     return 0
 
 

@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import struct
+import zlib
 
 spec = importlib.util.spec_from_file_location('public_content', Path(__file__).parents[2] / 'Scripts/check-public-content.py')
 module = importlib.util.module_from_spec(spec)
@@ -36,6 +38,27 @@ class PublicContentTests(unittest.TestCase):
 
     def test_binary_artifacts_are_rejected(self):
         self.assertIn('binary or oversized artifact', module.scan('capture.dat', b'\0private'))
+
+    @staticmethod
+    def png(extra=b''):
+        def chunk(kind, data):
+            return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+        return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 6, 0, 0, 0)) + extra
+                + chunk(b'IDAT', zlib.compress(b'\0\xff\xff\xff\xff')) + chunk(b'IEND', b''))
+
+    def test_only_reviewed_metadata_free_app_image_is_allowed(self):
+        png = self.png()
+        self.assertFalse(module.scan('docs/images/profiles.png', png))
+        self.assertTrue(module.scan('docs/images/unreviewed.png', png))
+        self.assertTrue(module.scan('docs/images/profiles.png', b'not a PNG'))
+        self.assertTrue(module.scan('docs/images/profiles.png', png + b'trailing private data'))
+        corrupt = bytearray(png); corrupt[-1] ^= 1
+        self.assertTrue(module.scan('docs/images/profiles.png', bytes(corrupt)))
+
+    def test_png_text_metadata_is_rejected_without_echoing_it(self):
+        text = b'tEXt' + b'private metadata'
+        extra = struct.pack('>I', len(text) - 4) + text + struct.pack('>I', zlib.crc32(text))
+        self.assertEqual(module.scan('docs/images/profiles.png', self.png(extra)), ['unreviewed PNG metadata'])
 
 
 if __name__ == '__main__':

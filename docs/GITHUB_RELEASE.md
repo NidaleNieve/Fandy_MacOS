@@ -37,3 +37,9 @@ No history rewrite was necessary. The audit intentionally preserves the public p
 3. Resolve the App Store architecture blockers before preparing a Store archive or claiming Store readiness.
 
 This publication did not replace the running app, change user profiles or permissions, or issue fan commands.
+
+## Documentation revision
+
+The README now uses a PNG rendered from the shipped `ProfileEditor` views, replacing the SVG interface illustration. Rendering used an isolated simulation model with built-in profiles and demo readings; the window remained hidden. The image was visually reviewed and embedded EXIF metadata removed. The public-content checker permits only the specifically reviewed image path and validates PNG structure, checksums and allowed non-text chunks. All other binary artifacts remain rejected.
+
+48 tool tests pass after the image-policy tests were added. The app-view render also compiled and completed successfully. Only documentation, assets and publication tooling changed; the downloadable build 8 app and checksum are unchanged. Release notes now contain the download, installation and signing status only. Notarization instructions are in [Distribution](DISTRIBUTION.md).
