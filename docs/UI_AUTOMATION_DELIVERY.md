@@ -29,6 +29,7 @@ The app icon uses original geometry. Apple limits system-provided imagery to int
 
 - **348 Swift tests** pass with one build job and serial test execution: 48 hardware, 191 core, 109 app.
 - **46 tool tests** pass.
+- [GitHub verification for code commit d988cb0](https://github.com/NidaleNieve/Fandy_MacOS/actions/runs/37209040150) passes all jobs: software tests, sanitizers, native Release on macOS 15 and macos-latest. These are compilation/software checks, not physical testing on additional Macs.
 - Signed arm64 Release build succeeds with macOS 15 deployment target, existing bundle/helper identities and private signing configuration.
 - New tests cover native cancellation/long-name rows, stable menu sizing, compact/resizable embedded controls, native clock size, hosting constraint removal, hidden native indicators, weekly spillover, launch/exit recovery, schedule resumption, timer priority, startup/wake baseline, unavailable activation, Undo/Redo and backward-compatible interchange.
 - Update used verified automatic restoration, native helper unregistration, a complete signed-bundle replacement and native registration. Helper and login registration remain enabled; previous bundle is retained in ignored build storage.
@@ -39,3 +40,5 @@ The app icon uses original geometry. Apple limits system-provided imagery to int
 ## Artifacts and remaining release work
 
 The refreshed Test DMG and its checksum/verification report are under ignored `build/Distribution/UI-Automation-0.2.0-build3`. Its app is Apple Development-signed; the image is unsigned and neither is notarized. Developer ID Application signing and a private notarytool keychain profile are still required for the broadly shareable release. Existing physical compatibility, helper-death and sleep/wake limitations remain documented in the compatibility/release reports; this UI delivery does not claim new physical verification on other models.
+
+Final Test DMG SHA-256: `ab5f551843b7851a321b71b77612d09c3b798b43d9e567d31b0860f1cede3162`.
