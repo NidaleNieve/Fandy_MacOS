@@ -14,7 +14,7 @@
 ![Fandy's profile editor](docs/images/profiles.png)
 <p align="center"><sub>Rendered from Fandy’s app views using demo readings.</sub></p>
 
-Fandy is a native menu-bar fan controller. Switch profiles, edit cooling curves and schedule cooling around your day.
+Fandy is a native menu-bar fan controller and temperature monitor. View chip and chassis temperatures alongside fan speeds, switch cooling profiles, and schedule cooling around your day.
 
 ## Get started
 
@@ -42,7 +42,8 @@ Create and edit custom profiles with intuitive graphs for chip and chassis tempe
 
 - **Temporary cooling:** activate a profile for minutes or hours, until a time, or until an application closes.
 - **Schedules:** choose weekday periods, overnight schedules and vacation pauses.
-- **At a glance:** customize temperature and fan-speed readouts, and assign keyboard shortcuts.
+- **Temperature monitoring:** see CPU, GPU, trackpad and other available sensor readings beside the profile editor. Choose which temperatures appear in the menu.
+- **At a glance:** show fan speeds and assign keyboard shortcuts.
 - **Make it portable:** export individual profiles with their schedules, or move your whole configuration to another Mac.
 
 ## Compatibility
