@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="448" viewBox="0 0 900 448" role="img" aria-labelledby="title description">
+<title id="title">Choose a profile and adjust its fan curve</title>
+<desc id="description">Illustration of Fandy’s compact menu and profile editor. Example temperatures and fan speeds do not come from a user’s Mac.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#25292e;font-size:14px}.muted{fill:#737b85;font-size:12px}.label{font-size:12px;fill:#737b85}.strong{font-weight:600}.axis{stroke:#e1e4e8;stroke-width:1}</style>
+<rect width="900" height="448" rx="12" fill="#f6f7f9"/>
+<rect x="20" y="20" width="254" height="400" rx="10" fill="white" stroke="#d9dde3"/>
+<text x="44" y="51" class="strong">Fandy</text><path d="M36 66H258" stroke="#e1e4e8"/>
+
+<text x="64" y="94">System</text>
+<text x="64" y="124">Max</text>
+<text x="64" y="154">System+</text>
+<rect x="28" y="163" width="238" height="29" rx="5" fill="#eef2f5"/><text x="40" y="184" class="strong">✓</text>
+<text x="64" y="184">Cool Chassis</text>
+<text x="64" y="214">Gaming</text>
+<text x="64" y="244">School</text>
+<path d="M36 261H258" stroke="#e1e4e8"/><text x="44" y="286">Activate for/until</text><text x="247" y="286">›</text>
+<path d="M36 302H258" stroke="#e1e4e8"/><rect x="83" y="322" width="128" height="3" rx="1.5" fill="#e6e8eb"/><rect x="83" y="322" width="48" height="3" rx="1.5" fill="#737b85"/>
+<text x="147" y="346" text-anchor="middle" class="muted">38% · 2,990 / 2,940 RPM</text>
+<text x="68" y="371" class="muted">CPU</text><text x="226" y="371" text-anchor="end" class="strong">48°C</text>
+<text x="68" y="395" class="muted">Trackpad</text><text x="226" y="395" text-anchor="end" class="strong">27°C</text>
+<rect x="300" y="20" width="580" height="400" rx="10" fill="white" stroke="#d9dde3"/>
+<text x="324" y="51" class="strong">Cool Chassis</text><text x="324" y="82" class="muted">Fan Curves</text><text x="428" y="82" class="muted">Schedule</text><text x="526" y="82" class="muted">Pause Schedule</text><text x="659" y="82" class="muted">When Activated</text>
+<path d="M316 95H864" stroke="#e1e4e8"/><text x="324" y="123" class="strong">Chip fan curve</text>
+
+<path d="M378 156H844" class="axis"/><text x="364" y="160" text-anchor="end" class="label">100%</text>
+<path d="M378 208H844" class="axis"/><text x="364" y="212" text-anchor="end" class="label">75%</text>
+<path d="M378 260H844" class="axis"/><text x="364" y="264" text-anchor="end" class="label">50%</text>
+<path d="M378 312H844" class="axis"/><text x="364" y="316" text-anchor="end" class="label">25%</text>
+<path d="M378 364H844" class="axis"/><text x="364" y="368" text-anchor="end" class="label">0%</text>
+<text x="378.0" y="385" text-anchor="middle" class="label">45°C</text>
+<text x="494.5" y="385" text-anchor="middle" class="label">55°C</text>
+<text x="611.0" y="385" text-anchor="middle" class="label">65°C</text>
+<text x="727.5" y="385" text-anchor="middle" class="label">75°C</text>
+<text x="844.0" y="385" text-anchor="middle" class="label">85°C</text>
+<polyline points="378.00,364.00 494.50,343.20 611.00,301.60 727.50,249.60 785.75,197.60 844.00,156.00" fill="none" stroke="#668f9e" stroke-width="2.5"/>
+<circle cx="378.00" cy="364.00" r="4.5" fill="white" stroke="#668f9e" stroke-width="2.5"/>
+<circle cx="494.50" cy="343.20" r="4.5" fill="white" stroke="#668f9e" stroke-width="2.5"/>
+<circle cx="611.00" cy="301.60" r="4.5" fill="white" stroke="#668f9e" stroke-width="2.5"/>
+<circle cx="727.50" cy="249.60" r="4.5" fill="white" stroke="#668f9e" stroke-width="2.5"/>
+<circle cx="785.75" cy="197.60" r="4.5" fill="white" stroke="#668f9e" stroke-width="2.5"/>
+<circle cx="844.00" cy="156.00" r="4.5" fill="white" stroke="#668f9e" stroke-width="2.5"/>
+<text x="450" y="439" text-anchor="middle" class="muted">Interface overview · example readings</text></svg>
