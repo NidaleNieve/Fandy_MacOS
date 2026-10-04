@@ -27,7 +27,7 @@ Before initial publication, all 38 reachable Git commits and 629 unique blobs we
 
 The README uses the owner's supplied screenshots of Cool Chassis: its chip curve editor and native menu with live temperature readings. Rounded corner masks preserve the original screenshot content and resolution; the menu's surrounding desktop margin is cropped. No personal information or schedules are visible. PNG ancillary metadata was stripped, and both images were visually reviewed.
 
-The public-content checker permits only specifically reviewed image paths and validates PNG structure, checksums and allowed non-text chunks. Other binary artifacts remain rejected. The images are shown side by side at the same display height, with the updated menu screenshot at a readable size and a clearly visible black outline around the rounded curve image. Customizable temperature readings inside the menu are documented explicitly.
+The public-content checker permits only specifically reviewed image paths and validates PNG structure, checksums and allowed non-text chunks. Other binary artifacts remain rejected. The images are shown side by side at the same display height, with the updated menu screenshot at a readable size and a subtle RGB 197, 197, 197 outline around the rounded curve image. Customizable temperature readings inside the menu are documented explicitly.
 
 ## Remaining work
 
