@@ -99,3 +99,9 @@ Global shortcuts register explicit user-selected combinations through Carbon; no
 ## Reference-supported authority
 
 DeviceRegistry is compiled into both signed processes. Runtime detection resolves only source-listed recipes; imported profiles/preferences and caller data cannot add models, change evidence, keys, mode sequences or qualification. The existing five-method authenticated XPC interface is unchanged. Legacy force/test operations are internal fixed-key operations, never arbitrary key APIs. XPC ingress cancellation revokes queued and acquiring transactions before System release; the safety queue remains the sole physical writer. Developer ID app/helper signatures must retain the same signing team and identifiers. Distribution builds refuse helper registration outside /Applications/Fandy.app.
+
+## Remembered defaults and helper onboarding
+
+The default-profile identifier is validated against the local profile collection and included in portable settings. It grants no authority: the signed hardware registry, peer authentication, fresh eligibility checks and helper validation still apply. Removing its profile resets it to System. Runtime overrides, targets and leases remain nonpersistent. Concurrent configuration saves preserve newer user selections rather than overwriting them with a stale snapshot.
+
+On supported hardware the genuine app requests the bundled SMAppService background helper at startup. Native approval is still required. While unapproved, non-System activation is unavailable; the menu, Profiles and Settings expose a red indicator and a direct Login Items settings action. The approval sheet does not block the controller's main actor. This is a launch daemon, not a system extension; no new permissions or privileged XPC methods are introduced. Tests and diagnostics cannot register login/helper services through this onboarding path.

@@ -18,6 +18,10 @@ No target clearing is implemented. After verified handback Apple independently c
 
 Custom mode uses manual ownership and temporarily replaces Apple's ordinary demand. A fan floor that reliably preserves higher Apple demand has not been established. Fandy does not fake a floor by multiplying a hidden Apple curve or interpreting actual RPM as Apple demand. The profile floor is a minimum within Fandy's own manual policy. System+/School hand back ownership at idle so Apple's stopped-fan behavior remains available.
 
+## Remembered default and scheduling
+
+The saved default is a profile identifier, never a manual mode, target, lease or heartbeat. Startup first verifies automatic handback, then requires fresh hardware/sensor/helper eligibility before selecting an active schedule or that default. A corrupt configuration blocks automatic default resumption. First launch defaults to System. A scheduled profile does not overwrite the default and returns through System when its occurrence ends. Temporary timers and process watches do not persist, and faults block automatic default retries until a deliberate selection. Selecting System supersedes the current scheduled occurrence.
+
 ## Failures and lifecycle
 
 | Event | Required behavior / current verification |

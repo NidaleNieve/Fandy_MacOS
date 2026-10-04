@@ -53,6 +53,21 @@ struct FandyApp: App {
         status.openSettings = { [weak self] in self?.showSettings() }
         menu = status
         guard !CommandLine.arguments.contains("--functional-check"), (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
+        Task { [weak self, weak model] in
+            // Registration is performed by the model's startup task. Give its
+            // native approval status a chance to settle before explaining it.
+            try? await Task.sleep(for: .seconds(1))
+            guard let model else { return }; model.refreshHelperSetup()
+            guard model.needsHelperSetup, model.helperSetupStatus == .requiresApproval else { return }
+            let alert = NSAlert(); alert.messageText = "Allow Fandy fan control"
+            alert.informativeText = "Enable Fandy in System Settings → General → Login Items & Extensions → Allow in the Background."
+            alert.addButton(withTitle: "Open System Settings"); alert.addButton(withTitle: "Later")
+            self?.showSettings()
+            guard let window = self?.settingsWindow else { return }
+            alert.beginSheetModal(for: window) { [weak model] response in
+                if response == .alertFirstButtonReturn { model?.openHelperSetup() }
+            }
+        }
         let shortcuts = GlobalShortcuts(); self.shortcuts = shortcuts
         shortcuts.invoke = { [weak self, weak model] action in
             if action == "menu" { self?.menu?.toggle() } else { model?.toggleProfile(action) }

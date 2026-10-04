@@ -1,4 +1,16 @@
-# Current checkpoint — 2026-10-04: compact native menu and application launch rules
+# Current checkpoint — 2026-10-04: remembered default and helper approval
+
+0.2.0 build 4 remembers an everyday profile across Quit/reopen after verified System/fresh eligibility. Schedules temporarily override it and return to it at their end/gaps; a deliberate selection supersedes the current occurrence. Until Changed is reversible. Timers/process watches remain nonpersistent. Concurrent saves retain newer selections, deleted defaults become System, and faults/wake retain conservative recovery.
+
+Native background-helper onboarding adds nonblocking explanation, direct Login Items settings access, disabled non-System profiles and red indicators in menu/Profiles/Settings. This is a privileged background helper, not a system extension. Hardware authority/XPC/SMC protocols are unchanged.
+
+357 Swift tests, 46 tool tests and the signed arm64 Release build pass. The installed signed bundle was updated after verified release/unregister, preserving private profiles and helper/login approval. A temporary-store startup check passes System/controlReady/modes 0/0. Two normal launches resumed Cool Chassis; normal Quit between them independently verified Apple handback and preserved the default. The app is running Cool Chassis. Permission-denied UI is model/native-menu tested; actual unapproved setup and layout remain for human review. No screenshots/GUI automation.
+
+DMG/checksum/report: `build/Distribution/Default-Profile-0.2.0-build4`. Only app + Applications; README removed. SHA-256 `b3fa8c54edc223cfccddbc6eccb403ae2f953ffe2a6f072ff2d9383c015f02b2`. Development-signed and unnotarized; Developer ID/notarization remain blocked on privately configured distribution credentials. See [delivery](DEFAULT_PROFILE_DELIVERY.md). Sleep/wake, other-hardware physical testing and subjective calibration remain open; do not repeat already-passed fan qualification for these UI/automation changes.
+
+---
+
+# Previous checkpoint — 2026-10-04: compact native menu and application launch rules
 
 0.2.0 build 3 delivers the native app icon, fully native menu actions (removing rectangular Cancel highlighting), stable centered readouts, compact inline time controls, native hosting sizing fixes, hidden profile scroll indicators, combined weekly schedule overview and per-profile application-launch/close automation. See [delivery details and semantics](UI_AUTOMATION_DELIVERY.md).
 

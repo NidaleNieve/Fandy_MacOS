@@ -17,7 +17,7 @@ struct ConfigurationSettings: View {
                 model.setPreferences { $0.launchAtLogin = enabled }; model.configureLogin(); loginStatus = SMAppService.mainApp.status
             }))
             if loginStatus == .requiresApproval { Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() } }
-            Text("Login starts in System. Enabled schedules can run after fresh hardware checks.").font(.caption).foregroundStyle(.secondary)
+            Text("Login checks the hardware, then uses the schedule or your remembered default profile.").font(.caption).foregroundStyle(.secondary)
             Toggle("Use 24-hour time", isOn: Binding(get: { model.automation.preferences.use24HourTime }, set: { enabled in model.setPreferences { $0.use24HourTime = enabled } }))
         }
         Section("Menu Bar Temperatures") {

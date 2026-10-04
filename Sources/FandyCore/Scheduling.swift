@@ -52,15 +52,17 @@ public struct SchedulePause: Codable, Sendable, Equatable, Identifiable {
     public func contains(_ date: Date, profile: String) -> Bool { (profileID == nil || profileID == profile) && start <= date && date < end }
 }
 public struct AppPreferences: Codable, Sendable, Equatable {
+    public var defaultProfileID: String = "system"
     public var launchAtLogin: Bool = true
     public var use24HourTime: Bool = true
     public var showHelperProcesses: Bool = false
     public var menuSensors: [String] = []
     public var shortcuts: [String: ShortcutBinding] = [:]
     public init() {}
-    private enum CodingKeys: String, CodingKey { case launchAtLogin, use24HourTime, showHelperProcesses, menuSensors, shortcuts }
+    private enum CodingKeys: String, CodingKey { case defaultProfileID, launchAtLogin, use24HourTime, showHelperProcesses, menuSensors, shortcuts }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        defaultProfileID = try c.decodeIfPresent(String.self, forKey: .defaultProfileID) ?? "system"
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
         use24HourTime = try c.decodeIfPresent(Bool.self, forKey: .use24HourTime) ?? true
         showHelperProcesses = try c.decodeIfPresent(Bool.self, forKey: .showHelperProcesses) ?? false
@@ -87,7 +89,7 @@ public struct AutomationConfiguration: Codable, Sendable, Equatable {
               Set(periods.map(\.id)).count == periods.count, Set(pauses.map(\.id)).count == pauses.count,
               Set(preferences.menuSensors).count == preferences.menuSensors.count,
               preferences.menuSensors.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 100 }) else { throw ScheduleError("Configuration limit exceeded or duplicate identifiers.") }
-        guard Set(activationDefaults.keys).isSubset(of: profileIDs), Set(preferences.shortcuts.keys).isSubset(of: profileIDs.union(["menu"])),
+        guard (preferences.defaultProfileID == "system" || profileIDs.contains(preferences.defaultProfileID)), Set(activationDefaults.keys).isSubset(of: profileIDs), Set(preferences.shortcuts.keys).isSubset(of: profileIDs.union(["menu"])),
               Set(preferences.shortcuts.values.map { "\($0.keyCode):\($0.modifiers)" }).count == preferences.shortcuts.count else { throw ScheduleError("Duplicate shortcuts or unknown profile preferences.") }
         try activationDefaults.values.forEach { try $0.validate() }
         try preferences.shortcuts.values.forEach { try $0.validate() }

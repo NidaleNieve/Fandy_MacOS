@@ -29,13 +29,31 @@ extension AppModel {
         if automation.activationDefaults[profile.id]?.kind == .application { refreshApplicationAvailability(force: true) }
         if let reason = activationDefaultUnavailableReason(profile) { draftError = reason; return false }; return true
     }
-    func applyActivationDefault(_ profile: Profile) {
-        manualIntent = ActivationIntent(profileID: profile.id); activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
-        guard let rule = automation.activationDefaults[profile.id] else { return }
+    func rememberDefault(_ id: String) {
+        if automation.preferences.defaultProfileID != id {
+            previousDefaultProfileID = automation.preferences.defaultProfileID
+            automation.preferences.defaultProfileID = id
+        }
+        defaultResumeBlocked = false
+        save()
+    }
+    func applyActivationDefault(_ profile: Profile, remember: Bool = true) {
+        clearActivation(); blockedScheduleID = nil
+        let rule = automation.activationDefaults[profile.id] ?? .init()
         switch rule.kind {
-        case .forever: break
-        case .duration: activateFor(seconds: Double(rule.seconds))
+        case .forever:
+            if remember {
+                // A deliberate selection supersedes the current occurrence, but
+                // upcoming periods may still temporarily replace this default.
+                blockedScheduleID = ScheduleEngine.active(in: automation, at: wallClock())?.id
+                rememberDefault(profile.id)
+            }
+            else { manualIntent = ActivationIntent(profileID: profile.id) }
+        case .duration:
+            manualIntent = ActivationIntent(profileID: profile.id)
+            activateFor(seconds: Double(rule.seconds))
         case .application:
+            manualIntent = ActivationIntent(profileID: profile.id)
             if let process = applicationCatalog().first(where: { $0.bundleID == rule.applicationID }) { activateWhile(process) }
             else { clearActivation(); select("system", manual: false) }
         }
@@ -45,7 +63,7 @@ extension AppModel {
         if rule.kind == .application || rule.launchWhenOpened { refreshApplicationAvailability(force: true) }
     }
     var cancellationTitle: String {
-        guard let intent = manualIntent else { return scheduledPeriodID == nil ? "Resume Schedule" : "Cancel \(machine.selected.name)" }
+        guard let intent = manualIntent else { return machine.selected.kind == .system && blockedScheduleID != nil ? "Resume Schedule" : "Cancel \(machine.selected.name)" }
         let end: Date
         if case .deadline(let deadline) = intent.limit { end = deadline } else { end = wallClock().addingTimeInterval(7 * 86400) }
         let resumes = ScheduleEngine.hasActivity(in: automation, after: wallClock(), before: end)
@@ -62,13 +80,16 @@ extension AppModel {
         }
         if scheduledPeriodID != nil { return "Scheduled" }
         if blockedScheduleID != nil { return "Schedule paused for this occurrence · Resume Schedule to retry" }
-        return "Schedule ready · System"
+        return "Default · " + (profiles.first { $0.id == automation.preferences.defaultProfileID }?.name ?? "System")
     }
     func formattedTime(_ date: Date) -> String {
         let formatter = DateFormatter(); formatter.dateFormat = automation.preferences.use24HourTime ? "HH:mm" : "h:mm a"
         return formatter.string(from: date)
     }
-    func activateForever() { _ = claimCurrentActivation(.forever) }
+    func activateForever() {
+        if case .forever = manualIntent?.limit { clearActivation(); evaluateSchedule() }
+        else if claimCurrentActivation(.forever) { rememberDefault(machine.selected.id) }
+    }
     func activateFor(seconds: Double) {
         guard seconds.isFinite, seconds > 0, seconds <= 31 * 86400 else { draftError = "Duration must be positive and no longer than 31 days."; return }
         guard claimCurrentActivation(.deadline(wallClock().addingTimeInterval(seconds))) else { return }
@@ -85,6 +106,10 @@ extension AppModel {
               let profile = profiles.first(where: { $0.id == machine.selected.id }), canActivate(profile) else {
             draftError = "Select an available profile before setting a duration."; return false
         }
+        if limit != .forever, automation.preferences.defaultProfileID == profile.id {
+            automation.preferences.defaultProfileID = profiles.contains { $0.id == previousDefaultProfileID } ? previousDefaultProfileID : "system"
+            save()
+        }
         manualIntent = ActivationIntent(profileID: profile.id, limit: limit)
         activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
         return true
@@ -92,10 +117,11 @@ extension AppModel {
     func cancelActivation() {
         if manualIntent == nil, let occurrence = scheduledPeriodID {
             clearActivation(); blockedScheduleID = occurrence; select("system", manual: false)
-        } else { resumeSchedule() }
+        } else if manualIntent == nil && machine.selected.kind != .system { select("system") }
+        else { resumeSchedule() }
     }
     func resumeSchedule() {
-        clearActivation(); blockedScheduleID = nil
+        clearActivation(); blockedScheduleID = nil; defaultResumeBlocked = false
         select("system", manual: false)
     }
     func clearActivation() {
@@ -105,7 +131,13 @@ extension AppModel {
     func expireActivation() {
         guard let intent = manualIntent else { return }
         let expired = (activationDeadline.map { clockNow() >= $0 } ?? false) || intent.expired(at: wallClock(), running: ProcessCatalog.isRunning)
-        if expired { clearActivation(); select("system", manual: false) }
+        if expired {
+            if automation.preferences.defaultProfileID == intent.profileID {
+                automation.preferences.defaultProfileID = profiles.contains { $0.id == previousDefaultProfileID } ? previousDefaultProfileID : "system"
+                save()
+            }
+            clearActivation(); select("system", manual: false)
+        }
     }
     func expireScheduledOccurrence() {
         guard manualIntent == nil, let scheduledPeriodID,
@@ -128,25 +160,33 @@ extension AppModel {
                 && runningApplicationIDs.contains(rule.applicationID) && canActivate(profile)
                 && activationDefaultUnavailableReason(profile) == nil
         }) else { return }
-        select(profile.id)
+        select(profile.id, manual: false)
+        if machine.selected.id == profile.id { applyActivationDefault(profile, remember: false) }
     }
     func evaluateSchedule() {
         guard manualIntent == nil, !isQuitting, !savingCollection else { return }
         let active = ScheduleEngine.active(in: automation, at: wallClock())
         if blockedScheduleID != active?.id { blockedScheduleID = nil }
-        guard active?.id != blockedScheduleID || active == nil else { return }
-        if scheduledPeriodID == active?.id { return }
-        // Handback is acknowledged before any scheduled lease is admitted.
+        let admitted = active?.id == blockedScheduleID ? nil : active
+        let id = admitted?.profileID ?? (defaultResumeBlocked ? "system" : automation.preferences.defaultProfileID)
+        guard let profile = profiles.first(where: { $0.id == id }) else { return }
+        // A persisted profile name is intent, never a lease or permission. A
+        // bounded activation default cannot turn into indefinite background control.
+        if admitted == nil && profile.kind != .system && automation.activationDefaults[id].map({ $0.kind != .forever }) == true { return }
+        if machine.selected.id == id && (machine.state == .system || machine.state == .customActive || machine.state == .initializingCustom) {
+            scheduledPeriodID = admitted?.id; return
+        }
+        guard machine.state != .fault else { return }
         if machine.selected.kind != .system {
             scheduledPeriodID = nil; select("system", manual: false); return
         }
-        guard machine.state == .system, simulation || ownership == .appleObserved else { return }
-        guard let active, let profile = profiles.first(where: { $0.id == active.profileID }), (simulation || eligibility(profile).allowed) else { return }
-        scheduledPeriodID = active.id
+        guard machine.state == .system, simulation || (ownership == .appleObserved && hardwareError == nil),
+              simulation || eligibility(profile).allowed, canActivate(profile) else { return }
+        scheduledPeriodID = admitted?.id
         select(profile.id, manual: false)
     }
     func automationFailed() {
-        pendingApplicationLaunches.removeAll()
+        pendingApplicationLaunches.removeAll(); defaultResumeBlocked = true
         blockedScheduleID = scheduledPeriodID ?? ScheduleEngine.active(in: automation, at: wallClock())?.id
         clearActivation()
     }
@@ -229,7 +269,7 @@ extension AppModel {
         guard !savingCollection, !isQuitting else { draftError = "Wait for the current save before replacing settings."; return }
         do {
             let imported = try ConfigurationInterchange.decode(data)
-            scheduleReview = nil; clearActivation(); blockedScheduleID = nil; select("system", manual: false)
+            scheduleReview = nil; defaultResumeBlocked = true; clearActivation(); blockedScheduleID = nil; select("system", manual: false)
             commitConfiguration(profiles: imported.profiles, automation: imported.automation, selection: "system-plus", restore: true)
         } catch { draftError = "Import rejected: \(error.localizedDescription)" }
     }

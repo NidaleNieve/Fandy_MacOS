@@ -12,34 +12,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 HELPER = Path('Contents/Library/HelperTools/FandyFanHelper')
 SERVICE = Path('Contents/Library/LaunchDaemons/is.dsr.fandy.fan-helper.plist')
-README = """Fandy — test build
 
-Drag Fandy.app to Applications, then open it from Applications.
-This Apple Development-signed build is not notarized. Gatekeeper may prevent it
-from opening on another Mac. A broadly distributable release requires Developer ID
-signing and Apple notarization; this disk image does not bypass macOS protection.
-
-Requires Apple Silicon and macOS 15 or later. M1–M5 MacBook Pros are reference-supported when their detected fan interface and
-required sensors pass runtime checks. Mac17,9 (M5 Pro) has been physically tested.
-Other models have not been physically tested by Fandy. Unsupported hardware stays
-under Apple control; missing chassis inputs disable only dependent profiles.
-Do not run competing fan controllers while using Fandy's custom profiles.
-
-Fandy starts in System with macOS controlling the fans. Custom profiles require
-the bundled fan helper; approve Fandy in Login Items & Extensions when macOS asks.
-System returns all fans to Apple automatic control. Quit does the same, and a
-helper watchdog handles loss of the controller. On older interfaces, Ftst transfers
-normal thermal-controller ownership to the helper; emergency behavior is not
-guaranteed by Fandy. A stopped/blocked helper cannot
-run its watchdog; restart recovery is the fallback.
-
-No accounts, telemetry or networking. Profile/configuration files can be exported
-and imported in Fandy. This image contains no developer preferences or recordings.
-
-To remove Fandy: select System, disable launch at login in Settings, and quit.
-Before moving the app to Trash, unregister its helper with this Terminal command:
-"/Applications/Fandy.app/Contents/MacOS/Fandy" --helper-restoration-unregister
-"""
 
 
 def run(args):
@@ -151,14 +124,6 @@ def package(app, output, release_staging=False):
         staging.mkdir()
         run(['ditto', '--noqtn', app, staging / 'Fandy.app'])
         (staging / 'Applications').symlink_to('/Applications')
-        readme = README
-        if release_staging:
-            readme = readme.replace('test build', 'release').replace(
-                'This Apple Development-signed build is not notarized. Gatekeeper may prevent it\nfrom opening on another Mac. A broadly distributable release requires Developer ID\nsigning and Apple notarization; this disk image does not bypass macOS protection.',
-                'Developer ID signed and notarized by Apple. Requires no developer tools.')
-        elif kind != 'Apple Development':
-            readme = readme.replace('test build', 'unnotarized build').replace('Apple Development-signed', 'Developer ID-signed')
-        (staging / 'Read Me.txt').write_text(readme)
         verify_app(staging / 'Fandy.app')
         temporary = Path(directory) / name
         run(['hdiutil', 'create', '-format', 'UDZO', '-volname', 'Fandy', '-srcfolder', staging, temporary])
@@ -169,7 +134,7 @@ def package(app, output, release_staging=False):
         volume = next(Path(e['mount-point']) for e in devices if 'mount-point' in e)
         device = next(e['dev-entry'] for e in devices if 'mount-point' in e)
         try:
-            if {p.name for p in volume.iterdir()} - {'.Trashes', '.fseventsd'} != {'Fandy.app', 'Applications', 'Read Me.txt'}:
+            if {p.name for p in volume.iterdir()} - {'.Trashes', '.fseventsd'} != {'Fandy.app', 'Applications'}:
                 raise ValueError('Unexpected image contents')
             verify_app(volume / 'Fandy.app')
             if not (volume / 'Applications').is_symlink() or (volume / 'Applications').readlink() != Path('/Applications'):

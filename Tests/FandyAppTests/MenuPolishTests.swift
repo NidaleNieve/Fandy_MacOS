@@ -142,7 +142,7 @@ private actor StartupRetryClient: PrivilegedFanClient {
     model.create(); await model.waitForCollection(); let custom = model.editorSelection
     model.select(custom); model.delete(); model.select("max"); await model.waitForCollection()
     #expect(!model.profiles.contains { $0.id == custom })
-    #expect(model.machine.selected.id == "max" && model.manualIntent?.profileID == "max")
+    #expect(model.machine.selected.id == "max" && model.automation.preferences.defaultProfileID == "max")
 }
 
 @MainActor @Test func cancellingScheduledActivationPausesOccurrenceInsteadOfImmediatelyReactivatingIt() async {

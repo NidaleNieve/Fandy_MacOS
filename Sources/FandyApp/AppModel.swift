@@ -11,6 +11,11 @@ import ServiceManagement
     var manualIntent: ActivationIntent?
     var activationDeadline: Double?
     var watchedProcessName: String?
+    var previousDefaultProfileID = "system"
+    var defaultResumeBlocked = false
+    var helperSetupStatus: SMAppService.Status = .notRegistered
+    var helperSetupError: String?
+    let helperRegistrationStatus: @MainActor () -> SMAppService.Status
     var scheduledPeriodID: UUID?
     var blockedScheduleID: UUID?
     var scheduleReview: ScheduleReview?
@@ -81,12 +86,16 @@ import ServiceManagement
     init(storeURL: URL? = nil, autoStart: Bool = true, simulation: Bool = false,
          provider: (any TemperatureSensorProvider)? = nil, client: (any PrivilegedFanClient)? = nil,
          capabilities: HardwareCapabilities? = nil, helperAvailable: (@MainActor () -> Bool)? = nil,
+         helperRegistrationStatus: (@MainActor () -> SMAppService.Status)? = nil,
          powerCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
          wallClock: @escaping @Sendable () -> Date = { Date() },
          applicationCatalog: @escaping @MainActor () -> [RunningProcess] = { ProcessCatalog.list(includeHelpers: false, includeIcons: false) },
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
+        if let helperRegistrationStatus { self.helperRegistrationStatus = helperRegistrationStatus }
+        else if let helperAvailable { self.helperRegistrationStatus = { helperAvailable() ? .enabled : .notRegistered } }
+        else { self.helperRegistrationStatus = { HelperManager.service.status } }
         self.capabilities = capabilities ?? DeviceRegistry.current.capabilities
         self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : self.capabilities.chipPolicy)
         self.clock = clock; self.wallClock = wallClock; self.applicationCatalog = applicationCatalog; self.powerCenter = powerCenter
@@ -95,6 +104,8 @@ import ServiceManagement
         persistence = ProfilePersistence(store: store)
         diagnostics = try? RotatingDiagnostics(directory: (storeURL?.deletingLastPathComponent() ?? root.appendingPathComponent("Fandy")).appendingPathComponent("logs"))
         let loaded = store.load(); profiles = loaded.profiles; issues = loaded.issues; automation = loaded.automation
+        defaultResumeBlocked = !issues.isEmpty
+        helperSetupStatus = self.helperRegistrationStatus()
         // Lifecycle begins from System regardless of persisted selection.
         if autoStart { Task { [weak self] in self?.start() } }
     }
@@ -143,6 +154,7 @@ import ServiceManagement
         ProfileEligibility.evaluate(profile, capabilities: capabilities, helper: helperHealth, snapshot: snapshot, now: clock())
     }
     func canActivate(_ profile: Profile) -> Bool {
+        if profile.kind != .system && needsHelperSetup { return false }
         if simulation || profile.kind == .system { return true }
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
            (try? snapshot.validate(now: clock(), required: profile.requiredSensors(chipPolicy: capabilities.chipPolicy))) != nil { return true }
@@ -189,7 +201,7 @@ import ServiceManagement
     }
     func start() {
         guard loop == nil, !quitting else { return }
-        observePower(); configureLogin()
+        observePower(); configureLogin(); prepareHelperSetup()
         loop = Task { [weak self] in
             // First-launch/reconnect handback is an actual verified transaction, not
             // an assumed state or a temperature-gated operation.
@@ -204,6 +216,7 @@ import ServiceManagement
     }
     func select(_ id: String, manual: Bool = true) {
         guard let profile = profiles.first(where: { $0.id == id }) else { return }
+        if !simulation && profile.kind != .system && needsHelperSetup { return }
         if !canActivate(profile) { hardwareError = eligibility(profile).reason; return }
         if manual && profile == machine.selected && (machine.state == .customActive || machine.state == .initializingCustom) { applyActivationDefault(profile); return }
         if manual, !canUseActivationDefault(profile) { return }
@@ -238,7 +251,7 @@ import ServiceManagement
     }
     func tick() async {
         guard !busy, !quitting else { return }
-        refreshApplicationAvailability(); expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
+        refreshHelperSetup(); refreshApplicationAvailability(); expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
         var restorationReport: RestorationReport?
         var monitoringReading: HardwareSnapshot?
         do {
@@ -371,6 +384,7 @@ import ServiceManagement
         var config = config
         // Undo profile edits and automation rules; retain current global settings.
         config.preferences = automation.preferences
+        if !next.contains(where: { $0.id == config.preferences.defaultProfileID }) { config.preferences.defaultProfileID = "system" }
         config.preferences.shortcuts = config.preferences.shortcuts.filter { binding in binding.key == "menu" || next.contains { $0.id == binding.key } }
         do {
             try PortableConfiguration(profiles: next, automation: config).validate()
@@ -425,17 +439,24 @@ import ServiceManagement
         guard !savingCollection, !quitting else { return }
         failedConfiguration = nil
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
-        let revision = saveRevision, active = machine.selected.id
+        let revision = saveRevision, active = machine.selected.id, admittedToken = lifecycleToken
         collectionTask = Task {
-            defer { savingCollection = false; collectionTask = nil }
+            var resave = false
+            defer { savingCollection = false; collectionTask = nil; if resave { scheduleSave() } }
             do {
                 var nextAutomation = automation
                 let ids = Set(next.map(\.id))
                 nextAutomation.periods.removeAll { !ids.contains($0.profileID) }
                 nextAutomation.pauses.removeAll { $0.profileID.map { !ids.contains($0) } ?? false }
                 nextAutomation.activationDefaults = nextAutomation.activationDefaults.filter { ids.contains($0.key) }
+                if !ids.contains(nextAutomation.preferences.defaultProfileID) { nextAutomation.preferences.defaultProfileID = "system" }
                 nextAutomation.preferences.shortcuts = nextAutomation.preferences.shortcuts.filter { $0.key == "menu" || ids.contains($0.key) }
                 try await persistence.save(next, selection: active, revision: revision, automation: nextAutomation)
+                if lifecycleToken != admittedToken {
+                    let latestDefault = automation.preferences.defaultProfileID
+                    nextAutomation.preferences.defaultProfileID = ids.contains(latestDefault) ? latestDefault : "system"
+                    resave = true
+                }
                 registerConfigurationUndo(); automation = nextAutomation
                 profiles = next; editorSelection = selection
                 unsavedChanges = false; saveError = nil; failedCollection = nil
@@ -478,9 +499,16 @@ import ServiceManagement
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
         let revision = saveRevision, admittedToken = lifecycleToken
         collectionTask = Task {
-            defer { savingCollection = false; collectionTask = nil }
+            var resave = false
+            defer { savingCollection = false; collectionTask = nil; if resave { scheduleSave() } }
             do {
                 try await persistence.save(next, selection: "system", revision: revision, automation: nextAutomation)
+                var publishedAutomation = nextAutomation
+                if lifecycleToken != admittedToken {
+                    let latestDefault = automation.preferences.defaultProfileID
+                    publishedAutomation.preferences.defaultProfileID = next.contains { $0.id == latestDefault } ? latestDefault : "system"
+                    resave = true
+                }
                 if restore && lifecycleToken == admittedToken { clearActivation(); blockedScheduleID = nil; select("system", manual: false) }
                 else if !next.contains(where: { $0.id == machine.selected.id }) {
                     clearActivation(); select("system")
@@ -492,7 +520,7 @@ import ServiceManagement
                     do { let effect = try machine.select(replacement); Task { await execute(effect) } }
                     catch { automationFailed(); await execute(machine.fail(error)) }
                 }
-                reconcileApplicationRules(nextAutomation); registerConfigurationUndo(); profiles = next; automation = nextAutomation; editorSelection = selection
+                reconcileApplicationRules(publishedAutomation); registerConfigurationUndo(); profiles = next; automation = publishedAutomation; editorSelection = selection
                 unsavedChanges = false; saveError = nil; configureLogin()
             } catch {
                 failedConfiguration = (next, nextAutomation, selection, restore)
@@ -522,6 +550,7 @@ import ServiceManagement
     }
     func powerTransition() {
         observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
+        defaultResumeBlocked = true
         clearActivation(); blockedScheduleID = nil
         powerTransitionCount &+= 1
         requestedSimulation = simulation

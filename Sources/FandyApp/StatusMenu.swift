@@ -48,9 +48,10 @@ import FandyCore
         actions.removeAll(); profileRows.removeAll(); menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
         for profile in model.profiles {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
+            if profile.kind != .system && model.needsHelperSetup { row.image = AppModel.approvalDot() }
             row.isEnabled = model.canActivate(profile) && model.activationDefaultUnavailableReason(profile) == nil
             profileRows[profile.id] = row; row.state = model.menuSelectionID == profile.id ? .on : .off
-            row.toolTip = model.activationDefaultUnavailableReason(profile) ?? model.eligibility(profile).reason ?? profile.name
+            row.toolTip = profile.kind != .system && model.needsHelperSetup ? model.helperSetupMessage : model.activationDefaultUnavailableReason(profile) ?? model.eligibility(profile).reason ?? profile.name
         }
         menu.addItem(.separator())
         let timing = submenu("Activate for/until", in: menu)
@@ -74,7 +75,7 @@ import FandyCore
         appControls.view = embedded(ProcessPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.application")
         applications.addItem(appControls)
         timing.addItem(.separator())
-        let forever = add("Until changed", to: timing) { [weak model] in model?.activateForever() }
+        let forever = add("Until Changed", to: timing) { [weak model] in model?.activateForever() }
         if case .forever = model.manualIntent?.limit { forever.state = .on }
         if (model.manualIntent.map { $0.limit != .forever } ?? false) || model.scheduledPeriodID != nil {
             let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); menu.addItem(explanation)
@@ -85,6 +86,14 @@ import FandyCore
         menu.addItem(.separator())
         let status = NSMenuItem(); status.view = fitted(FanMenuStatus(model: model)); menu.addItem(status)
         menu.addItem(.separator())
+        if model.needsHelperSetup {
+            let notice = NSMenuItem()
+            notice.view = fitted(HelperApprovalNotice(model: model, showButton: false).frame(width: MenuLayout.textWidth).frame(maxWidth: .infinity).padding(.vertical, 4))
+            menu.addItem(notice)
+            let setup = add("Allow Fan Control…", to: menu) { [weak model] in model?.openHelperSetup() }
+            setup.image = AppModel.approvalDot()
+            menu.addItem(.separator())
+        }
         add("Edit Profiles…", to: menu) { [weak self] in self?.openProfiles() }
         add("Settings…", to: menu) { [weak self] in self?.openSettings() }
         let quit = add("Quit", to: menu) { [weak model] in model?.quit() }; quit.keyEquivalent = "q"

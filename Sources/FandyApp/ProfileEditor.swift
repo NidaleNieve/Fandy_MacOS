@@ -8,11 +8,14 @@ import FandyHardware
 struct ProfileEditor: View {
     @Bindable var model: AppModel
     var body: some View {
+        VStack(spacing: 0) {
         ProfileSplitView {
             ProfileSidebarPanel(model: model, importFile: importFile, exportFile: { exportFile() }, exportProfile: exportFile)
         } detail: {
             ProfileWorkspace(model: model)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        if model.needsHelperSetup { Divider(); HelperApprovalNotice(model: model).padding(10).frame(maxWidth: .infinity, alignment: .leading) }
+        }
         .sheet(item: $model.scheduleReview) { _ in ScheduleConflictSheet(model: model) }
         .sheet(item: $model.renameRequest) { request in ProfileRenameSheet(model: model, request: request) }
         .disabled(model.savingCollection)
@@ -288,9 +291,7 @@ struct SettingsView: View {
             }
             Section("Fan Helper") {
                 Text(model.helperRegistrationText)
-                if helperStatus == .requiresApproval {
-                    Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
-                }
+                if model.needsHelperSetup { HelperApprovalNotice(model: model) }
                 Text(model.capabilities.stage == .qualifiedControl ? "Eligible profiles control real fans. System restores Apple automatic control." : model.capabilities.canRestore ? "System and Max are available. Temperature profiles await their required inputs and activation test." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Hardware verification") {
                     LabeledContent("Compatibility", value: model.capabilities.compatibilityEvidence == .locallyTested ? "Locally tested" : model.capabilities.compatibilityEvidence == .referenceSupported ? "Reference supported" : "Monitoring only")
@@ -306,7 +307,7 @@ struct SettingsView: View {
         .task { if !model.simulation { await model.sensorMenu.discover() } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refreshRegistration() } }
     }
-    private func refreshRegistration() { loginStatus = SMAppService.mainApp.status; helperStatus = HelperManager.service.status }
+    private func refreshRegistration() { model.refreshHelperSetup(); loginStatus = SMAppService.mainApp.status; helperStatus = HelperManager.service.status }
     private func exportDiagnostics() {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Diagnostics.json"
         panel.begin { response in

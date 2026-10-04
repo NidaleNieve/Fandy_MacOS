@@ -13,12 +13,12 @@ import FandyCore
     defer { try? FileManager.default.removeItem(at: dir) }
     let model = makeAutomationModel(dir.appendingPathComponent("profiles.json"))
     model.automation.periods = [WeeklyPeriod(profileID: "gaming", weekday: 1, startMinute: 0, endMinute: 1440)]
-    model.select("max"); for _ in 0..<6 { await model.tick() }
+    model.select("max"); model.activateForever(); for _ in 0..<6 { await model.tick() }
     #expect(model.machine.selected.id == "max"); #expect(model.manualIntent?.profileID == "max")
     model.resumeSchedule(); for _ in 0..<10 { await Task.yield(); await model.tick() }
     #expect(model.manualIntent == nil); #expect(model.machine.selected.id == "gaming")
     #expect(model.machine.state == .customActive); #expect(model.scheduledPeriodID != nil)
-    model.select("system"); for _ in 0..<4 { await model.tick() }
+    model.select("system"); model.activateForever(); for _ in 0..<4 { await model.tick() }
     #expect(model.machine.selected.id == "system"); #expect(model.manualIntent?.profileID == "system")
 }
 @MainActor @Test func expiredTimerRestoresBeforeAnyFurtherControlStep() async {
@@ -38,7 +38,7 @@ import FandyCore
     let model = makeAutomationModel(dir.appendingPathComponent("profiles.json")); model.select("max")
     for invalid in [Double.nan, .infinity, -1, 0, 32 * 86400] { model.activateFor(seconds: invalid); #expect(model.activationDeadline == nil) }
     model.activateFor(seconds: 300); #expect(model.activationDeadline == 400)
-    model.select("school"); #expect(model.activationDeadline == nil); #expect(model.manualIntent?.limit == .forever)
+    model.select("school"); #expect(model.activationDeadline == nil); #expect(model.manualIntent == nil && model.automation.preferences.defaultProfileID == "school")
 }
 @MainActor @Test func processExitUsesExactIdentityAndReleasesToSystem() async {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -297,7 +297,7 @@ private actor DelayedAutomationClient: PrivilegedFanClient {
     var automation = AutomationConfiguration()
     automation.periods = [WeeklyPeriod(profileID: "gaming", weekday: 1, startMinute: 0, endMinute: 1440)]
     model.importConfiguration(try ConfigurationInterchange.encode(.init(profiles: BuiltInProfiles.all, automation: automation)))
-    model.select("max")
+    model.select("max"); model.activateForever()
     await model.waitForCollection(); for _ in 0..<5 { await model.tick() }
     #expect(model.manualIntent?.profileID == "max"); #expect(model.machine.selected.id == "max")
     #expect(model.scheduledPeriodID == nil)
