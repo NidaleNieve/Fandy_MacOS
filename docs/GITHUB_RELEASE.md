@@ -1,12 +1,14 @@
 # GitHub release verification
 
-Prepared October 4, 2026 for Fandy 0.2.0, build 8. The release uses the tested application from source commit `63267a4`; subsequent publication changes add documentation and static SVG illustrations only.
+Published October 4, 2026 as Fandy 0.2.0, build 8, tagged at `10c090b`. The release uses the tested application from source commit `63267a4`; subsequent publication changes add documentation and static SVG illustrations only.
 
 ## Public download
 
 [Release page](https://github.com/NidaleNieve/Fandy_MacOS/releases/tag/v0.2.0) · [DMG](https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.0/Fandy-0.2.0-arm64.dmg)
 
-The assets include the DMG, its SHA-256 checksum and a machine-readable verification report. The image contains Fandy.app and an Applications shortcut; required license notices are inside the application. It contains no personal profiles, schedules, logs, measurements, signing configuration or debug symbols.
+The assets include the DMG, its SHA-256 checksum and a machine-readable verification report. All three were downloaded anonymously from the public release and matched their local SHA-256 hashes. The README's latest-release direct download was independently checked. The DMG is 2,116,364 bytes.
+
+The image contains Fandy.app and an Applications shortcut; required license notices are inside the application. It contains no personal profiles, schedules, logs, measurements, signing configuration or debug symbols.
 
 SHA-256:
 
@@ -24,7 +26,7 @@ SHA-256:
 
 ## Privacy audit
 
-Before publication, all 37 existing reachable Git commits and 622 unique blobs were scanned, including historical content and commit identities. No private-source/history findings were detected. Newly added publication documents and illustrations also pass the public-content checker. Git authors use a project identity, and third-party license attribution remains intact.
+Before publication, all 38 reachable Git commits and 629 unique blobs were scanned, including historical content and commit identities. No private-source/history findings were detected. Newly added publication documents and illustrations also pass the public-content checker across all 189 staged text files. Git authors use a project identity, and third-party license attribution remains intact.
 
 No history rewrite was necessary. The audit intentionally preserves the public project/domain identifiers and legally required third-party credits. Apple certificate identity is the explicit distribution exception; private signing configuration and credentials remain outside Git.
 
