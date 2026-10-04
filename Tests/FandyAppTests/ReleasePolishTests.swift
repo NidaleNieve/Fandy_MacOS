@@ -41,13 +41,12 @@ import Testing
     #expect(row.view!.frame.width == MenuLayout.width)
     #expect(menu.size.width <= MenuLayout.maximumMenuWidth)
 }
-@MainActor @Test func bothProfileDividersAreResizableAndCannotCollapse() {
+@MainActor @Test func restoredProfileLayoutKeepsItsOriginalNativeSidebarBounds() {
     let outer = ProfileSplitView(sidebar: { Text("Profiles") }, detail: { Text("Editor") }).makeController()
-    let inner = ProfileDetailSplitView(editor: { Text("Editor") }, monitoring: { Text("Status") }).makeController()
-    #expect(outer.splitViewItems[0].minimumThickness < outer.splitViewItems[0].maximumThickness)
-    #expect(inner.splitViewItems[1].minimumThickness < inner.splitViewItems[1].maximumThickness)
-    #expect((outer.splitViewItems + inner.splitViewItems).allSatisfy { !$0.canCollapse })
-    #expect(ProfilesWindow.minimumContentSize.width < 900 && ProfilesWindow.minimumContentSize.height < 500)
+    #expect(outer.splitViewItems[0].minimumThickness == 220)
+    #expect(outer.splitViewItems[1].minimumThickness == 660)
+    #expect(outer.splitViewItems.allSatisfy { !$0.canCollapse })
+    #expect(ProfilesWindow.minimumContentSize == NSSize(width: 960, height: 560))
 }
 @MainActor @Test func resetDefaultsClearsPortableConfigurationAndReturnsSystem() async throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -73,4 +72,12 @@ import Testing
     model.activateForever()
     #expect(model.machine.selected.id == "gaming" && model.awaitingApplicationID == nil)
     #expect(model.manualIntent?.limit == .forever && model.activationDescription == "Manual · until changed")
+}
+
+@Test func compactMenuTemperaturesKeepMetadataOutOfVisibleReadings() {
+    #expect(MenuTemperatureReadout.compact("CPU Average · estimate") == "CPU Average")
+    #expect(MenuTemperatureReadout.temperature("48.2°C · estimate") == "48.2°C")
+    #expect(MenuTemperatureReadout.temperature("48°C ≈") == "48°C")
+    #expect(MenuTemperatureReadout.temperature("Unavailable on this Mac") == "—")
+    #expect(MenuTemperatureReadout.valueWidth == 60)
 }

@@ -19,16 +19,16 @@ import Testing
         model.editorSelection = id
         window.contentViewController?.view.layoutSubtreeIfNeeded()
         let size = window.contentRect(forFrameRect: window.frame).size
-        #expect(size.width >= 780 && size.height >= 480)
+        #expect(size.width >= 960 && size.height >= 560)
     }
     window.setContentSize(NSSize(width: 20, height: 10))
-    #expect(window.contentRect(forFrameRect: window.frame).size.width >= 780)
-    #expect(window.contentRect(forFrameRect: window.frame).size.height >= 480)
+    #expect(window.contentRect(forFrameRect: window.frame).size.width >= 960)
+    #expect(window.contentRect(forFrameRect: window.frame).size.height >= 560)
     window.setFrame(NSRect(x: 0, y: 0, width: 50, height: 30), display: false)
-    #expect(window.contentRect(forFrameRect: window.frame).size.width >= 780)
-    #expect(window.contentRect(forFrameRect: window.frame).size.height >= 480)
+    #expect(window.contentRect(forFrameRect: window.frame).size.width >= 960)
+    #expect(window.contentRect(forFrameRect: window.frame).size.height >= 560)
     window.setFrame(NSRect(x: 0, y: 0, width: 60, height: 25), display: false, animate: false)
-    #expect(window.contentRect(forFrameRect: window.frame).size.height >= 480)
+    #expect(window.contentRect(forFrameRect: window.frame).size.height >= 560)
     window.setContentSize(NSSize(width: 1200, height: 800))
     #expect(window.contentRect(forFrameRect: window.frame).size == NSSize(width: 1200, height: 800))
     #expect(!window.isVisible)

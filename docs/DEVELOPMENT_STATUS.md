@@ -1,4 +1,14 @@
-# Current checkpoint — 2026-10-04: release UI and application-close conditions
+# Current checkpoint — 2026-10-04: quick sidebar rollback and comfort defaults
+
+0.2.0 build 7 restores the pre-build-6 sidebar/workspace layout and its native window sizing, as requested after the resize regression. Other build-6 setup/settings/activation fixes remain. Cool Chassis factory defaults match the supplied export: floor 0, manual-at-idle, unchanged chip curve, Trackpad starting 26°C/0%, Actuator 24.9°C/0% and 27.1°C/20%, and Airflow 31.4°C/0% and 36°C/20%. School’s separate existing defaults and saved user customizations are untouched. The exported file and its point UUIDs are not copied into the repository.
+
+Menu temperatures use a borderless two-column layout: fixed left name column, right-aligned fixed-width semibold temperature column with monospaced digits. Estimate/candidate suffixes are omitted from visible menu readouts; full provenance remains in tooltips/accessibility and elsewhere. Missing readings show an em dash, never zero.
+
+372 Swift tests and the one-job signed arm64 Release build pass. The verified DMG is `build/Distribution/Release-0.2.0-build7/Fandy-0.2.0-arm64.dmg`, SHA-256 `97aeda4daf26e06a12f636213f70cbfee0e593645876fd3f19b94569e5208f22`. It contains only the app and Applications link and remains Apple Development-signed/unnotarized. No hardware writes, permission changes or visual automation were performed. Install build 7 to use the changes; the running installed app is not replaced automatically. Other-Mac physical tests, notarization and calibration remain the previously documented follow-ups.
+
+---
+
+# Previous checkpoint — 2026-10-04: release UI and application-close conditions
 
 0.2.0 build 6 allows manual activation before a watched application opens and retains its close condition. Long cancellation actions wrap without widening the menu. Selected temperatures now appear inside the menu, and fan bar/numbers have independent visibility settings. Both profile sidebars resize with system backgrounds; the 1040×720 startup size retains a smaller 780×480 minimum. Setup uses arrow-path guidance, settings are reorganized, and confirmed Reset to Defaults returns to System and replaces portable configuration.
 

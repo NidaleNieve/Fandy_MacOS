@@ -60,7 +60,7 @@ func fixture(at now: Double = 10, cpu: Double = 48, gpu: Double = 44, trackpad: 
     snapshot.sensors[snapshot.sensors.firstIndex{$0.role == .charger}!].celsius=90
     #expect(try ProfileEngine().evaluate(BuiltInProfiles.coolChassis,snapshot:snapshot,now:10).percent==55)
     snapshot=fixture();snapshot.sensors[snapshot.sensors.firstIndex{$0.role == .charger}!].celsius=90
-    #expect(try ProfileEngine().evaluate(BuiltInProfiles.coolChassis,snapshot:snapshot,now:10).percent==20)
+    #expect(try abs(ProfileEngine().evaluate(BuiltInProfiles.coolChassis,snapshot:snapshot,now:10).percent - 25.0 / 3.0) < 0.001)
 }
 @Test func disabledChipCurveCannotSuppressSafety() throws {
     var profile=BuiltInProfiles.coolChassis;profile.curves[0].enabled=false
@@ -68,7 +68,8 @@ func fixture(at now: Double = 10, cpu: Double = 48, gpu: Double = 44, trackpad: 
     #expect(throws:(any Error).self) { try ProfileEngine().evaluate(profile,snapshot:fixture(pressure:.serious),now:10) }
 }
 @Test func minimumFloorAndSchoolIdle() throws {
-    #expect(try ProfileEngine().evaluate(BuiltInProfiles.coolChassis,snapshot:fixture(),now:10).percent==20)
+    var floored = BuiltInProfiles.coolChassis; floored.floor = 20
+    #expect(try ProfileEngine().evaluate(floored,snapshot:fixture(),now:10).percent==20)
     #expect(try ProfileEngine().evaluate(BuiltInProfiles.school,snapshot:fixture(cpu:40,gpu:40),now:10).percent==0)
 }
 @Test func governorFastRiseSlowFallHysteresisAndSafety() throws {

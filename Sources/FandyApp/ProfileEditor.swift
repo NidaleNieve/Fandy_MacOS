@@ -72,14 +72,14 @@ private struct ProfileSidebarPanel: View {
                 } label: { Image(systemName: "ellipsis.circle") }.help("Profile files")
                 Spacer(minLength: 0)
             }.buttonStyle(.bordered).controlSize(.small).padding(10)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(.regularMaterial).disabled(model.savingCollection)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(nsColor: .controlBackgroundColor)).disabled(model.savingCollection)
     }
 }
 private struct ProfileWorkspace: View {
     @State private var showingSchedule = false
     @Bindable var model: AppModel
     var body: some View {
-        ProfileDetailSplitView {
+        HStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack {
                     Spacer()
@@ -88,10 +88,10 @@ private struct ProfileWorkspace: View {
                 }.padding(.horizontal, 16).padding(.top, 10)
                 ProfileDetail(model: model).frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             }.frame(minWidth: 0, maxWidth: .infinity)
-        } monitoring: {
+            Divider()
             ScrollView { SensorStatus(model: model).padding(14).frame(maxWidth: .infinity, alignment: .leading) }
                 .scrollIndicators(.hidden)
-                .frame(maxWidth: .infinity, maxHeight: .infinity).background(.regularMaterial)
+                .frame(width: 205)
         }.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
         .sheet(isPresented: $showingSchedule) { WeeklyScheduleOverview(model: model) }
     }

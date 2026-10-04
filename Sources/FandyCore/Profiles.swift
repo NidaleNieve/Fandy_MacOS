@@ -44,7 +44,15 @@ public enum BuiltInProfiles {
     public static let system = Profile(id: "system", name: "System", kind: .system, bundled: true, curves: [])
     public static let maximum = Profile(id: "max", name: "Max", kind: .maximum, bundled: true, curves: [])
     public static let systemPlus = Profile(id: "system-plus", name: "System+", bundled: true, curves: [chip], automaticAtIdle: true)
-    public static let coolChassis = Profile(id: "cool-chassis", name: "Cool Chassis", bundled: true, curves: [chip, trackpad, actuator, airflow], floor: 20)
+    public static let coolChassis: Profile = {
+        var profile = Profile(id: "cool-chassis", name: "Cool Chassis", bundled: true, curves: [
+            chip,
+            FanCurve(.trackpad, [(26,0),(29,25),(31,40),(34,60),(38,85),(42,100)]),
+            FanCurve(.actuator, [(24.9,0),(27.1,20),(29,40),(32,60),(36,85),(40,100)]),
+            FanCurve(.airflow, [(31.4,0),(36,20),(40,40),(44,55),(50,75),(60,100)])
+        ], floor: 0)
+        profile.defaultRevision = 2; return profile
+    }()
     public static let gaming: Profile = {
         var profile = Profile(id: "gaming", name: "Gaming", bundled: true, curves: [FanCurve(.chip, [(35,15),(45,25),(55,40),(65,55),(72,70),(77,85),(81,95),(85,100)])])
         profile.defaultRevision = 2; return profile

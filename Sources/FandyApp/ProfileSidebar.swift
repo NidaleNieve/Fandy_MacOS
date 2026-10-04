@@ -15,7 +15,7 @@ struct ProfileSidebar: NSViewRepresentable {
         table.contextMenuForRow = { [weak coordinator = context.coordinator] row in coordinator?.menu(for: row) }
         let column = NSTableColumn(identifier: .init("profile")); table.addTableColumn(column)
         table.headerView = nil; table.rowHeight = 30; table.intercellSpacing = .init(width: 0, height: 2)
-        table.style = .plain; table.backgroundColor = .clear
+        table.style = .plain; table.backgroundColor = .controlBackgroundColor
         table.allowsEmptySelection = false; table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         table.delegate = context.coordinator; table.dataSource = context.coordinator
         table.target = context.coordinator; table.doubleAction = #selector(Coordinator.activate(_:))

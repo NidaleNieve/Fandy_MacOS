@@ -53,12 +53,11 @@ struct FanMenuStatus: View {
         VStack(alignment: .center, spacing: 4) {
             FanSpeedReadout(model: model, centered: true, respectsMenuPreferences: true)
             Text(model.statusText).font(.caption).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true).frame(width: MenuLayout.textWidth)
             ForEach(model.automation.preferences.menuSensors, id: \.self) { id in
-                Text(model.sensorMenu.title(for: id) + " · " + model.sensorMenu.valueText(for: id))
-                    .font(.caption).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                MenuTemperatureReadout(name: model.sensorMenu.title(for: id), value: model.sensorMenu.valueText(for: id))
             }
-        }.frame(width: MenuLayout.textWidth).frame(maxWidth: .infinity)
+        }.frame(width: MenuLayout.width - 28).frame(maxWidth: .infinity)
             .padding(.horizontal, 14).padding(.vertical, 5)
     }
 }
@@ -78,5 +77,24 @@ struct WrappedMenuAction: View {
             .background(hovered ? Color(nsColor: .selectedContentBackgroundColor) : .clear, in: RoundedRectangle(cornerRadius: 5))
             .onHover { hovered = $0 }.padding(.horizontal, 4).padding(.vertical, 2)
             .frame(maxWidth: .infinity).accessibilityLabel(title)
+    }
+}
+
+struct MenuTemperatureReadout: View {
+    let name: String
+    let value: String
+    static let valueWidth: CGFloat = 60
+    static func compact(_ text: String) -> String {
+        text.components(separatedBy: " · ").first!.replacingOccurrences(of: " ≈", with: "")
+    }
+    static func temperature(_ text: String) -> String { text.contains("°C") ? compact(text) : "—" }
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(Self.compact(name)).font(.caption).foregroundStyle(.secondary)
+                .lineLimit(1).truncationMode(.tail).frame(width: 112, alignment: .leading)
+            Text(Self.temperature(value)).font(.caption.weight(.semibold)).monospacedDigit()
+                .lineLimit(1).frame(width: Self.valueWidth, alignment: .trailing)
+        }.help(name + ": " + value).accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.compact(name)).accessibilityValue(value)
     }
 }

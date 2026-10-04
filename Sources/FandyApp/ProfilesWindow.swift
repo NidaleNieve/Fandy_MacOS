@@ -5,7 +5,7 @@ import SwiftUI
 /// split view's transient fitting height during initial layout or tab changes.
 @MainActor final class ProfilesWindow: NSWindow {
     static let initialContentSize = NSSize(width: 1040, height: 720)
-    static let minimumContentSize = NSSize(width: 780, height: 480)
+    static let minimumContentSize = NSSize(width: 960, height: 560)
 
     static func make<Content: View>(content: Content) -> ProfilesWindow {
         let window = ProfilesWindow(contentRect: NSRect(origin: .zero, size: initialContentSize),

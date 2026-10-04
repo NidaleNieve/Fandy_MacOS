@@ -100,7 +100,7 @@ private actor StartupRetryClient: PrivilegedFanClient {
     var profile = BuiltInProfiles.school; profile.name = String(repeating: "Wide profile ", count: 6); model.update(profile)
     let split = ProfileSplitView(sidebar: { Text("Profiles") }, detail: { Text("Editor") }).makeController()
     #expect(split.splitViewItems.allSatisfy { !$0.canCollapse })
-    #expect(split.splitViewItems[0].minimumThickness == 170)
+    #expect(split.splitViewItems[0].minimumThickness == 220)
     let menu = NSMenu(), presenter = StatusMenu(model: model, install: false); presenter.rebuild(menu)
     #expect(menu.items.filter { $0.view != nil }.allSatisfy { $0.view!.frame.width <= MenuLayout.width })
     let row = try #require(menu.items.first { $0.accessibilityLabel() == profile.name })

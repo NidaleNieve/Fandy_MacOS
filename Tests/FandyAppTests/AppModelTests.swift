@@ -13,7 +13,7 @@ import FandyCore
     var profile=model.edited!;profile.name="Typing";model.update(profile);#expect(model.edited?.name=="Typing")
     model.duplicate(); await model.waitForCollection();#expect(model.profiles.count==8);model.delete(); await model.waitForCollection();#expect(model.profiles.count==7)
     model.editorSelection=id;model.delete(); await model.waitForCollection();#expect(model.profiles.count==6)
-    model.editorSelection="cool-chassis";profile=model.edited!;profile.floor=35;model.update(profile);model.reset();#expect(model.edited?.floor==20)
+    model.editorSelection="cool-chassis";profile=model.edited!;profile.floor=35;model.update(profile);model.reset();#expect(model.edited?.floor==0)
 }
 @MainActor @Test func invalidDraftRetainsValidatedProfileAndScenarioFaultRestores() async throws {
     let directory=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -122,7 +122,7 @@ private actor SuspendedProvider: TemperatureSensorProvider {
     await model.tick()
     #expect(model.helperHealth == .monitoring); #expect(model.ownership == .appleObserved)
     model.editorSelection = "cool-chassis"
-    #expect(model.preview?.usesCandidates == true); #expect(model.preview?.percent == 20)
+    #expect(model.preview?.usesCandidates == true); #expect(abs((model.preview?.percent ?? -1) - 25.0 / 3.0) < 0.001)
     #expect(!model.isSelected("cool-chassis")); #expect(!model.canActivate(model.edited!))
     model.select("cool-chassis")
     #expect(model.machine.selected.id == "system")
