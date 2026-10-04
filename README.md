@@ -12,9 +12,9 @@
 <p align="center">Apple Silicon MacBook Pro · macOS 15 or later · Signed &amp; notarized</p>
 
 <p align="center">
-  <img src="docs/images/menu.png" width="147" height="280" alt="Fandy menu with cooling profiles, fan speed and customizable temperatures">
+  <img src="docs/images/menu.png" width="206" height="350" alt="Fandy menu with cooling profiles, fan speed and customizable temperatures">
   &nbsp;
-  <img src="docs/images/curve.png" width="481" height="280" alt="Fandy’s editable Cool Chassis chip fan curve">
+  <img src="docs/images/curve.png" width="601" height="350" alt="Fandy’s editable Cool Chassis chip fan curve">
 </p>
 
 Fandy is a native menu-bar fan controller and temperature monitor. View chip and chassis temperatures alongside fan speeds, switch cooling profiles, and schedule cooling around your day.
