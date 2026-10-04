@@ -5,6 +5,7 @@ import FandyCore
 struct CurveEditor: View {
     let curve: FanCurve
     let resetRevision: UInt64
+    let request: CurveRequestPreview
     let onChange: (FanCurve) -> Void
     let onBegin: () -> Void
     let onEnd: () -> Void
@@ -12,11 +13,11 @@ struct CurveEditor: View {
     @State private var editor: CurveDraft
     @State private var dragging: UUID?
     @State private var dragRange: ClosedRange<Double>?
-    init(curve: FanCurve, resetRevision: UInt64 = 0, currentTemperature: Double? = nil, onBegin: @escaping () -> Void = {}, onEnd: @escaping () -> Void = {}, onChange: @escaping (FanCurve) -> Void) {
+    init(curve: FanCurve, request: CurveRequestPreview = .init(), resetRevision: UInt64 = 0, currentTemperature: Double? = nil, onBegin: @escaping () -> Void = {}, onEnd: @escaping () -> Void = {}, onChange: @escaping (FanCurve) -> Void) {
         self.currentTemperature = currentTemperature; self.onBegin = onBegin; self.onEnd = onEnd;
-        self.curve = curve; self.resetRevision = resetRevision; self.onChange = onChange; _editor = State(initialValue: CurveDraft(curve))
+        self.request = request; self.curve = curve; self.resetRevision = resetRevision; self.onChange = onChange; _editor = State(initialValue: CurveDraft(curve))
     }
-    var range: ClosedRange<Double> { dragRange ?? editor.range }
+    var range: ClosedRange<Double> { dragRange ?? request.range(for: editor.curve) }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geometry in
@@ -46,6 +47,22 @@ struct CurveEditor: View {
                     if let last = editor.curve.points.last { line.addLine(to: CGPoint(x: plot.maxX, y: coordinate(last, plot: plot).y)) }
                     let color = editor.validation == nil ? Color.accentColor : .red
                     context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    if request.hasOverlay(for: curve.input), editor.validation == nil {
+                        var effective = Path()
+                        for step in 0...128 {
+                            let temperature = range.lowerBound + Double(step) / 128 * (range.upperBound - range.lowerBound)
+                            guard let percent = try? request.percent(at: temperature, curve: editor.curve) else { continue }
+                            let point = coordinate(CurvePoint(temperature, percent), plot: plot)
+                            if step == 0 { effective.move(to: point) } else { effective.addLine(to: point) }
+                        }
+                        context.stroke(effective, with: .color(.primary), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        if let target = request.target, target.input == curve.input, target.celsius.isFinite {
+                            let x = coordinate(CurvePoint(target.celsius, 0), plot: plot).x
+                            var marker = Path(); marker.move(to: CGPoint(x: x, y: plot.minY)); marker.addLine(to: CGPoint(x: x, y: plot.maxY))
+                            context.stroke(marker, with: .color(.orange), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+                            context.draw(Text("Target \(target.celsius, specifier: "%.1f")°").font(.system(size: 10)).foregroundStyle(.orange), at: CGPoint(x: min(plot.maxX - 40, max(plot.minX + 40, x)), y: plot.minY + 8))
+                        }
+                    }
                     for point in editor.curve.points {
                         let position = coordinate(point, plot: plot), radius: CGFloat = point.id == editor.selectedID ? 5.5 : 4
                         let rect = CGRect(x: position.x-radius,y:position.y-radius,width:radius*2,height:radius*2)
@@ -67,7 +84,7 @@ struct CurveEditor: View {
                 .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                     if dragging == nil {
                         let nearest = editor.curve.points.min { distance(coordinate($0,plot:plot),value.startLocation) < distance(coordinate($1,plot:plot),value.startLocation) }
-                        if let nearest, distance(coordinate(nearest,plot:plot),value.startLocation) < 16 { onBegin(); dragging = nearest.id; dragRange = editor.range; editor.select(nearest.id) }
+                        if let nearest, distance(coordinate(nearest,plot:plot),value.startLocation) < 16 { onBegin(); dragging = nearest.id; dragRange = range; editor.select(nearest.id) }
                     }
                     guard dragging != nil else { return }
                     let temperature = range.lowerBound + (value.location.x - plot.minX) / plot.width * (range.upperBound - range.lowerBound)
@@ -89,10 +106,14 @@ struct CurveEditor: View {
                 .accessibilityLabel("\(curve.input.label) fan curve; arrow keys edit the selected point")
                 .accessibilityIdentifier("curve.\(curve.input.rawValue).graph")
             }.frame(height: 170)
+            if request.hasOverlay(for: curve.input) {
+                Text("Dashed: curve + minimum airflow\(request.target?.input == curve.input ? " + temperature target" : ""). Other inputs and chip safety may request more.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             HStack(spacing: 8) {
-                Button { publish(editor.add()) } label: { Image(systemName: "plus") }
+                Button { publish(editor.add()) } label: { Image(systemName: "plus").frame(width: 16, height: 16) }
                     .disabled(!editor.canAdd).help("Add node").accessibilityLabel("Add curve point")
-                Button { publish(editor.remove()) } label: { Image(systemName: "minus") }
+                Button { publish(editor.remove()) } label: { Image(systemName: "minus").frame(width: 16, height: 16) }
                     .disabled(!editor.canRemove).help("Remove selected node").accessibilityLabel("Remove curve point")
                 Picker("Point", selection: Binding(get: { editor.selectedID }, set: { editor.select($0) })) {
                     Text("Select a point").tag(nil as UUID?)
@@ -110,7 +131,7 @@ struct CurveEditor: View {
                     .onSubmit { publish(editor.applyNumbers()) }.accessibilityLabel("Point fan percentage")
                     .accessibilityIdentifier("curve.\(curve.input.rawValue).percent")
                 Text("%").foregroundStyle(.secondary)
-            }.textFieldStyle(.roundedBorder)
+            }.textFieldStyle(.roundedBorder).buttonStyle(.bordered).controlSize(.small)
             if let validation = editor.validation { Text("Not applied: \(validation)").font(.caption).foregroundStyle(.red) }
         }
         .onDisappear { if dragging != nil { onEnd() }; dragging = nil; dragRange = nil }

@@ -434,14 +434,14 @@ import ServiceManagement
         var profile = BuiltInProfiles.systemPlus.duplicated(); profile.name = "Custom Profile"
         commitCollection(profiles + [profile], selection: profile.id)
     }
-    func duplicate() {
-        guard let profile = edited else { return }; let copy = profile.duplicated()
+    func duplicate(_ id: String? = nil) {
+        guard let profile = profiles.first(where: { $0.id == (id ?? editorSelection) }) else { return }; let copy = profile.duplicated()
         var config = automation; config.activationDefaults[copy.id] = config.activationDefaults[profile.id]
         commitConfiguration(profiles: profiles + [copy], automation: config, selection: copy.id)
     }
-    func delete() {
-        guard let profile = edited, !profile.bundled else { return }
-        commitCollection(profiles.filter { $0.id != profile.id }, selection: "system-plus")
+    func delete(_ id: String? = nil) {
+        guard let profile = profiles.first(where: { $0.id == (id ?? editorSelection) }), !profile.bundled else { return }
+        commitCollection(profiles.filter { $0.id != profile.id }, selection: editorSelection == profile.id ? "system-plus" : editorSelection)
     }
     func reset() {
         guard let original = BuiltInProfiles.all.first(where: { $0.id == editorSelection }), !original.protected else { return }; update(original)

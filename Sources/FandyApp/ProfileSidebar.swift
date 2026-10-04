@@ -8,13 +8,14 @@ struct ProfileSidebar: NSViewRepresentable {
     let profiles: [Profile]
     let selection: String
     let activeID: String?
-    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    var exportProfile: (String) -> Void = { _ in }
+    func makeCoordinator() -> Coordinator { Coordinator(model: model, exportProfile: exportProfile) }
     func makeNSView(context: Context) -> NSScrollView {
         let table = ContextTable()
         table.contextMenuForRow = { [weak coordinator = context.coordinator] row in coordinator?.menu(for: row) }
         let column = NSTableColumn(identifier: .init("profile")); table.addTableColumn(column)
         table.headerView = nil; table.rowHeight = 30; table.intercellSpacing = .init(width: 0, height: 2)
-        table.style = .sourceList
+        table.style = .plain; table.backgroundColor = .controlBackgroundColor
         table.allowsEmptySelection = false; table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         table.delegate = context.coordinator; table.dataSource = context.coordinator
         table.target = context.coordinator; table.doubleAction = #selector(Coordinator.activate(_:))
@@ -25,7 +26,7 @@ struct ProfileSidebar: NSViewRepresentable {
         context.coordinator.update()
         return scroll
     }
-    func updateNSView(_ view: NSScrollView, context: Context) { context.coordinator.update() }
+    func updateNSView(_ view: NSScrollView, context: Context) { context.coordinator.exportProfile = exportProfile; context.coordinator.update() }
     @MainActor final class ContextTable: NSTableView {
         var contextMenuForRow: (Int) -> NSMenu? = { _ in nil }
         override func menu(for event: NSEvent) -> NSMenu? { contextMenuForRow(row(at: convert(event.locationInWindow, from: nil))) }
@@ -36,7 +37,8 @@ struct ProfileSidebar: NSViewRepresentable {
         private var rows: [(id: String, name: String)] = []
         private var activeID: String?
         private var updating = false
-        init(model: AppModel) { self.model = model }
+        var exportProfile: (String) -> Void
+        init(model: AppModel, exportProfile: @escaping (String) -> Void = { _ in }) { self.model = model; self.exportProfile = exportProfile }
         func update() {
             guard let table else { return }
             let next = model.profiles.map { (id: $0.id, name: $0.name) }
@@ -82,10 +84,31 @@ struct ProfileSidebar: NSViewRepresentable {
             rename.image = NSImage(systemSymbolName: "pencil", accessibilityDescription: nil)
             rename.isEnabled = !profile.protected && !model.savingCollection && !model.isQuitting
             menu.addItem(rename)
+            for (title, action, symbol, allowed) in [
+                ("Duplicate", #selector(duplicate(_:)), "square.on.square", true),
+                ("Export…", #selector(export(_:)), "square.and.arrow.up", true),
+                ("Remove", #selector(remove(_:)), "trash", !profile.bundled)
+            ] {
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.target = self; item.representedObject = profile.id
+                item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+                item.isEnabled = allowed && !model.savingCollection && !model.isQuitting
+                menu.addItem(item)
+            }
             return menu
         }
         @objc private func rename(_ item: NSMenuItem) {
             guard let id = item.representedObject as? String else { return }; model.requestRename(id)
+        }
+        @objc private func duplicate(_ item: NSMenuItem) {
+            guard let id = item.representedObject as? String else { return }; model.duplicate(id)
+        }
+        @objc private func remove(_ item: NSMenuItem) {
+            guard let id = item.representedObject as? String else { return }; model.delete(id)
+        }
+        @objc private func export(_ item: NSMenuItem) {
+            guard !model.savingCollection, !model.isQuitting, let id = item.representedObject as? String,
+                  model.profiles.contains(where: { $0.id == id }) else { return }; exportProfile(id)
         }
         @objc func activate(_ sender: NSTableView) { activateRow(sender.clickedRow) }
         func activateRow(_ row: Int) {

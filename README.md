@@ -8,6 +8,8 @@ Menu/profile polish includes optional global shortcuts, per-profile activation d
 
 Editable profiles also support an optional target temperature for Chip, Trackpad, Actuator or Airflow. It adds cooling demand while curves and chip safety remain authoritative. Rename profiles using the visible pencil/Rename button or sidebar right-click menu; System and Max stay protected. [Details and verification](docs/TEMPERATURE_TARGET_DELIVERY.md).
 
+Fan Curves, Schedule, Pause Schedule and When Activated have separate tabs. Chip/Chassis collapse independently; graph request overlays show minimum airflow and temperature-target effects while preserving editable nodes. Right-click profiles to rename, duplicate, export or remove eligible custom profiles. Time/Until uses native segmented controls and an AppKit clock. [Layout update and tests](docs/PROFILE_LAYOUT_DELIVERY.md).
+
 Chip control uses a separately named conservative **Chip envelope** across a fixed 105-key model manifest. CPU/GPU averages remain labelled estimates. Chassis control uses Trackpad, Actuator, Left/Right airflow and an explicitly labelled **Top proximity** input. These are reviewed operational inputs, not a claim that every physical sensor identity is certified. [Sensor evidence and limitations](docs/SENSOR_EVIDENCE.md).
 
 ## Build and run

@@ -1,4 +1,14 @@
-# Current checkpoint — 2026-10-03: inline controls and test DMG
+# Current checkpoint — 2026-10-04: profile layout and native clock
+
+Pause Schedule is a separate tab, with a separator below the tab selector. Schedule priority is a bottom tip. Chip/Chassis collapse independently; target and minimum airflow appear in graphs as a dashed request envelope using production math, without overwriting nodes. Target controls are lower, airflow has Reset, point buttons match, sidebar backgrounds are consistent, and context menus add identity-specific duplicate/export/remove. The transient unsaved line is removed. Inline For/Until uses a native segmented picker, stable positions, centered fields and AppKit's clock.
+
+318 Swift tests, 37 tool tests and the signed Release build pass. See [profile layout delivery](PROFILE_LAYOUT_DELIVERY.md). The refreshed DMG is under `build/Distribution/2026-10-04`; existing signing/distribution/hardware limitations remain.
+
+The installed Release app passes five live System startup ticks with Apple ownership, helper controlReady, both modes 0/0 and no monitoring warning. It is running in System after the update; helper and login registration remain enabled.
+
+---
+
+# Previous checkpoint — 2026-10-03: inline controls and test DMG
 
 Time/Until and running-app conditions now open as hover submenus with embedded controls. The fan readout centers across the actual native menu width. Profiles hide scroll indicators while retaining scrolling. Git was checkpointed before edits on `codex/inline-menu-dmg`.
 

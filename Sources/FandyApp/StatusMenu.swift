@@ -137,47 +137,48 @@ struct CustomActivationPicker: View {
     @State private var error: String?
     enum Field: Hashable { case hours, minutes }
     @FocusState private var focused: Field?
-    @State private var editing: Field = .hours
     private var clockHour: Int {
         let h = Int(untilHours) ?? 0
         return model.automation.preferences.use24HourTime ? h : h % 12 + (afternoon ? 12 : 0)
     }
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 0) {
-                segment("For", value: false); segment("Until", value: true)
-            }.background(Color(nsColor: .controlBackgroundColor)).clipShape(RoundedRectangle(cornerRadius: 6))
-            if until {
-                HStack {
-                    timeField("Hours", text: $untilHours, field: .hours)
-                    Text(":")
-                    timeField("Minutes", text: $untilMinutes, field: .minutes)
-                    if !model.automation.preferences.use24HourTime {
-                        Picker("Period", selection: $afternoon) { Text("AM").tag(false); Text("PM").tag(true) }.labelsHidden().frame(width: 75)
+        VStack(spacing: 8) {
+            Picker("Activation limit", selection: $until) { Text("For").tag(false); Text("Until").tag(true) }
+                .pickerStyle(.segmented).labelsHidden().frame(height: 24)
+            ZStack(alignment: .top) {
+                if until {
+                    VStack(spacing: 10) {
+                        HStack(spacing: 6) {
+                            timeField("Hours", text: $untilHours, field: .hours, width: 48)
+                            Text(":")
+                            timeField("Minutes", text: $untilMinutes, field: .minutes, width: 48)
+                            if !model.automation.preferences.use24HourTime {
+                                Picker("Period", selection: $afternoon) { Text("AM").tag(false); Text("PM").tag(true) }.labelsHidden().frame(width: 60)
+                            }
+                        }
+                        TimeDial(hour: Binding(get: { clockHour }, set: { value in afternoon = value >= 12; untilHours = String(model.automation.preferences.use24HourTime ? value : (value % 12 == 0 ? 12 : value % 12)) }), minute: Binding(get: { Int(untilMinutes) ?? 0 }, set: { untilMinutes = String(format: "%02d", $0) }), use24HourTime: model.automation.preferences.use24HourTime)
+                            .frame(width: 155, height: 155)
                     }
+                } else {
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 12) {
+                        GridRow { timeField("Hours", text: $hours, field: .hours); Text("hours").frame(width: 64, alignment: .leading) }
+                        GridRow { timeField("Minutes", text: $minutes, field: .minutes); Text("minutes").frame(width: 64, alignment: .leading) }
+                    }.padding(.top, 8)
                 }
-                TimeDial(hour: Binding(get: { clockHour }, set: { value in afternoon = value >= 12; untilHours = String(model.automation.preferences.use24HourTime ? value : (value % 12 == 0 ? 12 : value % 12)) }), minute: Binding(get: { Int(untilMinutes) ?? 0 }, set: { untilMinutes = String(format: "%02d", $0) }), editingMinutes: editing == .minutes, use24HourTime: model.automation.preferences.use24HourTime)
-            } else {
-                HStack { timeField("Hours", text: $hours, field: .hours); Text("hours") }
-                HStack { timeField("Minutes", text: $minutes, field: .minutes); Text("minutes") }
-                Spacer(minLength: 0)
-            }
-            if let error { Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
-            Button("Continue") { apply() }.buttonStyle(.borderedProminent).tint(.accentColor)
-        }.padding(12).frame(width: 240, height: 300)
-        .onChange(of: focused) { _, value in if let value { editing = value } }
+            }.frame(maxWidth: .infinity).frame(height: 190)
+            Text(error ?? "").font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                .frame(height: 30, alignment: .top).accessibilityHidden(error == nil)
+            Button("Continue") { apply() }.buttonStyle(.bordered).frame(height: 24)
+        }.padding(12).frame(width: 240, height: 320)
         .onChange(of: until) { _, _ in
             focused = .hours; error = nil
             if !model.automation.preferences.use24HourTime { let h = clockHour % 12; untilHours = String(h == 0 ? 12 : h) }
         }
     }
-    private func segment(_ title: String, value: Bool) -> some View {
-        Button { until = value } label: { Text(title).frame(maxWidth: .infinity).padding(.vertical, 5).background(until == value ? Color.accentColor : .clear).foregroundStyle(until == value ? .white : .primary) }.buttonStyle(.borderless)
-    }
-    private func timeField(_ label: String, text: Binding<String>, field: Field) -> some View {
-        TextField(label, text: text).textFieldStyle(.roundedBorder).frame(width: 58).focused($focused, equals: field)
+    private func timeField(_ label: String, text: Binding<String>, field: Field, width: CGFloat = 58) -> some View {
+        TextField(label, text: text).textFieldStyle(.roundedBorder).frame(width: width).focused($focused, equals: field)
             .overlay(RoundedRectangle(cornerRadius: 5).stroke(focused == field ? Color.accentColor : .clear, lineWidth: 2))
-            .onTapGesture { editing = field; focused = field }.accessibilityLabel(label)
+            .onTapGesture { focused = field }.accessibilityLabel(label)
     }
     private func apply() {
         func integer(_ text: String) -> Int? { guard !text.isEmpty, text.utf8.allSatisfy({ (48...57).contains($0) }) else { return nil }; return Int(text) }

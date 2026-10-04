@@ -58,6 +58,12 @@
 			"path" = "Sources/FandyApp/CurveEditor.swift";
 			"sourceTree" = "<group>";
 		};
+		"A48FB4F620EB6AE19767DD6E" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/CurveRequestPreview.swift";
+			"sourceTree" = "<group>";
+		};
 		"8E639CEF8DDAE615620B8426" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -92,6 +98,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyApp/NativeSearchField.swift";
+			"sourceTree" = "<group>";
+		};
+		"32E24315218F49A3390F9915" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/PauseScheduleEditor.swift";
 			"sourceTree" = "<group>";
 		};
 		"C422ABCFB47349BD703F2E1A" = {
@@ -194,6 +206,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyApp/TemperatureTargetEditor.swift";
+			"sourceTree" = "<group>";
+		};
+		"74FE756E77D83ED759A813F0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/TimeDial.swift";
 			"sourceTree" = "<group>";
 		};
 		"D96A58088F00CD60907A1AF5" = {
@@ -451,12 +469,14 @@
 				04CAF0803A5BC8A92DA42A06,
 				1F639B204FFCC92863C8A7D0,
 				9A6ECCAA56620715A84F6DCC,
+				A48FB4F620EB6AE19767DD6E,
 				8E639CEF8DDAE615620B8426,
 				51D0B8FD680608BAF5020BFE,
 				A02906912D3FA3D0197F9768,
 				C86459ECAEFA78BC4D8D517C,
 				34BAD267582F8214CA24776A,
 				C1EFD3A2EB26D1281AEED0C1,
+				32E24315218F49A3390F9915,
 				C422ABCFB47349BD703F2E1A,
 				8C434696CA7290CC43A8844B,
 				FA5D341B7FDCB3115240BB4C,
@@ -474,6 +494,7 @@
 				52E34BEC1C679FE30F0B4033,
 				3217C5AE4A415B73290ADFE6,
 				BD4456D906A2D6FFA041D820,
+				74FE756E77D83ED759A813F0,
 				D96A58088F00CD60907A1AF5,
 				925C545BBF5908A07D2A47AF,
 				D2CEB122BCF9ECDC6BB42176,
@@ -620,6 +641,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 9A6ECCAA56620715A84F6DCC;
 		};
+		"DCF9586E3F57070E435433C3" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = A48FB4F620EB6AE19767DD6E;
+		};
 		"59F320D3FCD95443EF12DCEE" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = 8E639CEF8DDAE615620B8426;
@@ -643,6 +668,10 @@
 		"91DD4C2AEE77B3EB195A5706" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = C1EFD3A2EB26D1281AEED0C1;
+		};
+		"8EE76D94E97782437366585F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 32E24315218F49A3390F9915;
 		};
 		"5836B2BA70DD36CA30970732" = {
 			"isa" = "PBXBuildFile";
@@ -712,6 +741,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = BD4456D906A2D6FFA041D820;
 		};
+		"78C0F51341784B5DD8C73994" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 74FE756E77D83ED759A813F0;
+		};
 		"7099A060F81C0382F95DD211" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = 2147483647;
@@ -725,12 +758,14 @@
 				94EACCF9D993FDD1BC193C1C,
 				C896C6982894C685DED1534F,
 				54E08E461525A4E404448A81,
+				DCF9586E3F57070E435433C3,
 				59F320D3FCD95443EF12DCEE,
 				B542E6D429544F89E6775EC5,
 				1383D537ECBA6634ADB6E3C4,
 				D03C65C5E28591996732114F,
 				D2001D7D8DADEC0BC7F883FF,
 				91DD4C2AEE77B3EB195A5706,
+				8EE76D94E97782437366585F,
 				5836B2BA70DD36CA30970732,
 				606C2B4BF54FCE72A0B9D602,
 				1BF7058C1452280BA41D37E8,
@@ -748,6 +783,7 @@
 				7C1A3894EA7C033CC0D681A8,
 				8C817E85958EF70C743F350C,
 				9F11A5D5C42B3DE6979DEE69,
+				78C0F51341784B5DD8C73994,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};

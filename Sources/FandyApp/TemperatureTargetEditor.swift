@@ -28,7 +28,7 @@ struct TemperatureTargetEditor: View {
                         var next = profile; next.targetTemperature?.celsius = temperature; model.update(next)
                     }), in: 0...125, step: 1).labelsHidden()
                 }
-                Text("A cooling goal, not a guaranteed temperature. Curves and chip safety can request more airflow.").font(.caption).foregroundStyle(.secondary)
+                Text("The dashed line in the selected sensor’s graph includes this goal: 50% airflow at the target, rising above it. Curves and chip safety can request more; temperature is not guaranteed.").font(.caption).foregroundStyle(.secondary)
                 if let reason = model.eligibility(profile).reason { Text(reason).font(.caption).foregroundStyle(.secondary) }
             }
         }

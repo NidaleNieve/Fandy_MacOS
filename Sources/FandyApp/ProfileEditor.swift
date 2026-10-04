@@ -9,7 +9,7 @@ struct ProfileEditor: View {
     @Bindable var model: AppModel
     var body: some View {
         ProfileSplitView {
-            ProfileSidebarPanel(model: model, importFile: importFile, exportFile: exportFile)
+            ProfileSidebarPanel(model: model, importFile: importFile, exportFile: { exportFile() }, exportProfile: exportFile)
         } detail: {
             ProfileWorkspace(model: model)
         }.frame(minWidth: 880, minHeight: 560)
@@ -34,8 +34,8 @@ struct ProfileEditor: View {
             }
         }
     }
-    private func exportFile() {
-        guard let profile = model.edited else { return }
+    private func exportFile(_ id: String? = nil) {
+        guard let profile = model.profiles.first(where: { $0.id == (id ?? model.editorSelection) }) else { return }
         let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Profile.json"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
@@ -52,10 +52,12 @@ private struct ProfileSidebarPanel: View {
     @Bindable var model: AppModel
     let importFile: () -> Void
     let exportFile: () -> Void
+    let exportProfile: (String) -> Void
     var body: some View {
         VStack(spacing: 0) {
             Text("Profiles").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 10)
-            ProfileSidebar(model: model, profiles: model.profiles, selection: model.editorSelection, activeID: model.menuSelectionID)
+            Divider()
+            ProfileSidebar(model: model, profiles: model.profiles, selection: model.editorSelection, activeID: model.menuSelectionID, exportProfile: exportProfile)
             Divider()
             HStack(spacing: 6) {
                 Button { model.create() } label: { Image(systemName: "plus").frame(width: 16, height: 16) }.help("Create profile").accessibilityLabel("Create profile")
@@ -67,7 +69,7 @@ private struct ProfileSidebarPanel: View {
                 } label: { Image(systemName: "ellipsis.circle") }.help("Profile files")
                 Spacer(minLength: 0)
             }.buttonStyle(.bordered).controlSize(.small).padding(10)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(nsColor: .controlBackgroundColor)).disabled(model.savingCollection)
     }
 }
 private struct ProfileWorkspace: View {
@@ -85,7 +87,9 @@ private struct ProfileWorkspace: View {
 private struct ProfileDetail: View {
     @Bindable var model: AppModel
     @State private var tab = EditorTab.curves
-    enum EditorTab: String, CaseIterable { case curves = "Fan Curves", schedule = "Schedule", activation = "When Activated" }
+    @State private var chipExpanded = true
+    @State private var chassisExpanded = true
+    enum EditorTab: String, CaseIterable { case curves = "Fan Curves", schedule = "Schedule", pauses = "Pause Schedule", activation = "When Activated" }
     var body: some View {
         if let profile = model.edited {
             VStack(alignment: .leading, spacing: 12) {
@@ -100,16 +104,17 @@ private struct ProfileDetail: View {
                 Picker("Profile section", selection: $tab) {
                     ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }.pickerStyle(.segmented).labelsHidden()
+                Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         switch tab {
                         case .curves: fanControls(profile)
                         case .schedule: ScheduleEditor(model: model, profile: profile).id(profile.id)
+                        case .pauses: PauseScheduleEditor(model: model, profile: profile).id(profile.id)
                         case .activation: ActivationDefaultsEditor(model: model, profile: profile).id(profile.id)
                         }
                         if let reason = model.activationDefaultUnavailableReason(profile) { Text(reason).font(.caption).foregroundStyle(.secondary) }
                         if let error = model.draftError { Text(error).foregroundStyle(.red).font(.caption).accessibilityIdentifier("curve.validation-error") }
-                        if model.unsavedChanges { Text("Changes not saved").font(.caption).foregroundStyle(.orange) }
                         if let error = model.saveError {
                             HStack { Text(error).font(.caption).foregroundStyle(.orange); Button("Retry") { model.save() } }
                         }
@@ -117,39 +122,58 @@ private struct ProfileDetail: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 12)
                 }.scrollIndicators(.hidden)
             }.padding(16)
+                .onAppear { expandUsedSections(profile) }
+                .onChange(of: profile.id) { _, _ in expandUsedSections(profile) }
+                .onChange(of: profile.targetTemperature?.input) { _, input in
+                    guard let input else { return }
+                    if input == .chip { chipExpanded = true }
+                    else { chassisExpanded = true; model.curveInput = input }
+                }
 
         } else { ContentUnavailableView("Select a profile", systemImage: "fan") }
+    }
+    private func expandUsedSections(_ profile: Profile) {
+        chipExpanded = profile.curves.contains { $0.input == .chip && $0.enabled } || profile.targetTemperature?.input == .chip
+        chassisExpanded = profile.curves.contains { $0.input != .chip && $0.enabled } || profile.targetTemperature.map { $0.input != .chip } == true
+        if let input = profile.targetTemperature?.input, input != .chip { model.curveInput = input }
     }
     @ViewBuilder private func fanControls(_ profile: Profile) -> some View {
         if profile.kind == .system { Text("Returns all fans to Apple automatic control.").foregroundStyle(.secondary) }
         else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
         else {
-            TemperatureTargetEditor(model: model, profile: profile)
-            Divider()
-            CurveSection(profile: profile, input: .chip, model: model)
-            if !model.simulation && model.capabilities.chipPolicy == .conservativeEnvelope {
-                Text("Chip uses the hottest reading in the reviewed chip-region envelope. CPU/GPU averages are estimates.")
-                    .font(.caption).foregroundStyle(.secondary)
+            DisclosureGroup("Chip", isExpanded: $chipExpanded) {
+                CurveSection(profile: profile, input: .chip, model: model)
+                if !model.simulation && model.capabilities.chipPolicy == .conservativeEnvelope {
+                    Text("Chip uses the hottest reading in the reviewed chip-region envelope. CPU/GPU averages are estimates.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Divider()
-            Text("Chassis").font(.headline)
-            Picker("Sensor", selection: $model.curveInput) {
-                Text("Trackpad").tag(CurveInput.trackpad)
-                Text("Actuator").tag(CurveInput.actuator)
-                Text("Airflow").tag(CurveInput.airflow)
-            }.pickerStyle(.segmented).onAppear { if model.curveInput == .chip { model.curveInput = .trackpad } }
-            CurveSection(profile: profile, input: model.curveInput == .chip ? .trackpad : model.curveInput, model: model)
-            if !model.simulation && model.capabilities.sensorName(.airflowTop) == "Top proximity" {
-                Text("Airflow uses the hottest of Left, Right and the Top proximity input.")
-                    .font(.caption).foregroundStyle(.secondary)
+            DisclosureGroup("Chassis", isExpanded: $chassisExpanded) {
+                Picker("Sensor", selection: $model.curveInput) {
+                    Text("Trackpad").tag(CurveInput.trackpad)
+                    Text("Actuator").tag(CurveInput.actuator)
+                    Text("Airflow").tag(CurveInput.airflow)
+                }.pickerStyle(.segmented).onAppear { if model.curveInput == .chip { model.curveInput = .trackpad } }
+                CurveSection(profile: profile, input: model.curveInput == .chip ? .trackpad : model.curveInput, model: model)
+                if !model.simulation && model.capabilities.sensorName(.airflowTop) == "Top proximity" {
+                    Text("Airflow uses the hottest of Left, Right and the Top proximity input.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
+            Divider()
             HStack {
                 Text("Minimum airflow")
                 Slider(value: Binding(get: { profile.floor }, set: { var next = profile; next.floor = $0.rounded(); model.update(next) }), in: 0...100, onEditingChanged: { editing in if editing { model.beginEditGroup() } else { model.endEditGroup() } })
                 Text("\(Int(profile.floor))%").monospacedDigit().frame(width: 40)
+                Button("Reset", systemImage: "arrow.counterclockwise") {
+                    var next = profile; next.floor = BuiltInProfiles.all.first { $0.id == profile.id }?.floor ?? 0; model.update(next)
+                }.help("Reset minimum airflow").controlSize(.small)
             }
             Text("0% uses each fan’s minimum RPM. Apple auto at idle can release control instead.").font(.caption).foregroundStyle(.secondary)
             Toggle("Use Apple auto at idle", isOn: Binding(get: { profile.automaticAtIdle }, set: { var next = profile; next.automaticAtIdle = $0; model.update(next) }))
+            Divider()
+            TemperatureTargetEditor(model: model, profile: profile)
         }
 
         if !model.simulation && profile.kind != .system {
@@ -182,7 +206,7 @@ struct CurveSection: View {
                 Spacer()
                 Button("Reset Curve") { resetCurve() }.font(.caption)
             }
-            CurveEditor(curve: curve, resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve), onBegin: { model.beginEditGroup() }, onEnd: { model.endEditGroup() }, onChange: { commit($0) }).id(profile.id + input.rawValue).disabled(!curve.enabled).opacity(curve.enabled ? 1 : 0.5)
+            CurveEditor(curve: curve, request: CurveRequestPreview(floor: profile.floor, target: profile.targetTemperature), resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve), onBegin: { model.beginEditGroup() }, onEnd: { model.endEditGroup() }, onChange: { commit($0) }).id(profile.id + input.rawValue).disabled(!curve.enabled)
         }
     }
     func resetCurve() {

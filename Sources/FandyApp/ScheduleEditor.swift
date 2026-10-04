@@ -8,8 +8,6 @@ struct ScheduleEditor: View {
     @State private var day = 1
     @State private var start = "08:30"
     @State private var end = "16:30"
-    @State private var pauseStart = Date()
-    @State private var pauseEnd = Date().addingTimeInterval(86400)
     @State private var importing = false
     @State private var editing: WeeklyPeriod?
     @State private var pendingPeriods: [WeeklyPeriod]?
@@ -17,8 +15,6 @@ struct ScheduleEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Manual selections take priority. Resume Schedule in the menu to return to automation.")
-                    .font(.caption).foregroundStyle(.secondary)
                 ForEach(1...7, id: \.self) { weekday in
                     let rows = dayRows(weekday)
                     VStack(alignment: .leading, spacing: 4) {
@@ -45,25 +41,10 @@ struct ScheduleEditor: View {
                     TextField("End HH:mm", text: $end).frame(width: 70)
                     Button("Add") { add() }
                 }
-                Text("24-hour times. An earlier end spills into the next day; 24:00 ends at midnight.").font(.caption).foregroundStyle(.secondary)
+                Button("Import Schedule from Text…") { importing = true }
                 Divider()
-                Text("Pauses").font(.subheadline).bold()
-                ForEach(model.automation.pauses.filter { $0.profileID == profile.id || $0.profileID == nil }) { pause in
-                    HStack {
-                        Text("\(pause.start.formatted(date: .abbreviated, time: .shortened)) – \(pause.end.formatted(date: .abbreviated, time: .shortened))\(pause.profileID == nil ? " · all profiles" : "")").font(.caption)
-                        Spacer()
-                        Button { model.removePause(pause.id) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
-                    }
-                }
-                DatePicker("From", selection: $pauseStart).environment(\.locale, Locale(identifier: model.automation.preferences.use24HourTime ? "en_GB" : "en_US"))
-                DatePicker("Until", selection: $pauseEnd).environment(\.locale, Locale(identifier: model.automation.preferences.use24HourTime ? "en_GB" : "en_US"))
-                HStack {
-                    Button("Add Pause") {
-                        var next = model.automation; next.pauses.append(SchedulePause(profileID: profile.id, start: pauseStart, end: pauseEnd)); model.setAutomation(next)
-                    }
-                    Spacer()
-                    Button("Import Schedule from Text…") { importing = true }
-                }
+                Label("Manual selections take priority. Resume Schedule in the menu to return to automation.", systemImage: "info.circle")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }.padding(.top, 8)
         }.accessibilityIdentifier("profile.schedule")
         .sheet(isPresented: $importing, onDismiss: finishPendingReview) {
