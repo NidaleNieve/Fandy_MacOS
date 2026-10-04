@@ -21,13 +21,9 @@ extension AppModel {
     var menuSelectionID: String? { machine.state == .fault ? nil : machine.selected.id }
     var canSetActivationLimit: Bool { machine.state != .fault && (machine.state != .restoringSystem || machine.selected.kind == .system) }
     func toggleProfile(_ id: String) { select(machine.selected.id == id && id != "system" && machine.state != .fault ? "system" : id) }
-    func activationDefaultUnavailableReason(_ profile: Profile) -> String? {
+    func activationConditionNote(_ profile: Profile) -> String? {
         guard let rule = automation.activationDefaults[profile.id], rule.kind == .application else { return nil }
-        return runningApplicationIDs.contains(rule.applicationID) ? nil : "\(rule.applicationName) is not running. Change this profile’s activation condition to use it now."
-    }
-    func canUseActivationDefault(_ profile: Profile) -> Bool {
-        if automation.activationDefaults[profile.id]?.kind == .application { refreshApplicationAvailability(force: true) }
-        if let reason = activationDefaultUnavailableReason(profile) { draftError = reason; return false }; return true
+        return runningApplicationIDs.contains(rule.applicationID) ? nil : "Ends when \(rule.applicationName) closes after it next opens."
     }
     func rememberDefault(_ id: String) {
         if automation.preferences.defaultProfileID != id {
@@ -55,7 +51,7 @@ extension AppModel {
         case .application:
             manualIntent = ActivationIntent(profileID: profile.id)
             if let process = applicationCatalog().first(where: { $0.bundleID == rule.applicationID }) { activateWhile(process) }
-            else { clearActivation(); select("system", manual: false) }
+            else { awaitingApplicationID = rule.applicationID; watchedProcessName = rule.applicationName }
         }
     }
     func setActivationDefault(_ rule: ProfileActivationDefault, profileID: String) {
@@ -74,7 +70,7 @@ extension AppModel {
     var activationDescription: String {
         if let manualIntent {
             switch manualIntent.limit {
-            case .forever: return "Manual · until changed"
+            case .forever: return awaitingApplicationID != nil ? "Until \(watchedProcessName ?? "application") closes · waiting for launch" : "Manual · until changed"
             case .deadline(let date): return "Until \(formattedTime(date))"
             case .process: return "While \(watchedProcessName ?? "application") is running"
             }
@@ -88,7 +84,7 @@ extension AppModel {
         return formatter.string(from: date)
     }
     func activateForever() {
-        if case .forever = manualIntent?.limit { clearActivation(); evaluateSchedule() }
+        if case .forever = manualIntent?.limit, awaitingApplicationID == nil { clearActivation(); evaluateSchedule() }
         else if claimCurrentActivation(.forever) { rememberDefault(machine.selected.id) }
     }
     func activateFor(seconds: Double) {
@@ -112,7 +108,7 @@ extension AppModel {
             saveDefaultPreference()
         }
         manualIntent = ActivationIntent(profileID: profile.id, limit: limit)
-        activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil; blockedScheduleID = nil
+        activationDeadline = nil; watchedProcessName = nil; awaitingApplicationID = nil; scheduledPeriodID = nil; blockedScheduleID = nil
         return true
     }
     func cancelActivation() {
@@ -127,10 +123,15 @@ extension AppModel {
         select("system", manual: false)
     }
     func clearActivation() {
-        manualIntent = nil; activationDeadline = nil; watchedProcessName = nil; scheduledPeriodID = nil
+        manualIntent = nil; activationDeadline = nil; watchedProcessName = nil; awaitingApplicationID = nil; scheduledPeriodID = nil
     }
     /// Called before sampling/commands. A delayed tick cannot renew an expired activation.
     func expireActivation() {
+        guard let activeIntent = manualIntent else { return }
+        if let bundleID = awaitingApplicationID, let process = applicationCatalog().first(where: { $0.bundleID == bundleID }) {
+            manualIntent = ActivationIntent(profileID: activeIntent.profileID, limit: .process(pid: process.pid, launched: process.launched))
+            awaitingApplicationID = nil; watchedProcessName = process.name
+        }
         guard let intent = manualIntent else { return }
         let expired = (activationDeadline.map { clockNow() >= $0 } ?? false) || intent.expired(at: wallClock(), running: ProcessCatalog.isRunning)
         if expired {
@@ -160,7 +161,6 @@ extension AppModel {
             guard let rule = automation.activationDefaults[profile.id] else { return false }
             return rule.launchWhenOpened && launched.contains(rule.applicationID)
                 && runningApplicationIDs.contains(rule.applicationID) && canActivate(profile)
-                && activationDefaultUnavailableReason(profile) == nil
         }) else { return }
         select(profile.id, manual: false)
         if machine.selected.id == profile.id { applyActivationDefault(profile, remember: false) }
@@ -284,5 +284,20 @@ extension AppModel {
             if automation.preferences.launchAtLogin && service.status == .notRegistered { try service.register() }
             else if !automation.preferences.launchAtLogin && service.status == .enabled { try service.unregister() }
         } catch { draftError = "Login setting could not be applied. Check Login Items in System Settings." }
+    }
+}
+
+extension AppModel {
+    func resetToDefaults() {
+        do {
+            let data = try ConfigurationInterchange.encode(.init(profiles: BuiltInProfiles.all, automation: .init()))
+            importConfiguration(data)
+            Task {
+                await waitForCollection()
+                guard saveError == nil else { return }
+                editorHistory.removeAllActions()
+                if simulation { setSimulation(false) }
+            }
+        } catch { draftError = "Defaults could not be restored: \(error.localizedDescription)" }
     }
 }

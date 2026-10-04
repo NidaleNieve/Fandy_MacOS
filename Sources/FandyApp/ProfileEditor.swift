@@ -72,14 +72,14 @@ private struct ProfileSidebarPanel: View {
                 } label: { Image(systemName: "ellipsis.circle") }.help("Profile files")
                 Spacer(minLength: 0)
             }.buttonStyle(.bordered).controlSize(.small).padding(10)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(nsColor: .controlBackgroundColor)).disabled(model.savingCollection)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(.regularMaterial).disabled(model.savingCollection)
     }
 }
 private struct ProfileWorkspace: View {
     @State private var showingSchedule = false
     @Bindable var model: AppModel
     var body: some View {
-        HStack(spacing: 0) {
+        ProfileDetailSplitView {
             VStack(spacing: 0) {
                 HStack {
                     Spacer()
@@ -88,10 +88,10 @@ private struct ProfileWorkspace: View {
                 }.padding(.horizontal, 16).padding(.top, 10)
                 ProfileDetail(model: model).frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             }.frame(minWidth: 0, maxWidth: .infinity)
-            Divider()
+        } monitoring: {
             ScrollView { SensorStatus(model: model).padding(14).frame(maxWidth: .infinity, alignment: .leading) }
                 .scrollIndicators(.hidden)
-                .frame(width: 205)
+                .frame(maxWidth: .infinity, maxHeight: .infinity).background(.regularMaterial)
         }.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
         .sheet(isPresented: $showingSchedule) { WeeklyScheduleOverview(model: model) }
     }
@@ -111,11 +111,16 @@ private struct ProfileDetail: View {
                         .disabled(profile.protected).help(profile.protected ? "System and Max cannot be renamed" : "Rename profile")
                         .accessibilityIdentifier("profile.rename")
                     Button(model.isSelected(profile.id) ? "Active" : "Use Profile") { model.select(profile.id) }
-                        .disabled(model.isSelected(profile.id) || !model.canActivate(profile) || model.activationDefaultUnavailableReason(profile) != nil)
+                        .disabled(model.isSelected(profile.id) || !model.canActivate(profile))
                 }
-                Picker("Profile section", selection: $tab) {
-                    ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented).controlSize(.small).labelsHidden()
+                ViewThatFits(in: .horizontal) {
+                    Picker("Profile section", selection: $tab) {
+                        ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented).controlSize(.small).labelsHidden().fixedSize(horizontal: true, vertical: false)
+                    Picker("Profile section", selection: $tab) {
+                        ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.menu).labelsHidden()
+                }
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -125,7 +130,7 @@ private struct ProfileDetail: View {
                         case .pauses: PauseScheduleEditor(model: model, profile: profile).id(profile.id)
                         case .activation: ActivationDefaultsEditor(model: model, profile: profile).id(profile.id)
                         }
-                        if let reason = model.activationDefaultUnavailableReason(profile) { Text(reason).font(.caption).foregroundStyle(.secondary) }
+                        if let reason = model.activationConditionNote(profile) { Text(reason).font(.caption).foregroundStyle(.secondary) }
                         if let error = model.draftError { Text(error).foregroundStyle(.red).font(.caption).accessibilityIdentifier("curve.validation-error") }
                         if let error = model.saveError {
                             HStack { Text(error).font(.caption).foregroundStyle(.orange); Button("Retry") { model.save() } }
@@ -268,21 +273,14 @@ struct SettingsView: View {
     @Bindable var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var loginStatus = SMAppService.mainApp.status
+    @State private var confirmingReset = false
     @State private var helperStatus = HelperManager.service.status
     var body: some View {
         ScrollView { Form {
-            Section("General") {
-                Button("Export Diagnostics…") { exportDiagnostics() }
-                if loginStatus == .requiresApproval {
-                    Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
-                }
-                if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
-            }
             ConfigurationSettings(model: model)
-            ShortcutSettings(model: model)
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: { model.setSimulation($0) }))
-                Text("Live mode reads sensors and runs the selected profile.").font(.caption).foregroundStyle(.secondary)
+                Text("Use simulated temperatures and fans for testing. Physical fan control is disabled.").font(.caption).foregroundStyle(.secondary)
                 if model.simulation {
                     Picker("Scenario", selection: $model.scenario) { ForEach(MockScenario.allCases) { Text($0.rawValue).tag($0) } }
                     Button("Simulate Helper Restart") { model.simulateRestart() }
@@ -302,7 +300,17 @@ struct SettingsView: View {
                 }.accessibilityIdentifier("settings.hardwareVerification")
                 Text("Startup and wake begin in System. No telemetry or networking.").font(.caption).foregroundStyle(.secondary)
             }
+            Section("Maintenance") {
+                Button("Export Diagnostics…") { exportDiagnostics() }
+                Button("Reset to Defaults…", role: .destructive) { confirmingReset = true }
+                    .disabled(model.savingCollection)
+                if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
+            }
         }.formStyle(.grouped).padding() }.frame(width: 500, height: 640)
+        .alert("Reset Fandy to Defaults?", isPresented: $confirmingReset) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) { model.resetToDefaults() }
+        } message: { Text("Removes custom profiles, schedules, activation conditions and shortcuts, resets preferences, and returns fans to System.") }
         .onAppear { refreshRegistration() }
         .task { if !model.simulation { await model.sensorMenu.discover() } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refreshRegistration() } }

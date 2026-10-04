@@ -102,6 +102,7 @@ actor DisplaySensorReader {
         displayed = next; publishedAt = Date()
     }
     func title(for id: String) -> String { choices.first { $0.id == id }?.name ?? id }
+    func valueText(for id: String) -> String { Date().timeIntervalSince(publishedAt) <= 3 ? (displayed[id] ?? "Unavailable") : "Unavailable" }
     var compactText: String { choices.compactMap { choice in displayed[choice.id].map { text in
         let short = choice.role.map { role in role == .cpuAverage ? "CPU" : role == .gpuAverage ? "GPU" : choice.name } ?? choice.name.components(separatedBy: " · ").first!
         let fresh = Date().timeIntervalSince(publishedAt) <= 3 ? text : "Unavailable"

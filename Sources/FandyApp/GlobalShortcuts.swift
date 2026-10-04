@@ -72,7 +72,7 @@ struct ShortcutSettings: View {
     @Bindable var model: AppModel
     var body: some View {
         Section("Keyboard Shortcuts") {
-            shortcut("Toggle Menu", id: "menu")
+            shortcut("Open Menu", id: "menu")
             ForEach(model.profiles) { profile in shortcut(profile.name, id: profile.id) }
         }
     }

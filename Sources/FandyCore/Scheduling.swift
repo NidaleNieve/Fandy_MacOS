@@ -57,15 +57,19 @@ public struct AppPreferences: Codable, Sendable, Equatable {
     public var use24HourTime: Bool = true
     public var showHelperProcesses: Bool = false
     public var menuSensors: [String] = []
+    public var showFanSpeedBar: Bool = true
+    public var showFanSpeedNumbers: Bool = true
     public var shortcuts: [String: ShortcutBinding] = [:]
     public init() {}
-    private enum CodingKeys: String, CodingKey { case defaultProfileID, launchAtLogin, use24HourTime, showHelperProcesses, menuSensors, shortcuts }
+    private enum CodingKeys: String, CodingKey { case defaultProfileID, launchAtLogin, use24HourTime, showHelperProcesses, menuSensors, shortcuts, showFanSpeedBar, showFanSpeedNumbers }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         defaultProfileID = try c.decodeIfPresent(String.self, forKey: .defaultProfileID) ?? "system"
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
         use24HourTime = try c.decodeIfPresent(Bool.self, forKey: .use24HourTime) ?? true
         showHelperProcesses = try c.decodeIfPresent(Bool.self, forKey: .showHelperProcesses) ?? false
+        showFanSpeedBar = try c.decodeIfPresent(Bool.self, forKey: .showFanSpeedBar) ?? true
+        showFanSpeedNumbers = try c.decodeIfPresent(Bool.self, forKey: .showFanSpeedNumbers) ?? true
         menuSensors = try c.decodeIfPresent([String].self, forKey: .menuSensors) ?? []
         shortcuts = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcuts) ?? [:]
     }

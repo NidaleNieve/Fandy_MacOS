@@ -17,10 +17,12 @@ struct ConfigurationSettings: View {
                 model.setPreferences { $0.launchAtLogin = enabled }; model.configureLogin(); loginStatus = SMAppService.mainApp.status
             }))
             if loginStatus == .requiresApproval { Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() } }
-            Text("Login checks the hardware, then uses the schedule or your remembered default profile.").font(.caption).foregroundStyle(.secondary)
             Toggle("Use 24-hour time", isOn: Binding(get: { model.automation.preferences.use24HourTime }, set: { enabled in model.setPreferences { $0.use24HourTime = enabled } }))
         }
-        Section("Menu Bar Temperatures") {
+        Section("Menu Bar Menu") {
+            Toggle("Show fan speed bar", isOn: Binding(get: { model.automation.preferences.showFanSpeedBar }, set: { value in model.setPreferences { $0.showFanSpeedBar = value } }))
+            Toggle("Show fan percentage and RPM", isOn: Binding(get: { model.automation.preferences.showFanSpeedNumbers }, set: { value in model.setPreferences { $0.showFanSpeedNumbers = value } }))
+            Text("Temperatures").font(.subheadline)
             NativeSearchField(placeholder: "Search sensors", text: $search).frame(height: 24)
             ScrollView {
                 LazyVStack(alignment: .leading) {
@@ -42,6 +44,7 @@ struct ConfigurationSettings: View {
             if model.sensorMenu.discovering { ProgressView("Finding temperature sensors…") }
             if let error = model.sensorMenu.discoveryError { Text(error).font(.caption); Button("Retry Discovery") { Task { await model.sensorMenu.discover() } } }
         }
+        ShortcutSettings(model: model)
         Section("Configuration Files") {
             HStack { Button("Export All Settings…") { exportFile() }; Button("Import All Settings…") { importFile() } }
             Text("Includes profiles, schedules, pauses and preferences. Import replaces the entire configuration and returns fans to System. Timers, watched processes and hardware authority are excluded.").font(.caption).foregroundStyle(.secondary)

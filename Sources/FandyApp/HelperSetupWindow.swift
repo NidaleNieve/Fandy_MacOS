@@ -40,7 +40,7 @@ private struct HelperSetupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Allow fan control", systemImage: "fan").font(.headline)
-            Text("Enable Fandy under Background App Activity in System Settings. This window closes when approval is complete.")
+            Text("System Settings → General → Login Items & Extensions → Background App Activity → enable Fandy.")
                 .fixedSize(horizontal: false, vertical: true)
             if let error = model.helperSetupError { Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
             Spacer(minLength: 0)

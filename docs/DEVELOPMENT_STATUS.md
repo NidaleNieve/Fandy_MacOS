@@ -1,4 +1,14 @@
-# Current checkpoint — 2026-10-04: bounded Profiles window and dedicated setup
+# Current checkpoint — 2026-10-04: release UI and application-close conditions
+
+0.2.0 build 6 allows manual activation before a watched application opens and retains its close condition. Long cancellation actions wrap without widening the menu. Selected temperatures now appear inside the menu, and fan bar/numbers have independent visibility settings. Both profile sidebars resize with system backgrounds; the 1040×720 startup size retains a smaller 780×480 minimum. Setup uses arrow-path guidance, settings are reorganized, and confirmed Reset to Defaults returns to System and replaces portable configuration.
+
+371 Swift tests, 46 tool tests, a signed arm64 Release build and an isolated simulation functional check pass. No physical fan tests or helper/approval changes were performed in this UI release. The user's Background App Activity disable is respected. See [delivery details](RELEASE_POLISH_DELIVERY.md).
+
+DMG: `build/Distribution/Release-0.2.0-build6/Fandy-0.2.0-arm64.dmg`. SHA-256: `21ec6aad91e88ba3709b8ac7a66347d6e6add7eb0b312abf22a7a51e39801ef9`. App/helper signatures, privacy, image and mounted payload checks pass. The filename no longer says Test; signing remains Apple Development and unnotarized. Developer ID/notarization, the user's actual M1 first-run/permission report, other-hardware physical testing, sleep/wake and subjective calibration remain follow-ups. Do not repeat unrelated fan qualification for these UI changes.
+
+---
+
+# Previous checkpoint — 2026-10-04: bounded Profiles window and dedicated setup
 
 0.2.0 build 5 fixes tiny Profiles-window startup/layout by assigning native sizing after hosting attachment and enforcing a 960×560 content minimum (initial 1040×720). Hidden-window layout/resize tests cover it without visual automation. Plain everyday profiles no longer display Cancel. Empty schedule days show no synthetic System entry; the overview includes configured application-open/close/duration conditions and current overrides at the bottom.
 

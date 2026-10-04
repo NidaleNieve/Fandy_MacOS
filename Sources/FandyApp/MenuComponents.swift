@@ -26,10 +26,12 @@ struct WrappedMenuText: View {
 struct FanSpeedReadout: View {
     @Bindable var model: AppModel
     var centered = false
+    var respectsMenuPreferences = false
     var body: some View {
         VStack(alignment: centered ? .center : .leading, spacing: 4) {
             if let fans = model.snapshot?.fans, !fans.isEmpty, model.ownership != .unknown {
                 let percentage = StatusPresentation.observedFanPercent(fans)
+                if !respectsMenuPreferences || model.automation.preferences.showFanSpeedBar {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color.secondary.opacity(0.18))
@@ -37,8 +39,11 @@ struct FanSpeedReadout: View {
                     }
                 }.frame(width: 120, height: 3)
                 .accessibilityLabel("Observed fan speed").accessibilityValue("\(Int(percentage.rounded())) percent")
+                }
+                if !respectsMenuPreferences || model.automation.preferences.showFanSpeedNumbers {
                 Text("\(Int(percentage.rounded()))% · " + fans.map { "\(Int($0.actualRPM.rounded()))" }.joined(separator: " / ") + " RPM").font(.caption).monospacedDigit()
-            } else { Text("Fan speed unavailable").font(.caption).foregroundStyle(.secondary) }
+                }
+            } else if !respectsMenuPreferences || model.automation.preferences.showFanSpeedBar || model.automation.preferences.showFanSpeedNumbers { Text("Fan speed unavailable").font(.caption).foregroundStyle(.secondary) }
         }.multilineTextAlignment(centered ? .center : .leading)
     }
 }
@@ -46,10 +51,32 @@ struct FanMenuStatus: View {
     @Bindable var model: AppModel
     var body: some View {
         VStack(alignment: .center, spacing: 4) {
-            FanSpeedReadout(model: model, centered: true)
+            FanSpeedReadout(model: model, centered: true, respectsMenuPreferences: true)
             Text(model.statusText).font(.caption).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            ForEach(model.automation.preferences.menuSensors, id: \.self) { id in
+                Text(model.sensorMenu.title(for: id) + " · " + model.sensorMenu.valueText(for: id))
+                    .font(.caption).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            }
         }.frame(width: MenuLayout.textWidth).frame(maxWidth: .infinity)
             .padding(.horizontal, 14).padding(.vertical, 5)
+    }
+}
+
+struct WrappedMenuAction: View {
+    let title: String
+    let action: () -> Void
+    @State private var hovered = false
+    var body: some View {
+        Button(action: action) {
+            Text(title).font(.system(size: NSFont.menuFont(ofSize: 0).pointSize))
+                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                .frame(width: MenuLayout.textWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 5)
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).foregroundStyle(hovered ? Color.white : Color.primary)
+            .background(hovered ? Color(nsColor: .selectedContentBackgroundColor) : .clear, in: RoundedRectangle(cornerRadius: 5))
+            .onHover { hovered = $0 }.padding(.horizontal, 4).padding(.vertical, 2)
+            .frame(maxWidth: .infinity).accessibilityLabel(title)
     }
 }

@@ -29,12 +29,12 @@ import Testing
     #expect(model.machine.selected.id == "system")
     model.toggleProfile("max"); #expect(model.manualIntent?.profileID == "max" && model.activationDeadline != nil)
 }
-@MainActor @Test func missingDefaultApplicationRetainsPreviousProfile() {
+@MainActor @Test func missingDefaultApplicationAllowsManualActivationAndWaitsForLaunch() {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString); defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
     var rule = ProfileActivationDefault(); rule.kind = .application; rule.applicationID = "invalid.nonexistent.fandy.test"; rule.applicationName = "Game"
     model.setActivationDefault(rule, profileID: "gaming"); model.select("gaming")
-    #expect(model.machine.selected.id == "system" && model.draftError?.contains("not running") == true)
+    #expect(model.machine.selected.id == "gaming" && model.awaitingApplicationID == rule.applicationID && model.draftError == nil)
 }
 @MainActor @Test func universalUndoRestoresCreationDeletionSchedulesAndDefaultsAcrossSelection() async throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString); defer { try? FileManager.default.removeItem(at: dir) }
@@ -100,7 +100,7 @@ private actor StartupRetryClient: PrivilegedFanClient {
     var profile = BuiltInProfiles.school; profile.name = String(repeating: "Wide profile ", count: 6); model.update(profile)
     let split = ProfileSplitView(sidebar: { Text("Profiles") }, detail: { Text("Editor") }).makeController()
     #expect(split.splitViewItems.allSatisfy { !$0.canCollapse })
-    #expect(split.splitViewItems[0].minimumThickness == 220)
+    #expect(split.splitViewItems[0].minimumThickness == 170)
     let menu = NSMenu(), presenter = StatusMenu(model: model, install: false); presenter.rebuild(menu)
     #expect(menu.items.filter { $0.view != nil }.allSatisfy { $0.view!.frame.width <= MenuLayout.width })
     let row = try #require(menu.items.first { $0.accessibilityLabel() == profile.name })

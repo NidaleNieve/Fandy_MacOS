@@ -38,8 +38,7 @@ import FandyCore
     }
     func updateTitle() {
         refreshSelection()
-        let text = model.sensorMenu.compactText
-        item?.button?.title = text.isEmpty ? "" : " " + text
+        item?.button?.title = ""
         item?.button?.toolTip = model.statusText + " · " + model.activationDescription
     }
     func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
@@ -49,9 +48,9 @@ import FandyCore
         for profile in model.profiles {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
             if profile.kind != .system && model.needsHelperSetup { row.image = AppModel.approvalDot() }
-            row.isEnabled = model.canActivate(profile) && model.activationDefaultUnavailableReason(profile) == nil
+            row.isEnabled = model.canActivate(profile)
             profileRows[profile.id] = row; row.state = model.menuSelectionID == profile.id ? .on : .off
-            row.toolTip = profile.kind != .system && model.needsHelperSetup ? model.helperSetupMessage : model.activationDefaultUnavailableReason(profile) ?? model.eligibility(profile).reason ?? profile.name
+            row.toolTip = profile.kind != .system && model.needsHelperSetup ? model.helperSetupMessage : model.activationConditionNote(profile) ?? model.eligibility(profile).reason ?? profile.name
         }
         menu.addItem(.separator())
         let timing = submenu("Activate for/until", in: menu)
@@ -76,12 +75,18 @@ import FandyCore
         applications.addItem(appControls)
         timing.addItem(.separator())
         let forever = add("Until Changed", to: timing) { [weak model] in model?.activateForever() }
-        if case .forever = model.manualIntent?.limit { forever.state = .on }
-        if (model.manualIntent.map { $0.limit != .forever } ?? false) || model.scheduledPeriodID != nil {
+        if case .forever = model.manualIntent?.limit, model.awaitingApplicationID == nil { forever.state = .on }
+        if (model.manualIntent.map { $0.limit != .forever } ?? false) || model.awaitingApplicationID != nil || model.scheduledPeriodID != nil {
             let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); menu.addItem(explanation)
         }
         if model.showsCancellation {
-            add(model.cancellationTitle, to: menu) { [weak model] in model?.cancelActivation() }
+            let title = model.cancellationTitle
+            let row = add(title, to: menu) { [weak model] in model?.cancelActivation() }
+            if MenuLayout.titleWidth(title) > MenuLayout.nativeTitleWidth {
+                row.view = fitted(WrappedMenuAction(title: title) { [weak model, weak menu] in
+                    menu?.cancelTracking(); model?.cancelActivation()
+                })
+            }
         }
         menu.addItem(.separator())
         let status = NSMenuItem(); status.view = fitted(FanMenuStatus(model: model)); menu.addItem(status)

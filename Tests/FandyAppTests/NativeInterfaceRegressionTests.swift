@@ -39,12 +39,12 @@ import Testing
     var rule = ProfileActivationDefault(); rule.kind = .application; rule.applicationID = "example.game"; rule.applicationName = "Game"
     model.setActivationDefault(rule, profileID: "gaming")
     let initial = queries
-    for _ in 0..<1000 { #expect(model.activationDefaultUnavailableReason(BuiltInProfiles.gaming) != nil) }
+    for _ in 0..<1000 { #expect(model.activationConditionNote(BuiltInProfiles.gaming) != nil) }
     #expect(queries == initial)
     model.refreshApplicationAvailability(); model.refreshApplicationAvailability()
     #expect(queries == initial)
     model.select("gaming")
-    #expect(queries == initial + 1 && model.machine.selected.id == "system")
+    #expect(queries == initial + 2 && model.machine.selected.id == "gaming")
 }
 
 @MainActor @Test func nativeMenuEmbedsHoverPickersAndCentersCompactReadouts() throws {

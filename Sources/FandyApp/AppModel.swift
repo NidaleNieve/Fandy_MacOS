@@ -11,6 +11,7 @@ import ServiceManagement
     var manualIntent: ActivationIntent?
     var activationDeadline: Double?
     var watchedProcessName: String?
+    var awaitingApplicationID: String?
     var previousDefaultProfileID = "system"
     private var defaultSelectionRevision: UInt64 = 0
     var defaultResumeBlocked = false
@@ -220,7 +221,7 @@ import ServiceManagement
         if !simulation && profile.kind != .system && needsHelperSetup { return }
         if !canActivate(profile) { hardwareError = eligibility(profile).reason; return }
         if manual && profile == machine.selected && (machine.state == .customActive || machine.state == .initializingCustom) { applyActivationDefault(profile); return }
-        if manual, !canUseActivationDefault(profile) { return }
+        if manual, automation.activationDefaults[profile.id]?.kind == .application { refreshApplicationAvailability(force: true) }
         lifecycleToken = UUID(); requestedSimulation = simulation
         do {
             if !simulation && profile.kind != .system && !helperAvailable() {

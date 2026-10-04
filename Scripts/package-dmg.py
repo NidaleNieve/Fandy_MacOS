@@ -114,8 +114,7 @@ def package(app, output, release_staging=False):
         run(['xcrun', 'stapler', 'validate', app])
         run(['spctl', '--assess', '--type', 'execute', app])
     output.mkdir(parents=True, exist_ok=True)
-    channel = 'Test' if kind == 'Apple Development' else 'Unnotarized'
-    name = f"Fandy-{info['CFBundleShortVersionString']}-arm64-{channel}.dmg"
+    name = f"Fandy-{info['CFBundleShortVersionString']}-arm64.dmg"
     dmg = output / name
     if dmg.exists():
         raise ValueError('Output already exists; choose a new output directory')

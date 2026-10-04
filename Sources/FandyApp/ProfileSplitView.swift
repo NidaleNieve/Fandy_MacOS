@@ -10,11 +10,11 @@ struct ProfileSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresenta
     func makeController() -> NSSplitViewController {
         let controller = NSSplitViewController(); controller.splitView.isVertical = true
         let left = NSSplitViewItem(viewController: ProfileHostingController(rootView: sidebar))
-        left.canCollapse = false; left.minimumThickness = 220; left.maximumThickness = 350; left.holdingPriority = .defaultHigh
+        left.canCollapse = false; left.minimumThickness = 170; left.maximumThickness = 350; left.holdingPriority = .defaultHigh
         let right = NSSplitViewItem(viewController: ProfileHostingController(rootView: detail))
-        right.canCollapse = false; right.minimumThickness = 660
+        right.canCollapse = false; right.minimumThickness = 590
         controller.addSplitViewItem(left); controller.addSplitViewItem(right)
-        controller.splitView.setPosition(240, ofDividerAt: 0)
+        controller.splitView.setPosition(210, ofDividerAt: 0)
         return controller
     }
     // Both roots retain the same observable model. Replacing them on each sensor
@@ -48,4 +48,23 @@ struct ProfileSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresenta
         }
         for child in view.subviews { hideScrollIndicators(in: child) }
     }
+}
+
+/// The monitoring column has its own native divider and stays visible.
+struct ProfileDetailSplitView<Editor: View, Monitoring: View>: NSViewControllerRepresentable {
+    let editor: Editor
+    let monitoring: Monitoring
+    init(@ViewBuilder editor: () -> Editor, @ViewBuilder monitoring: () -> Monitoring) { self.editor = editor(); self.monitoring = monitoring() }
+    func makeNSViewController(context: Context) -> NSSplitViewController { makeController() }
+    func makeController() -> NSSplitViewController {
+        let controller = NSSplitViewController(); controller.splitView.isVertical = true
+        let main = NSSplitViewItem(viewController: ProfileHostingController(rootView: editor))
+        main.canCollapse = false; main.minimumThickness = 400; main.holdingPriority = .defaultLow
+        let status = NSSplitViewItem(viewController: ProfileHostingController(rootView: monitoring))
+        status.canCollapse = false; status.minimumThickness = 170; status.maximumThickness = 300; status.holdingPriority = .defaultHigh
+        controller.addSplitViewItem(main); controller.addSplitViewItem(status)
+        controller.splitView.setPosition(605, ofDividerAt: 0)
+        return controller
+    }
+    func updateNSViewController(_ controller: NSSplitViewController, context: Context) {}
 }
