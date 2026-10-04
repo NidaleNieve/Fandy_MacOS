@@ -1,4 +1,16 @@
-# Current checkpoint — 2026-10-04: Apple Silicon registry and release pipeline
+# Current checkpoint — 2026-10-04: compact native menu and application launch rules
+
+0.2.0 build 3 delivers the native app icon, fully native menu actions (removing rectangular Cancel highlighting), stable centered readouts, compact inline time controls, native hosting sizing fixes, hidden profile scroll indicators, combined weekly schedule overview and per-profile application-launch/close automation. See [delivery details and semantics](UI_AUTOMATION_DELIVERY.md).
+
+348 Swift / 46 tool tests and the signed Release build pass. The installed `build/MonitoringDSR/Fandy.app` was replaced after verified automatic handback/unregistration; helper/login registration remain enabled. Its five-tick live startup check passes in System, fan modes 0/0, Apple ownership and no monitoring warning. The app is running in System. Existing personal profiles/signing choices remain intact. No screenshots or GUI automation were used.
+
+Updated Test DMG/checksum/report: `build/Distribution/UI-Automation-0.2.0-build3`. This is still an Apple Development-signed, unnotarized test artifact, not a notarized distribution release. Developer ID certificate plus the private notarytool profile name remain the release blockers. No new credentials or hardware authority are stored in launch rules.
+
+Next: human appearance review of the native menu, resizing and time controls; optional application launch/close usability check; macOS 15/latest native CI compilation after push. Broad distribution and the existing physical sleep/wake/helper restart follow-ups remain below. Do not restart hardware qualification for UI work.
+
+---
+
+# Previous checkpoint — 2026-10-04: Apple Silicon registry and release pipeline
 
 0.2.0 adds compiled M1–M5 MacBook Pro reference support, preserving the tested Mac17,9 direct path. DeviceRegistry resolves identity and generation-specific source groups; selected membership/types are frozen. FanInterface admits only reviewed one/two-fan metadata and float/fpe2 encodings. ReferenceFanTransaction implements direct and bounded Ftst handover; every-fan release and global flag verification are independent of sensor health. Ingress cancellation survives queue and hardware-admission races. Monitoring retains temperatures when fan metadata fails. Imported settings and XPC requests cannot grant capability.
 

@@ -18,6 +18,8 @@ import ServiceManagement
     var shortcutErrors: [String: String] = [:]
     let wallClock: @Sendable () -> Date
     private(set) var runningApplicationIDs: Set<String> = []
+    var observedApplicationInstances: Set<String>?
+    var pendingApplicationLaunches: Set<String> = []
     private var applicationCatalogRefreshedAt = -Double.infinity
     let applicationCatalog: @MainActor () -> [RunningProcess]
     var isQuitting: Bool { quitting }
@@ -81,7 +83,7 @@ import ServiceManagement
          capabilities: HardwareCapabilities? = nil, helperAvailable: (@MainActor () -> Bool)? = nil,
          powerCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
          wallClock: @escaping @Sendable () -> Date = { Date() },
-         applicationCatalog: @escaping @MainActor () -> [RunningProcess] = { ProcessCatalog.list(includeHelpers: false) },
+         applicationCatalog: @escaping @MainActor () -> [RunningProcess] = { ProcessCatalog.list(includeHelpers: false, includeIcons: false) },
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
@@ -224,8 +226,14 @@ import ServiceManagement
         } catch { draftError = error.localizedDescription }
     }
     func refreshApplicationAvailability(force: Bool = false) {
-        guard force || (automation.activationDefaults.values.contains { $0.kind == .application } && clock() - applicationCatalogRefreshedAt >= 1) else { return }
-        runningApplicationIDs = Set(applicationCatalog().filter { ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }.compactMap(\.bundleID))
+        guard force || (automation.activationDefaults.values.contains { $0.kind == .application || $0.launchWhenOpened } && clock() - applicationCatalogRefreshedAt >= 1) else { return }
+        let running = applicationCatalog().filter { ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }
+        let instances = Set(running.map { "\($0.pid):\($0.launched.timeIntervalSince1970)" })
+        if let previous = observedApplicationInstances {
+            pendingApplicationLaunches.formUnion(running.filter { !previous.contains("\($0.pid):\($0.launched.timeIntervalSince1970)") }.compactMap(\.bundleID))
+        }
+        observedApplicationInstances = instances
+        runningApplicationIDs = Set(running.compactMap(\.bundleID))
         applicationCatalogRefreshedAt = clock()
     }
     func tick() async {
@@ -283,6 +291,7 @@ import ServiceManagement
                 hardwareError = observedBlocker ?? (reading.fans.isEmpty ? "Fan interface unavailable; temperature monitoring remains available." : nil)
             }
             tickCount += 1
+            evaluateApplicationLaunches()
             evaluateSchedule()
             sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: snapshot)
             if let snapshot, tickCount % 5 == 0 { diagnostics?.enqueue(profile:machine.selected.name,snapshot:snapshot) }
@@ -367,7 +376,7 @@ import ServiceManagement
             try PortableConfiguration(profiles: next, automation: config).validate()
             registerConfigurationUndo()
             let activeID = machine.selected.id
-            profiles = next; automation = config; editorSelection = selection; scheduleReview = nil
+            reconcileApplicationRules(config); profiles = next; automation = config; editorSelection = selection; scheduleReview = nil
             if let replacement = next.first(where: { $0.id == activeID }) {
                 if replacement != machine.selected {
                     lifecycleToken = UUID(); let effect = try machine.select(replacement); Task { await execute(effect) }
@@ -483,7 +492,7 @@ import ServiceManagement
                     do { let effect = try machine.select(replacement); Task { await execute(effect) } }
                     catch { automationFailed(); await execute(machine.fail(error)) }
                 }
-                registerConfigurationUndo(); profiles = next; automation = nextAutomation; editorSelection = selection
+                reconcileApplicationRules(nextAutomation); registerConfigurationUndo(); profiles = next; automation = nextAutomation; editorSelection = selection
                 unsavedChanges = false; saveError = nil; configureLogin()
             } catch {
                 failedConfiguration = (next, nextAutomation, selection, restore)
@@ -512,6 +521,7 @@ import ServiceManagement
         }
     }
     func powerTransition() {
+        observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
         clearActivation(); blockedScheduleID = nil
         powerTransitionCount &+= 1
         requestedSimulation = simulation

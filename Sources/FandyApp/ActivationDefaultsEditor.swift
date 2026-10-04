@@ -11,6 +11,25 @@ struct ActivationDefaultsEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 10) {
+                Toggle("Activate when an application opens", isOn: Binding(get: { rule.launchWhenOpened }, set: { enabled in
+                    var next = rule
+                    if enabled && next.applicationID.isEmpty { chooseApplication(enableLaunch: true); return }
+                    next.launchWhenOpened = enabled; model.setActivationDefault(next, profileID: profile.id)
+                }))
+                if rule.launchWhenOpened {
+                    HStack {
+                        Text(rule.applicationName).font(.callout)
+                        Spacer()
+                        Button("Choose Application…") { chooseApplication(enableLaunch: true) }
+                    }
+                    Toggle("Turn off when this application closes", isOn: Binding(get: { rule.kind == .application }, set: { enabled in
+                        var next = rule; next.kind = enabled ? .application : .forever
+                        model.setActivationDefault(next, profileID: profile.id)
+                    }))
+                    Text("Manual selections take priority. Applications already open at startup or wake do not trigger activation.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Divider()
+                }
                 Picker("Keep this profile active", selection: Binding(get: { rule.kind }, set: { kind in
                     var next = rule; next.kind = kind
                     if kind == .application, next.applicationID.isEmpty {
@@ -28,7 +47,7 @@ struct ActivationDefaultsEditor: View {
                         Stepper("Hours: \(rule.seconds / 3600)", value: Binding(get: { rule.seconds / 3600 }, set: { value in var next = rule; next.seconds = max(60, value * 3600 + (rule.seconds / 60 % 60) * 60); model.setActivationDefault(next, profileID: profile.id) }), in: 0...743)
                         Stepper("Minutes: \(rule.seconds / 60 % 60)", value: Binding(get: { rule.seconds / 60 % 60 }, set: { value in var next = rule; next.seconds = max(60, (rule.seconds / 3600) * 3600 + value * 60); model.setActivationDefault(next, profileID: profile.id) }), in: 0...59)
                     }
-                } else if rule.kind == .application {
+                } else if rule.kind == .application && !rule.launchWhenOpened {
                     Picker("Application", selection: Binding(get: { rule.applicationID }, set: { id in
                         guard let app = applications.first(where: { $0.bundleID == id }) else { return }
                         var next = rule; next.applicationID = id; next.applicationName = app.name; model.setActivationDefault(next, profileID: profile.id)
@@ -42,11 +61,11 @@ struct ActivationDefaultsEditor: View {
             }.padding(.top, 8)
         }.onAppear { applications = ProcessCatalog.list(includeHelpers: false).filter { $0.bundleID != nil } }
     }
-    private func chooseApplication() {
+    private func chooseApplication(enableLaunch: Bool = false) {
         let panel = NSOpenPanel(); panel.allowedContentTypes = [.applicationBundle]; panel.directoryURL = URL(fileURLWithPath: "/Applications"); panel.allowsMultipleSelection = false
         panel.begin { response in
             guard response == .OK, let url = panel.url, let bundle = Bundle(url: url), let id = bundle.bundleIdentifier else { return }
-            var next = rule; next.kind = .application; next.applicationID = id
+            var next = rule; if enableLaunch { next.launchWhenOpened = true } else { next.kind = .application }; next.applicationID = id
             next.applicationName = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? url.deletingPathExtension().lastPathComponent
             model.setActivationDefault(next, profileID: profile.id)
         }

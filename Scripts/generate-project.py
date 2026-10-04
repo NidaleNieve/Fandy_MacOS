@@ -88,6 +88,12 @@ for name,folder,product,ptype,bundle in [('Fandy','FandyApp',appProduct,'com.app
   noticebuild=add('notice-build','PBXBuildFile',fileRef=notices)
   licensebuild=add('license-build','PBXBuildFile',fileRef=licenses)
   phases.append(add('app-resources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[noticebuild,licensebuild],runOnlyForDeploymentPostprocessing=0))
+  phases.append(add('app-icon','PBXShellScriptBuildPhase',buildActionMask=2147483647,files=[],
+      inputPaths=['$(SRCROOT)/Scripts/generate-icon.swift'],
+      outputPaths=['$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Fandy.icns'],
+      name='Generate App Icon',shellPath='/bin/sh',
+      shellScript='xcrun swift -module-cache-path "$TARGET_TEMP_DIR/IconModuleCache" "$SRCROOT/Scripts/generate-icon.swift" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Fandy.icns"\n',
+      runOnlyForDeploymentPostprocessing=0))
   proxy=add('helper-proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=helperID,remoteInfo='FandyFanHelper')
   dependencies=[add('helper-dependency','PBXTargetDependency',target=helperID,targetProxy=proxy)]
   embed=add('helper-embed','PBXBuildFile',fileRef=helperProduct,settings={'ATTRIBUTES':['CodeSignOnCopy']})

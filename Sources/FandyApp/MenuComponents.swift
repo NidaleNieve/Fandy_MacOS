@@ -4,13 +4,20 @@ import FandyCore
 
 /// Native action rows size themselves. Only readouts use a bounded custom view.
 enum MenuLayout {
-    static let width: CGFloat = 168
+    static let width: CGFloat = 224
     static let textWidth: CGFloat = 140
     static let nativeTitleWidth: CGFloat = textWidth
     // AppKit reserves its own state/key-equivalent columns outside custom views.
     static let maximumMenuWidth: CGFloat = 256
     static func titleWidth(_ title: String) -> CGFloat { (title as NSString).size(withAttributes: [.font: NSFont.menuFont(ofSize: 0)]).width }
-
+    /// Native menu rows retain native highlighting. Long names are shortened,
+    /// with the complete action retained in the tooltip and accessibility label.
+    static func compactTitle(_ title: String) -> String {
+        guard titleWidth(title) > nativeTitleWidth else { return title }
+        var result = title
+        while !result.isEmpty && titleWidth(result + "…") > nativeTitleWidth { result.removeLast() }
+        return result + "…"
+    }
 }
 struct WrappedMenuText: View {
     let text: String

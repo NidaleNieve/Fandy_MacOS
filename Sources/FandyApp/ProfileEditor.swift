@@ -12,7 +12,7 @@ struct ProfileEditor: View {
             ProfileSidebarPanel(model: model, importFile: importFile, exportFile: { exportFile() }, exportProfile: exportFile)
         } detail: {
             ProfileWorkspace(model: model)
-        }.frame(minWidth: 880, minHeight: 560)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(item: $model.scheduleReview) { _ in ScheduleConflictSheet(model: model) }
         .sheet(item: $model.renameRequest) { request in ProfileRenameSheet(model: model, request: request) }
         .disabled(model.savingCollection)
@@ -73,15 +73,24 @@ private struct ProfileSidebarPanel: View {
     }
 }
 private struct ProfileWorkspace: View {
+    @State private var showingSchedule = false
     @Bindable var model: AppModel
     var body: some View {
         HStack(spacing: 0) {
-            ProfileDetail(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button("See Schedule", systemImage: "calendar") { showingSchedule = true }
+                        .controlSize(.small).accessibilityIdentifier("schedule.overview")
+                }.padding(.horizontal, 16).padding(.top, 10)
+                ProfileDetail(model: model).frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+            }.frame(minWidth: 0, maxWidth: .infinity)
             Divider()
             ScrollView { SensorStatus(model: model).padding(14).frame(maxWidth: .infinity, alignment: .leading) }
                 .scrollIndicators(.hidden)
                 .frame(width: 205)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
+        }.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity).disabled(model.savingCollection)
+        .sheet(isPresented: $showingSchedule) { WeeklyScheduleOverview(model: model) }
     }
 }
 private struct ProfileDetail: View {
@@ -103,7 +112,7 @@ private struct ProfileDetail: View {
                 }
                 Picker("Profile section", selection: $tab) {
                     ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented).labelsHidden()
+                }.pickerStyle(.segmented).controlSize(.small).labelsHidden()
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -238,7 +247,7 @@ struct SensorStatus: View {
             FanSpeedReadout(model: model)
             Divider()
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 5) {
-                ForEach(primary) { role in GridRow { Text(label(role)); Text(model.temperatureText(role)).monospacedDigit().foregroundStyle(.secondary) } }
+                ForEach(primary) { role in GridRow { Text(label(role)); Text(model.temperatureText(role)).monospacedDigit().foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) } }
                 ForEach(model.snapshot?.fans ?? []) { fan in GridRow { Text("Fan \(fan.id + 1)"); Text("\(Int(fan.actualRPM.rounded())) RPM").monospacedDigit().foregroundStyle(.secondary) } }
             }
             DisclosureGroup("Details") {

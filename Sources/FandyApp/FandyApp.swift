@@ -68,11 +68,15 @@ struct FandyApp: App {
     private func window<V: View>(_ title: String, size: NSSize, view: V) -> NSWindow {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = title; window.isReleasedWhenClosed = false
-        window.contentViewController = NSHostingController(rootView: view); window.center(); return window
+        let controller = NSHostingController(rootView: view); controller.sizingOptions = []
+        window.contentViewController = controller; window.center(); return window
     }
     func showProfiles() {
         guard let model else { return }
-        if profilesWindow == nil { profilesWindow = window("Fandy Profiles", size: NSSize(width: 980, height: 720), view: ProfileEditor(model: model)) }
+        if profilesWindow == nil {
+            profilesWindow = window("Fandy Profiles", size: NSSize(width: 1040, height: 720), view: ProfileEditor(model: model))
+            profilesWindow?.contentMinSize = NSSize(width: 960, height: 560)
+        }
         if let profilesWindow { present(profilesWindow) }
     }
     func showSettings() {

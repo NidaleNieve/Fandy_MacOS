@@ -13,13 +13,13 @@ struct RunningProcess: Identifiable, Equatable {
 }
 
 @MainActor enum ProcessCatalog {
-    static func list(includeHelpers: Bool) -> [RunningProcess] {
+    static func list(includeHelpers: Bool, includeIcons: Bool = true) -> [RunningProcess] {
         let applications = NSWorkspace.shared.runningApplications
         var result = applications.compactMap { app -> RunningProcess? in
             guard includeHelpers || app.activationPolicy == .regular,
                   let launched = startTime(app.processIdentifier) else { return nil }
             return RunningProcess(pid: app.processIdentifier, launched: launched,
-                                  name: app.localizedName ?? "Application", bundleID: app.bundleIdentifier, icon: app.icon)
+                                  name: app.localizedName ?? "Application", bundleID: app.bundleIdentifier, icon: includeIcons ? app.icon : nil)
         }
         if includeHelpers {
             let known = Set(result.map(\.pid))

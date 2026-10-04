@@ -9,9 +9,9 @@ struct ProfileSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresenta
     func makeNSViewController(context: Context) -> NSSplitViewController { makeController() }
     func makeController() -> NSSplitViewController {
         let controller = NSSplitViewController(); controller.splitView.isVertical = true
-        let left = NSSplitViewItem(viewController: NSHostingController(rootView: sidebar))
+        let left = NSSplitViewItem(viewController: ProfileHostingController(rootView: sidebar))
         left.canCollapse = false; left.minimumThickness = 220; left.maximumThickness = 350; left.holdingPriority = .defaultHigh
-        let right = NSSplitViewItem(viewController: NSHostingController(rootView: detail))
+        let right = NSSplitViewItem(viewController: ProfileHostingController(rootView: detail))
         right.canCollapse = false; right.minimumThickness = 660
         controller.addSplitViewItem(left); controller.addSplitViewItem(right)
         controller.splitView.setPosition(240, ofDividerAt: 0)
@@ -20,4 +20,32 @@ struct ProfileSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresenta
     // Both roots retain the same observable model. Replacing them on each sensor
     // tick discards native sizing/interaction state and invalidates the editor.
     func updateNSViewController(_ controller: NSSplitViewController, context: Context) {}
+}
+
+/// The window and split view own layout, not the changing ideal width of a
+/// segmented picker, grid or graph. Intrinsic hosting constraints otherwise
+/// temporarily push the columns outside the window during SwiftUI updates.
+@MainActor final class ProfileHostingController<Content: View>: NSHostingController<Content> {
+    override init(rootView: Content) {
+        super.init(rootView: rootView)
+        sizingOptions = []
+        if let hosting = view as? NSHostingView<Content> { hosting.sizingOptions = [] }
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        sizingOptions = []
+        if let hosting = view as? NSHostingView<Content> { hosting.sizingOptions = [] }
+    }
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        Self.hideScrollIndicators(in: view)
+    }
+    static func hideScrollIndicators(in view: NSView) {
+        if let scroll = view as? NSScrollView {
+            if scroll.hasVerticalScroller { scroll.hasVerticalScroller = false }
+            if scroll.hasHorizontalScroller { scroll.hasHorizontalScroller = false }
+        }
+        for child in view.subviews { hideScrollIndicators(in: child) }
+    }
 }

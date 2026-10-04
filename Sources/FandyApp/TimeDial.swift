@@ -22,6 +22,9 @@ struct TimeDial: NSViewRepresentable {
         picker.sizeToFit()
         return picker
     }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSDatePicker, context: Context) -> CGSize? {
+        nsView.intrinsicContentSize
+    }
     func updateNSView(_ picker: NSDatePicker, context: Context) {
         context.coordinator.hour = $hour; context.coordinator.minute = $minute
         picker.locale = Locale(identifier: use24HourTime ? "en_GB" : "en_US")

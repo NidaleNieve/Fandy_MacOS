@@ -28,12 +28,6 @@
 			"path" = "Sources/FandyApp/AutomationModel.swift";
 			"sourceTree" = "<group>";
 		};
-		"56412AAB1E4A72ABA48EE095" = {
-			"isa" = "PBXFileReference";
-			"lastKnownFileType" = "sourcecode.swift";
-			"path" = "Sources/FandyApp/BoundedMenuAction.swift";
-			"sourceTree" = "<group>";
-		};
 		"81A2B2EBDF0766F54192F464" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -212,6 +206,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyApp/TimeDial.swift";
+			"sourceTree" = "<group>";
+		};
+		"741B6893E7BAFB98ADF2F78C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/WeeklyScheduleOverview.swift";
 			"sourceTree" = "<group>";
 		};
 		"D96A58088F00CD60907A1AF5" = {
@@ -488,7 +488,6 @@
 				3B4B7C88C79578697F216634,
 				00E82DE6D757878644A692D8,
 				01E056203FDFB85CDB4AC0DE,
-				56412AAB1E4A72ABA48EE095,
 				81A2B2EBDF0766F54192F464,
 				04CAF0803A5BC8A92DA42A06,
 				1F639B204FFCC92863C8A7D0,
@@ -519,6 +518,7 @@
 				3217C5AE4A415B73290ADFE6,
 				BD4456D906A2D6FFA041D820,
 				74FE756E77D83ED759A813F0,
+				741B6893E7BAFB98ADF2F78C,
 				D96A58088F00CD60907A1AF5,
 				925C545BBF5908A07D2A47AF,
 				D2CEB122BCF9ECDC6BB42176,
@@ -649,10 +649,6 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 01E056203FDFB85CDB4AC0DE;
 		};
-		"6E32ACD3E38E14B7995B1E85" = {
-			"isa" = "PBXBuildFile";
-			"fileRef" = 56412AAB1E4A72ABA48EE095;
-		};
 		"2BE551215C228EE865B5D160" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = 81A2B2EBDF0766F54192F464;
@@ -773,6 +769,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 74FE756E77D83ED759A813F0;
 		};
+		"FE11B4DEDBF1FFBA22EEDE4D" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 741B6893E7BAFB98ADF2F78C;
+		};
 		"7099A060F81C0382F95DD211" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = 2147483647;
@@ -781,7 +781,6 @@
 				43FFA59EE5B6860410079F34,
 				8B498409790EB0DA406AB3A9,
 				7AD457A8D443D460F14F4681,
-				6E32ACD3E38E14B7995B1E85,
 				2BE551215C228EE865B5D160,
 				94EACCF9D993FDD1BC193C1C,
 				C896C6982894C685DED1534F,
@@ -812,6 +811,7 @@
 				8C817E85958EF70C743F350C,
 				9F11A5D5C42B3DE6979DEE69,
 				78C0F51341784B5DD8C73994,
+				FE11B4DEDBF1FFBA22EEDE4D,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};
@@ -857,6 +857,21 @@
 				7F8F7749F99D3CD6A0BD1280,
 				715503FC66ACB177FDB9B741,
 			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"4D6FC5A1736DCA577CF68A90" = {
+			"isa" = "PBXShellScriptBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"inputPaths" = (
+				"$(SRCROOT)/Scripts/generate-icon.swift",
+			);
+			"outputPaths" = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Fandy.icns",
+			);
+			"name" = "Generate App Icon";
+			"shellPath" = "/bin/sh";
+			"shellScript" = "xcrun swift -module-cache-path \"$TARGET_TEMP_DIR/IconModuleCache\" \"$SRCROOT/Scripts/generate-icon.swift\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Fandy.icns\"\n";
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};
 		"803932F7A97FAA234D9EF5B9" = {
@@ -982,6 +997,7 @@
 				7099A060F81C0382F95DD211,
 				6FA21FD5D112574F2EC7C0FA,
 				F9187E824FE171A6F0EFAE28,
+				4D6FC5A1736DCA577CF68A90,
 				EDC0263597BF60BDB8301E61,
 				F2461BCFFE5DB8BC951FD26B,
 			);

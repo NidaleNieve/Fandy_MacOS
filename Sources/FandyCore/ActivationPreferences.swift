@@ -7,10 +7,23 @@ public struct ProfileActivationDefault: Codable, Sendable, Equatable {
     public var seconds: Int = 300
     public var applicationID: String = ""
     public var applicationName: String = ""
+    /// User automation only: runtime identity and fan authority are never stored.
+    public var launchWhenOpened: Bool = false
     public init() {}
+    private enum CodingKeys: String, CodingKey { case kind, seconds, applicationID, applicationName, launchWhenOpened }
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decodeIfPresent(Kind.self, forKey: .kind) ?? .forever
+        seconds = try c.decodeIfPresent(Int.self, forKey: .seconds) ?? 300
+        applicationID = try c.decodeIfPresent(String.self, forKey: .applicationID) ?? ""
+        applicationName = try c.decodeIfPresent(String.self, forKey: .applicationName) ?? ""
+        launchWhenOpened = try c.decodeIfPresent(Bool.self, forKey: .launchWhenOpened) ?? false
+    }
     public func validate() throws {
         guard (1...2_678_400).contains(seconds), applicationID.utf8.count <= 255, applicationName.count <= 128,
-              kind != .application || (!applicationID.isEmpty && !applicationName.isEmpty) else {
+              applicationID.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
+              applicationName.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
+              (kind != .application && !launchWhenOpened) || (!applicationID.isEmpty && !applicationName.isEmpty) else {
             throw ScheduleError("Choose a running application or a duration between one second and 31 days.")
         }
     }

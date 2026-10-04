@@ -63,7 +63,7 @@ import Testing
         let controls = try #require(child.items.first?.view)
         #expect(controls.accessibilityIdentifier() == identifier)
         #expect(controls.frame.width <= 260 && controls.frame.height <= 320)
-        #expect(controls.frame.height >= 250)
+        #expect(controls.frame.height >= 140)
     }
     #expect(menu.items.filter { $0.view != nil }.count == 1)
     let status = try #require(menu.items.compactMap(\.view).first)
@@ -78,8 +78,8 @@ import Testing
     #expect(timing.items.prefix(2).compactMap(\.submenu).flatMap(\.items).allSatisfy { $0.view == nil })
     presenter.menuWillOpen(menu); #expect(presenter.isOpen)
     presenter.menuDidClose(menu); #expect(!presenter.isOpen)
-    let wide = BoundedMenuAction(title: String(repeating: "W", count: 64))
-    #expect(wide.frame.width == MenuLayout.width && wide.frame.height > 24)
+    let wide = MenuLayout.compactTitle(String(repeating: "W", count: 64))
+    #expect(wide.hasSuffix("…") && MenuLayout.titleWidth(wide) <= MenuLayout.nativeTitleWidth)
 }
 
 @MainActor @Test func nativeSidebarSelectionAndActivationAreSeparateAndImmediate() {

@@ -45,7 +45,7 @@ import FandyCore
     func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
     func menuDidClose(_ menu: NSMenu) { isOpen = false }
     func rebuild(_ menu: NSMenu) {
-        actions.removeAll(); profileRows.removeAll(); menu.removeAllItems(); menu.autoenablesItems = false
+        actions.removeAll(); profileRows.removeAll(); menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
         for profile in model.profiles {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
             row.isEnabled = model.canActivate(profile) && model.activationDefaultUnavailableReason(profile) == nil
@@ -79,7 +79,7 @@ import FandyCore
         if (model.manualIntent.map { $0.limit != .forever } ?? false) || model.scheduledPeriodID != nil {
             let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); menu.addItem(explanation)
         }
-        if model.machine.selected.kind != .system || model.blockedScheduleID != nil {
+        if model.manualIntent != nil || model.machine.selected.kind != .system || model.blockedScheduleID != nil {
             add(model.cancellationTitle, to: menu) { [weak model] in model?.cancelActivation() }
         }
         menu.addItem(.separator())
@@ -91,10 +91,10 @@ import FandyCore
     }
     @discardableResult private func add(_ title: String, to menu: NSMenu, action: @escaping () -> Void) -> NSMenuItem {
         let id = UUID(); actions[id] = action
-        let item = NSMenuItem(title: title, action: #selector(invoke(_:)), keyEquivalent: "")
+        let item = NSMenuItem(title: MenuLayout.compactTitle(title), action: #selector(invoke(_:)), keyEquivalent: "")
         item.target = self; item.representedObject = id
         item.toolTip = title
-        if MenuLayout.titleWidth(title) > MenuLayout.nativeTitleWidth { item.view = BoundedMenuAction(title: title) }
+        item.setAccessibilityLabel(title)
         menu.addItem(item); return item
     }
     @objc private func invoke(_ item: NSMenuItem) { if let id = item.representedObject as? UUID { actions[id]?() } }
@@ -105,14 +105,16 @@ import FandyCore
     private func embedded<V: View>(_ view: V, identifier: String) -> NSView {
         // NSMenuItem.view receives native mouse/keyboard events. Keep its controls
         // in the submenu's own window; never activate a separate panel/popover.
-        let hosting = NSHostingView(rootView: view)
+        let hosting = MenuControlHostingView(rootView: view)
         hosting.frame.size = hosting.fittingSize
         hosting.setAccessibilityIdentifier(identifier)
         return hosting
     }
     private func fitted<V: View>(_ view: V) -> NSView {
         let hosting = NSHostingView(rootView: view)
-        hosting.frame.size = NSSize(width: MenuLayout.width, height: hosting.fittingSize.height)
+        let height = hosting.fittingSize.height
+        hosting.sizingOptions = []
+        hosting.frame.size = NSSize(width: MenuLayout.width, height: height)
         // AppKit expands this view to the menu width, including the space used by
         // native checkmarks/shortcuts. The readout centers in that actual width.
         hosting.autoresizingMask = [.width]
@@ -123,7 +125,9 @@ import FandyCore
 
 struct ActivationMenuSummary: View {
     @Bindable var model: AppModel
-    var body: some View { WrappedMenuText(text: model.activationDescription).foregroundStyle(.secondary) }
+    var body: some View { Text(model.activationDescription).font(.caption).foregroundStyle(.secondary)
+        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        .frame(width: MenuLayout.textWidth).frame(maxWidth: .infinity).padding(.vertical, 3) }
 }
 struct CustomActivationPicker: View {
     @Bindable var model: AppModel
@@ -145,7 +149,7 @@ struct CustomActivationPicker: View {
         VStack(spacing: 8) {
             Picker("Activation limit", selection: $until) { Text("For").tag(false); Text("Until").tag(true) }
                 .pickerStyle(.segmented).labelsHidden().frame(height: 24)
-            ZStack(alignment: .top) {
+            VStack(spacing: 0) {
                 if until {
                     VStack(spacing: 10) {
                         HStack(spacing: 6) {
@@ -157,19 +161,19 @@ struct CustomActivationPicker: View {
                             }
                         }
                         TimeDial(hour: Binding(get: { clockHour }, set: { value in afternoon = value >= 12; untilHours = String(model.automation.preferences.use24HourTime ? value : (value % 12 == 0 ? 12 : value % 12)) }), minute: Binding(get: { Int(untilMinutes) ?? 0 }, set: { untilMinutes = String(format: "%02d", $0) }), use24HourTime: model.automation.preferences.use24HourTime)
-                            .frame(width: 155, height: 155)
+                            .fixedSize()
                     }
                 } else {
                     Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 12) {
                         GridRow { timeField("Hours", text: $hours, field: .hours); Text("hours").frame(width: 64, alignment: .leading) }
                         GridRow { timeField("Minutes", text: $minutes, field: .minutes); Text("minutes").frame(width: 64, alignment: .leading) }
-                    }.padding(.top, 8)
+                    }.frame(maxWidth: .infinity, alignment: .center).padding(.top, 8)
                 }
-            }.frame(maxWidth: .infinity).frame(height: 190)
+            }.frame(maxWidth: .infinity).frame(height: until ? 180 : 80, alignment: .center)
             Text(error ?? "").font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
-                .frame(height: 30, alignment: .top).accessibilityHidden(error == nil)
+                .frame(height: 18, alignment: .top).accessibilityHidden(error == nil)
             Button("Continue") { apply() }.buttonStyle(.bordered).frame(height: 24)
-        }.padding(12).frame(width: 240, height: 320)
+        }.padding(10).frame(width: 220)
         .onChange(of: until) { _, _ in
             focused = .hours; error = nil
             if !model.automation.preferences.use24HourTime { let h = clockHour % 12; untilHours = String(h == 0 ? 12 : h) }
@@ -226,4 +230,20 @@ struct ProcessPicker: View {
         .onAppear { refresh() }.onChange(of: helpers) { _, _ in refresh() }
     }
     private func refresh() { processes = ProcessCatalog.list(includeHelpers: helpers) }
+}
+
+/// Embedded pickers change height as their mode changes. Unlike passive status
+/// rows, they keep an intrinsic size, but only their height can resize the menu.
+@MainActor final class MenuControlHostingView<Content: View>: NSHostingView<Content> {
+    private var resizing = false
+    override func layout() {
+        super.layout()
+        guard !resizing else { return }
+        let height = fittingSize.height
+        guard height.isFinite, height > 0, abs(frame.height - height) > 0.5 else { return }
+        resizing = true
+        setFrameSize(NSSize(width: frame.width, height: height))
+        enclosingMenuItem?.menu?.update()
+        resizing = false
+    }
 }

@@ -42,7 +42,7 @@ extension AppModel {
     }
     func setActivationDefault(_ rule: ProfileActivationDefault, profileID: String) {
         var next = automation; next.activationDefaults[profileID] = rule; setAutomation(next)
-        if rule.kind == .application { refreshApplicationAvailability(force: true) }
+        if rule.kind == .application || rule.launchWhenOpened { refreshApplicationAvailability(force: true) }
     }
     var cancellationTitle: String {
         guard let intent = manualIntent else { return scheduledPeriodID == nil ? "Resume Schedule" : "Cancel \(machine.selected.name)" }
@@ -112,6 +112,24 @@ extension AppModel {
               ScheduleEngine.active(in: automation, at: wallClock())?.id != scheduledPeriodID else { return }
         self.scheduledPeriodID = nil; select("system", manual: false)
     }
+    /// Only a newly observed process triggers activation. Existing applications
+    /// at startup/wake are a baseline, never permission to restore manual control.
+    /// Manual selections (including System) consume and suppress launch events.
+    func evaluateApplicationLaunches() {
+        let launched = pendingApplicationLaunches; pendingApplicationLaunches.removeAll()
+        guard !launched.isEmpty, manualIntent == nil, !isQuitting, !savingCollection,
+              machine.state != .fault, machine.state != .restoringSystem,
+              simulation || (snapshot != nil && hardwareError == nil && helperHealth == .controlReady) else { return }
+        // Profile order breaks ties if multiple programs launch together. A
+        // failed/unsupported profile never displaces an available selection.
+        guard let profile = profiles.first(where: { profile in
+            guard let rule = automation.activationDefaults[profile.id] else { return false }
+            return rule.launchWhenOpened && launched.contains(rule.applicationID)
+                && runningApplicationIDs.contains(rule.applicationID) && canActivate(profile)
+                && activationDefaultUnavailableReason(profile) == nil
+        }) else { return }
+        select(profile.id)
+    }
     func evaluateSchedule() {
         guard manualIntent == nil, !isQuitting, !savingCollection else { return }
         let active = ScheduleEngine.active(in: automation, at: wallClock())
@@ -128,8 +146,16 @@ extension AppModel {
         select(profile.id, manual: false)
     }
     func automationFailed() {
+        pendingApplicationLaunches.removeAll()
         blockedScheduleID = scheduledPeriodID ?? ScheduleEngine.active(in: automation, at: wallClock())?.id
         clearActivation()
+    }
+    func resetApplicationLaunchBaseline() {
+        observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
+        refreshApplicationAvailability(force: true)
+    }
+    func reconcileApplicationRules(_ next: AutomationConfiguration) {
+        if automation.activationDefaults != next.activationDefaults { resetApplicationLaunchBaseline() }
     }
     func setPreferences(_ update: (inout AppPreferences) -> Void) {
         var next = automation; update(&next.preferences); setAutomation(next, recordHistory: false)
@@ -138,6 +164,7 @@ extension AppModel {
         guard !savingCollection, !isQuitting else { return }
         do {
             try next.validate(profileIDs: Set(profiles.map(\.id)))
+            reconcileApplicationRules(next)
             discardFailedConfiguration(); if recordHistory { registerConfigurationUndo() }; automation = next; save(); draftError = nil
         } catch { draftError = error.localizedDescription }
     }

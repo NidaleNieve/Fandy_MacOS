@@ -119,7 +119,7 @@ enum ImportValidation {
     }
     static func defaults(_ value: Any) throws {
         guard let defaults = value as? [String: Any], defaults.count <= 128 else { throw ScheduleError("Invalid activation defaults.") }
-        for item in defaults.values { _ = try fields(item, allowed: ["kind", "seconds", "applicationID", "applicationName"], path: "activation default") }
+        for item in defaults.values { _ = try fields(item, allowed: ["kind", "seconds", "applicationID", "applicationName", "launchWhenOpened"], path: "activation default") }
     }
     static func automation(_ value: Any?) throws {
         let object = try fields(value, allowed: ["periods", "pauses", "preferences", "activationDefaults"], path: "automation")
