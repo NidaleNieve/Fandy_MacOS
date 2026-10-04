@@ -39,7 +39,7 @@ struct ProfileEditor: View {
     }
     private func exportFile(_ id: String? = nil) {
         guard let profile = model.profiles.first(where: { $0.id == (id ?? model.editorSelection) }) else { return }
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Profile.json"
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = profile.exportFilename
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             let config = model.automation

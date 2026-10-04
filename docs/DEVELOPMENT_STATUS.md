@@ -1,4 +1,12 @@
-# Current checkpoint — 2026-10-04: quick sidebar rollback and comfort defaults
+# Current checkpoint — 2026-10-04: Cool Chassis migration and named exports
+
+0.2.0 build 8 matches the latest supplied Cool Chassis export: minimum airflow 0, Trackpad unchanged from build 7, Actuator starting 25°C/0% then 27.1°C/22%, and Airflow 32°C/0% then 35.5°C/18%. Factory revision is 3. Persistence upgrades only exact unchanged revision-1/revision-2 factory definitions; custom modifications are preserved. This fixes saved old defaults retaining their 20% floor. Reset to Default also uses the new definition. The private export file and point identities are excluded from Git.
+
+Single-profile export filenames now use the profile name, for example `Cool Chassis.json`; directory separators/control characters are sanitized. 375 Swift tests and the signed one-job arm64 Release build pass. DMG: `build/Distribution/Release-0.2.0-build8/Fandy-0.2.0-arm64.dmg`, SHA-256 `5e113e56ff60b4dac04a84162405b91de3bf4366967b111bb70320842993ed84`. The image/signature/payload checks pass; signing remains Apple Development and unnotarized. Install build 8 to use the fixes; no private user configuration, running installed app or helper permissions were changed during development.
+
+---
+
+# Previous checkpoint — 2026-10-04: quick sidebar rollback and comfort defaults
 
 0.2.0 build 7 restores the pre-build-6 sidebar/workspace layout and its native window sizing, as requested after the resize regression. Other build-6 setup/settings/activation fixes remain. Cool Chassis factory defaults match the supplied export: floor 0, manual-at-idle, unchanged chip curve, Trackpad starting 26°C/0%, Actuator 24.9°C/0% and 27.1°C/20%, and Airflow 31.4°C/0% and 36°C/20%. School’s separate existing defaults and saved user customizations are untouched. The exported file and its point UUIDs are not copied into the repository.
 

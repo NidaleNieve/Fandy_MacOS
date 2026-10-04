@@ -13,6 +13,11 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
     public init(id: String = UUID().uuidString, name: String, kind: ProfileKind = .custom, bundled: Bool = false, curves: [FanCurve], floor: Double = 0, automaticAtIdle: Bool = false, targetTemperature: TemperatureTarget? = nil) {
         self.id = id; self.name = name; self.kind = kind; self.bundled = bundled; defaultRevision = 1; self.curves = curves; self.floor = floor; self.automaticAtIdle = automaticAtIdle; self.targetTemperature = targetTemperature
     }
+    public var exportFilename: String {
+        let forbidden = CharacterSet.controlCharacters.union(CharacterSet(charactersIn: "/:\\"))
+        let filename = String(String.UnicodeScalarView(name.unicodeScalars.map { forbidden.contains($0) ? UnicodeScalar(45)! : $0 })).trimmingCharacters(in: .whitespacesAndNewlines)
+        return (filename.isEmpty ? "Profile" : filename) + ".json"
+    }
     public var protected: Bool { id == "system" || id == "max" }
     public var requiredSensors: Set<SensorRole> { requiredSensors(chipPolicy: .cpuGPU) }
     public func requiredSensors(chipPolicy: ChipControlPolicy) -> Set<SensorRole> {
@@ -48,11 +53,30 @@ public enum BuiltInProfiles {
         var profile = Profile(id: "cool-chassis", name: "Cool Chassis", bundled: true, curves: [
             chip,
             FanCurve(.trackpad, [(26,0),(29,25),(31,40),(34,60),(38,85),(42,100)]),
-            FanCurve(.actuator, [(24.9,0),(27.1,20),(29,40),(32,60),(36,85),(40,100)]),
-            FanCurve(.airflow, [(31.4,0),(36,20),(40,40),(44,55),(50,75),(60,100)])
+            FanCurve(.actuator, [(25,0),(27.1,22),(29,40),(32,60),(36,85),(40,100)]),
+            FanCurve(.airflow, [(32,0),(35.5,18),(40,40),(44,55),(50,75),(60,100)])
         ], floor: 0)
-        profile.defaultRevision = 2; return profile
+        profile.defaultRevision = 3; return profile
     }()
+    /// Upgrade only exact old factory shapes; edited curves/floors stay intact.
+    public static func upgradeCoolChassisDefault(_ profile: Profile) -> Profile {
+        guard profile.id == "cool-chassis", profile.name == "Cool Chassis", profile.kind == .custom,
+              profile.defaultRevision < 3, !profile.automaticAtIdle, profile.targetTemperature == nil,
+              profile.curves.count == 4, profile.curves.allSatisfy(\.enabled) else { return profile }
+        let original = [chip, trackpad, actuator, airflow]
+        let previous = [chip,
+            FanCurve(.trackpad, [(26,0),(29,25),(31,40),(34,60),(38,85),(42,100)]),
+            FanCurve(.actuator, [(24.9,0),(27.1,20),(29,40),(32,60),(36,85),(40,100)]),
+            FanCurve(.airflow, [(31.4,0),(36,20),(40,40),(44,55),(50,75),(60,100)])]
+        func matches(_ curves: [FanCurve]) -> Bool {
+            zip(profile.curves, curves).allSatisfy { stored, factory in
+                stored.input == factory.input && stored.points.map { [$0.temperature, $0.percent] } == factory.points.map { [$0.temperature, $0.percent] }
+            }
+        }
+        if (profile.defaultRevision == 1 && profile.floor == 20 && matches(original)) ||
+            (profile.defaultRevision == 2 && profile.floor == 0 && matches(previous)) { return coolChassis }
+        return profile
+    }
     public static let gaming: Profile = {
         var profile = Profile(id: "gaming", name: "Gaming", bundled: true, curves: [FanCurve(.chip, [(35,15),(45,25),(55,40),(65,55),(72,70),(77,85),(81,95),(85,100)])])
         profile.defaultRevision = 2; return profile

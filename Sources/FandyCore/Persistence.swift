@@ -42,6 +42,7 @@ public struct ProfileStore: Sendable {
                        profile.curves[0].points.map({ [$0.temperature, $0.percent] }) == [[55,0],[65,25],[72,45],[77,65],[81,85],[85,100]] {
                         profile.curves = BuiltInProfiles.gaming.curves; profile.defaultRevision = 2
                     }
+                    profile = BuiltInProfiles.upgradeCoolChassisDefault(profile)
                     try profile.validate()
                     guard ids.insert(profile.id).inserted else { throw ControlError.invalidProfile("Duplicate profile identifier.") }
                     profiles.append(profile)
