@@ -1,4 +1,8 @@
-# Current checkpoint — 0.2.4 build 22
+# Current checkpoint — 0.3.0 build 23
+
+System+ and Cool Chassis factory response is 20%. Saved credentials are reused automatically; main has a verified active pull-request/checks ruleset. 464 Swift tests, 58 tool tests and signed Release compilation pass. See [verification and release state](RELEASE_030.md). Public release and updater publication remain held for user testing.
+
+# Previous checkpoint — 0.2.4 build 22
 
 Per-profile multiple application triggers and all-close conditions are implemented, including helper-process selection and legacy rule migration. Never is removed from the automatic-update frequency picker; legacy Never uses the disabled Automatic Updates toggle. 463 Swift and 52 tool tests pass, with a signed Release build and notarized local DMG. See [behavior and verification](MULTIPLE_APPLICATION_CONDITIONS.md). Public release/updater publication remains held for user testing.
 

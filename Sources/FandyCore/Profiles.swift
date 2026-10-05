@@ -72,14 +72,14 @@ public enum BuiltInProfiles {
     public static let airflow = FanCurve(.airflow, [(33,20),(36,25),(40,40),(44,55),(50,75),(60,100)])
     public static let system = Profile(id: "system", name: "System", kind: .system, bundled: true, curves: [])
     public static let maximum = Profile(id: "max", name: "Max", kind: .maximum, bundled: true, curves: [])
-    public static let systemPlus = Profile(id: "system-plus", name: "System+", bundled: true, curves: [chip], automaticAtIdle: true)
+    public static let systemPlus = Profile(id: "system-plus", name: "System+", bundled: true, curves: [chip], automaticAtIdle: true, fanResponse: 0.2)
     public static let coolChassis: Profile = {
         var profile = Profile(id: "cool-chassis", name: "Cool Chassis", bundled: true, curves: [
             chip,
             FanCurve(.trackpad, [(26,0),(29,25),(31,40),(34,60),(38,85),(42,100)]),
             FanCurve(.actuator, [(25,0),(27.1,22),(29,40),(32,60),(36,85),(40,100)]),
             FanCurve(.airflow, [(32,0),(35.5,18),(40,40),(44,55),(50,75),(60,100)])
-        ], floor: 0)
+        ], floor: 0, fanResponse: 0.2)
         profile.defaultRevision = 3; return profile
     }()
     /// Upgrade only exact old factory shapes; edited curves/floors stay intact.

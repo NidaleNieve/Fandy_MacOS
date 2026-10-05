@@ -12,6 +12,32 @@ import tempfile
 SPEC = importlib.util.spec_from_file_location('package_dmg', Path(__file__).with_name('package-dmg.py'))
 PACKAGE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PACKAGE)
+DEFAULT_PROFILE = 'FandyNotary'
+
+
+def notary_arguments(profile, keychain=None):
+    arguments = ['--keychain-profile', profile]
+    if keychain is not None:
+        arguments += ['--keychain', str(keychain)]
+    return arguments
+
+
+def validate_credentials(profile, keychain=None):
+    # Use the same lookup as submission. An explicit login Keychain can hide a
+    # profile available through the default lookup; never silently replace it.
+    try:
+        result = subprocess.run(['xcrun', 'notarytool', 'history'] + notary_arguments(profile, keychain)
+                                + ['--output-format', 'json'], capture_output=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        raise ValueError('Saved notarization credentials could not be checked. Retry when Apple is reachable; credentials were not changed.') from None
+    if result.returncode:
+        raise ValueError('Saved notarization profile could not be accessed or validated. Retry the default Keychain lookup and check Keychain access before creating new credentials. No credentials were changed.')
+    try:
+        report = json.loads(result.stdout)
+    except (ValueError, TypeError):
+        raise ValueError('Apple returned an unreadable credential-check response. Retry; credentials were not changed.') from None
+    if not isinstance(report, dict):
+        raise ValueError('Apple returned an invalid credential-check response. No credentials were changed.')
 
 
 def developer_identity():
@@ -22,9 +48,9 @@ def developer_identity():
     return matches[0]
 
 
-def notarize(path, profile):
-    result = subprocess.run(['xcrun', 'notarytool', 'submit', str(path), '--keychain-profile', profile,
-                             '--wait', '--output-format', 'json'], capture_output=True, timeout=1800)
+def notarize(path, profile, keychain=None):
+    result = subprocess.run(['xcrun', 'notarytool', 'submit', str(path)] + notary_arguments(profile, keychain)
+                             + ['--wait', '--output-format', 'json'], capture_output=True, timeout=1800)
     # Apple tool output may include private account information. Emit only reviewed status.
     try:
         report = json.loads(result.stdout)
@@ -61,12 +87,13 @@ def sign_updater(app, identity):
     sign(framework, identity, 'org.sparkle-project.Sparkle')
 
 
-def distribute(app, output, profile):
+def distribute(app, output, profile=DEFAULT_PROFILE, keychain=None):
     if not profile.strip() or '\n' in profile or '\r' in profile:
         raise ValueError('A local notarytool keychain profile name is required')
     info, _ = PACKAGE.verify_app(app)
     original_team, _ = PACKAGE.signature(app, 'is.dsr.fandy')
     identity = developer_identity()  # Fail before creating any public artifact.
+    validate_credentials(profile, keychain)
     name = f"Fandy-{info['CFBundleShortVersionString']}-arm64.dmg"
     if (output / name).exists():
         raise ValueError('Release output already exists; choose a new directory')
@@ -83,11 +110,11 @@ def distribute(app, output, profile):
             raise ValueError('Distribution must preserve the existing trusted signing team')
         archive = work / 'Fandy.zip'
         PACKAGE.run(['ditto', '-c', '-k', '--keepParent', staged, archive])
-        notarize(archive, profile)
+        notarize(archive, profile, keychain)
         PACKAGE.run(['xcrun', 'stapler', 'staple', staged])
         candidate = PACKAGE.package(staged, work / 'image', release_staging=True)
         sign(candidate, identity, 'is.dsr.fandy.disk-image')
-        notarize(candidate, profile)
+        notarize(candidate, profile, keychain)
         PACKAGE.run(['xcrun', 'stapler', 'staple', candidate])
         PACKAGE.run(['xcrun', 'stapler', 'validate', candidate])
         PACKAGE.run(['codesign', '--verify', '--strict', candidate])
@@ -122,10 +149,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app', type=Path, default=PACKAGE.ROOT / 'build/DerivedData/Build/Products/Release/Fandy.app')
     parser.add_argument('--output', type=Path, default=PACKAGE.ROOT / 'build/Distribution-Release')
-    parser.add_argument('--keychain-profile', required=True, help='Local profile name, never a password or API key')
+    parser.add_argument('--keychain-profile', default=DEFAULT_PROFILE, help='Existing local profile (default: FandyNotary); never a password or API key')
+    parser.add_argument('--keychain', type=Path, help='Optional custom Keychain; omit to reuse the working default lookup')
     args = parser.parse_args()
     try:
-        distribute(args.app.resolve(), args.output.resolve(), args.keychain_profile)
+        distribute(args.app.resolve(), args.output.resolve(), args.keychain_profile, args.keychain)
     except (ValueError, OSError, StopIteration, subprocess.TimeoutExpired) as error:
         print(str(error) if isinstance(error, ValueError) else 'Distribution failed; no verified release was published')
         return 1

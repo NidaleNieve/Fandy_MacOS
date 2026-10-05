@@ -16,7 +16,8 @@ import Testing
     let file = dir.appendingPathComponent("profiles.json")
     var old = Profile(id: "cool-chassis", name: "Cool Chassis", bundled: true, curves: [BuiltInProfiles.chip, BuiltInProfiles.trackpad, BuiltInProfiles.actuator, BuiltInProfiles.airflow], floor: 20)
     try JSONEncoder().encode(ProfileArchive(profiles: [old])).write(to: file)
-    #expect(ProfileStore(url: file).load().profiles.first { $0.id == old.id } == BuiltInProfiles.coolChassis)
+    var expected = BuiltInProfiles.coolChassis; expected.fanResponse = old.fanResponse
+    #expect(ProfileStore(url: file).load().profiles.first { $0.id == old.id } == expected)
     old.curves[1].points[1].percent = 27
     try JSONEncoder().encode(ProfileArchive(profiles: [old])).write(to: file)
     #expect(ProfileStore(url: file).load().profiles.first { $0.id == old.id } == old)

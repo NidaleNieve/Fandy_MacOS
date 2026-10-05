@@ -24,3 +24,13 @@ Preserve user configuration and stable profile identifiers during migrations.
 Author new commits using the repository owner's configured Git identity; preserve
 original contributor authorship. Keep credentials, signing configuration and raw
 measurements out of Git. Notarize verified builds before public distribution.
+
+## Protected main
+
+Develop on a branch and merge through a pull request. Main requires resolved review
+conversations and the tests, sanitizers, native-release (macos-15), and
+native-release (macos-latest) GitHub Actions checks. Do not bypass the ruleset or
+force-push main. The reviewed configuration is `.github/main-ruleset.json`.
+
+Reuse the saved `FandyNotary` Keychain profile and existing ignored signing
+configuration. Never recreate credentials merely because a lookup fails.
