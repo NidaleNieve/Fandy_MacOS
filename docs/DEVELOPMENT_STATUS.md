@@ -1,6 +1,6 @@
 # Current checkpoint — 0.3.0 build 23
 
-System+ and Cool Chassis factory response is 20%. Saved credentials are reused automatically; main has a verified active pull-request/checks ruleset. 464 Swift tests, 58 tool tests and signed Release compilation pass. See [verification and release state](RELEASE_030.md). Public release and updater publication remain held for user testing.
+System+ and Cool Chassis factory response is 20%. Saved credentials are reused automatically; main has a verified active pull-request/checks ruleset. 464 Swift tests, 58 tool tests and signed Release compilation pass. The local DMG is notarized, stapled and Gatekeeper verified. See [verification and release state](RELEASE_030.md). Public release and updater publication remain held for user testing.
 
 # Previous checkpoint — 0.2.4 build 22
 
