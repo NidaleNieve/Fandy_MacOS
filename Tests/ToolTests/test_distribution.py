@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import sys
 from unittest.mock import patch
 
 ROOT = Path(__file__).parents[2]
@@ -13,6 +14,48 @@ SPEC.loader.exec_module(DISTRIBUTE)
 
 
 class DistributionTests(unittest.TestCase):
+    def test_default_cli_reuses_existing_profile_without_selecting_another_keychain(self):
+        with patch.object(sys, 'argv', ['distribute.py']), patch.object(DISTRIBUTE, 'distribute') as distribute:
+            self.assertEqual(DISTRIBUTE.main(), 0)
+        self.assertEqual(distribute.call_args.args[2], 'FandyNotary')
+        self.assertIsNone(distribute.call_args.args[3])
+
+    def test_credential_preflight_uses_default_lookup_and_never_recreates_credentials(self):
+        result = subprocess.CompletedProcess([], 0, b'{"history":[]}', b'')
+        with patch.object(DISTRIBUTE.subprocess, 'run', return_value=result) as run:
+            DISTRIBUTE.validate_credentials('FandyNotary')
+        args = run.call_args.args[0]
+        self.assertIn('history', args)
+        self.assertIn('--keychain-profile', args)
+        self.assertNotIn('--keychain', args)
+        for forbidden in ['store-credentials', '--apple-id', '--password', '--team-id']:
+            self.assertNotIn(forbidden, args)
+
+    def test_notarization_uses_explicit_keychain_only_when_selected(self):
+        result = subprocess.CompletedProcess([], 0, b'{"status":"Accepted"}', b'')
+        with patch.object(DISTRIBUTE.subprocess, 'run', return_value=result) as run:
+            DISTRIBUTE.notarize(Path('candidate.dmg'), 'custom-profile', Path('custom.keychain-db'))
+        args = run.call_args.args[0]
+        self.assertEqual(args[args.index('--keychain') + 1], 'custom.keychain-db')
+
+    def test_failed_credential_preflight_does_not_print_private_apple_output(self):
+        for output, error in [(b'not-json', b'private account details'), (b'{}', b'private revoked account'), (b'{}', b'private network error')]:
+            result = subprocess.CompletedProcess([], 1, output, error)
+            with patch.object(DISTRIBUTE.subprocess, 'run', return_value=result) as run:
+                with self.assertRaises(ValueError) as caught:
+                    DISTRIBUTE.validate_credentials('FandyNotary')
+                self.assertNotIn('private', str(caught.exception))
+                self.assertEqual(run.call_count, 1)
+
+    def test_invalid_credentials_stop_before_resigning_or_packaging(self):
+        with patch.object(DISTRIBUTE.PACKAGE, 'verify_app', return_value=({}, 'Apple Development')), \
+             patch.object(DISTRIBUTE.PACKAGE, 'signature', return_value=('fixture', 'Apple Development')), \
+             patch.object(DISTRIBUTE, 'developer_identity', return_value='fixture'), \
+             patch.object(DISTRIBUTE, 'validate_credentials', side_effect=ValueError('credentials unavailable')), \
+             patch.object(DISTRIBUTE, 'sign_updater') as sign:
+            with self.assertRaises(ValueError): DISTRIBUTE.distribute(Path('Fandy.app'), Path('output'), 'FandyNotary')
+        sign.assert_not_called()
+
     def test_release_metadata_comes_from_compiled_roster_and_pinned_source(self):
         report = DISTRIBUTE.PACKAGE.compatibility_manifest()
         self.assertEqual(set(report['referenceSupportedFamilies']), {'M1', 'M2', 'M3', 'M4', 'M5'})
