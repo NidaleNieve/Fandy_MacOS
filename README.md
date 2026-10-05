@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">Fandy</h1>
-<p align="center">Comfortable typing. Cooler gaming. One-click fan profiles.</p>
+<p align="center">Native Mac fan control with powerful profiles, automation, custom curves, and live temperatures.</p>
 <p align="center">
   <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.3-arm64.dmg"><strong>Download for Mac</strong></a>
   · <a href="docs/INSTALLATION.md">Installation help</a>
@@ -17,7 +17,9 @@
   <img src="docs/images/curve.png" width="601" height="350" alt="Fandy’s editable Cool Chassis chip fan curve">
 </p>
 
-Fandy is a native menu-bar fan controller and temperature monitor. View chip and chassis temperatures alongside fan speeds, switch cooling profiles, and schedule cooling around your day.
+Fandy is a native macOS fan controller and temperature monitor built for Apple Silicon MacBook Pros. Create custom cooling profiles, shape fan curves around chip or chassis temperatures, and automate when profiles activate.
+
+Profiles can follow schedules, react to apps, run temporarily, or stay active for exactly as long as you need. Everything is designed to stay simple to use while giving you much deeper control than a basic fan utility.
 
 Vibecoded with Codex, but very polish.
 
