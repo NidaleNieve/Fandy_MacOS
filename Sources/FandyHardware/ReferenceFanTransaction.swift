@@ -44,7 +44,25 @@ public enum ReferenceFanTransaction {
             guard clock().isFinite, clock() < deadline else { throw ControlError.staleSession }
             do { try interface.startManual(id: fan.id, metadata: read(interface.modeKeys[fan.id]!), transport: transport) }
             catch RecoveryWriteError.rejected(_, let result, _) where result == 0x82 && interface.forceTestAvailable { throw ReferenceAdmissionError.protectedMode }
-            let observed = try read(interface.modeKeys[fan.id]!); try interface.validateMode(observed, id: fan.id)
+            // Accepted commands may become visible asynchronously. Target this fan
+            // as soon as its own manual admission is independently acknowledged.
+            var observed = try read(interface.modeKeys[fan.id]!); try interface.validateMode(observed, id: fan.id)
+            func validatePendingModes() throws {
+                let pending = try fans()
+                try pending.forEach { try $0.validate() }
+                guard pending.map(\.id).sorted() == interface.fanIDs,
+                      pending.allSatisfy({ item in
+                          (item.mode == .automatic || item.mode == .manual) && baseline.contains {
+                              $0.id == item.id && $0.minimumRPM == item.minimumRPM && $0.maximumRPM == item.maximumRPM
+                          }
+                      }) else { throw ControlError.restorationUnverified }
+            }
+            while observed.value == 0 {
+                try current(); try validatePendingModes()
+                pause()
+                try current(); try validatePendingModes()
+                observed = try read(interface.modeKeys[fan.id]!); try interface.validateMode(observed, id: fan.id)
+            }
             guard observed.value == 1 else { throw ControlError.restorationUnverified }
             try cancelled()
             guard clock().isFinite, clock() < deadline else { throw ControlError.staleSession }

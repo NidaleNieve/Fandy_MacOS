@@ -35,7 +35,7 @@ Vibecoded with Codex, but very polish.
 | **System+** | Gentle, earlier airflow for everyday use. |
 | **Cool Chassis** | Keeping the typing area comfortable. |
 | **Gaming** | Earlier, stronger cooling during sustained loads. |
-| **School** | Quiet work and long typing sessions. |
+| **Silent** | Quiet work and long typing sessions. |
 | **Max** | Running each fan at its reported maximum. |
 | **Custom Profiles** | Your own cooling curves and temperature targets. |
 

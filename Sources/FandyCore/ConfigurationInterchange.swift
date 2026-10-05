@@ -29,7 +29,8 @@ public enum ConfigurationInterchange {
         guard Set(root.keys) == ["version", "profiles", "automation"] else { throw ScheduleError("Expected only version, profiles and automation. Runtime control authority cannot be imported.") }
         try ImportValidation.profiles(root["profiles"])
         try ImportValidation.automation(root["automation"])
-        let result = try JSONDecoder().decode(PortableConfiguration.self, from: data)
+        var result = try JSONDecoder().decode(PortableConfiguration.self, from: data)
+        result.profiles = result.profiles.map(BuiltInProfiles.normalizeName)
         try result.validate()
         return result
     }
@@ -77,7 +78,7 @@ public enum ScheduledProfileInterchange {
         }
         var config = AutomationConfiguration(); config.periods = archive.periods; config.pauses = archive.pauses; config.activationDefaults = archive.activationDefaults ?? [:]
         try config.validate(profileIDs: Set(archive.profiles.map(\.id)), allowConflicts: true)
-        let copies = archive.profiles.map { profile -> Profile in var result = profile.bundled ? profile : profile.duplicated(); result.name = profile.name; return result }
+        let copies = archive.profiles.map { profile -> Profile in var result = profile.bundled ? profile : profile.duplicated(); result.name = profile.name; return BuiltInProfiles.normalizeName(result) }
         let ids = Dictionary(uniqueKeysWithValues: zip(archive.profiles.map(\.id), copies.map(\.id)))
         return ScheduledProfileBundle(profiles: copies.filter { !$0.bundled }, periods: archive.periods.map { period in
             var result = period; result.id = UUID(); result.profileID = ids[period.profileID]!; return result
@@ -152,7 +153,7 @@ public enum ScheduleTextImport {
     public static func prompt(profiles: [Profile]) -> String {
         """
         Format my schedule as JSON only, without Markdown fences. Fandy schema:
-        {"version":1,"entries":[{"profile":"School","day":"Monday","start":"08:30","end":"12:30"}],"pauses":[{"profile":"School","start":"2026-12-20T00:00:00Z","end":"2027-01-04T00:00:00Z"}]}
+        {"version":1,"entries":[{"profile":"Silent","day":"Monday","start":"08:30","end":"12:30"}],"pauses":[{"profile":"Silent","start":"2026-12-20T00:00:00Z","end":"2027-01-04T00:00:00Z"}]}
         Use exactly these profile names: \(profiles.map(\.name).joined(separator: ", ")).
         Days must be Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
         Times must be 24-hour HH:mm. End earlier than start means overnight into the next day. Equal start/end is invalid. For all day use 00:00–24:00.
@@ -169,7 +170,10 @@ public enum ScheduleTextImport {
               let entries = root["entries"] as? [[String: Any]], entries.count <= 1024 else { throw ScheduleError("Root: expected version 1 and an entries array (maximum 1024), with optional pauses.") }
         func profileID(_ name: Any?, path: String) throws -> String {
             guard let name = name as? String else { throw ScheduleError("\(path): expected a profile name.") }
-            let matches = profiles.filter { $0.name == name }
+            var matches = profiles.filter { $0.name == name }
+            if matches.isEmpty, name == "School" {
+                matches = profiles.filter { $0.id == "school" && $0.bundled }
+            }
             guard matches.count == 1 else { throw ScheduleError("\(path): profile '\(name)' is unknown or ambiguous. Use an exact, unique profile name.") }; return matches[0].id
         }
         var periods: [WeeklyPeriod] = []

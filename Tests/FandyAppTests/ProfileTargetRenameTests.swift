@@ -29,9 +29,9 @@ import Testing
     model.editorHistory.beginUndoGrouping(); #expect(model.renameProfile("school", to: "  Quiet Study  ")); model.editorHistory.endUndoGrouping()
     #expect(model.machine.selected.name == "Quiet Study" && model.machine.generation == generation && model.machine.state == state)
     model.editorHistory.undo()
-    #expect(model.machine.selected.name == "School" && model.machine.generation == generation)
+    #expect(model.machine.selected.name == "Silent" && model.machine.generation == generation)
     #expect(!model.renameProfile("school", to: "   "))
-    #expect(model.profiles.first { $0.id == "school" }?.name == "School")
+    #expect(model.profiles.first { $0.id == "school" }?.name == "Silent")
 }
 @MainActor @Test func profileTemperatureTargetIsUndoableAndInvalidDraftRetainsSafeState() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

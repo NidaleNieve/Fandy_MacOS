@@ -44,6 +44,7 @@ public struct ProfileStore: Sendable {
                     }
                     profile = BuiltInProfiles.upgradeCoolChassisDefault(profile)
                     profile = BuiltInProfiles.upgradeSchoolDefault(profile)
+                    profile = BuiltInProfiles.normalizeName(profile)
                     try profile.validate()
                     guard ids.insert(profile.id).inserted else { throw ControlError.invalidProfile("Duplicate profile identifier.") }
                     profiles.append(profile)

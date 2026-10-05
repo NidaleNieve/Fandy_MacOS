@@ -111,7 +111,7 @@ public enum BuiltInProfiles {
         var comfort = [trackpad, actuator, airflow]
         for i in comfort.indices { for j in comfort[i].points.indices { comfort[i].points[j].percent = max(0, comfort[i].points[j].percent / 2 - 10) } }
         let quietChip = FanCurve(.chip, [(45,0),(57.8,9),(70.3,15),(77.2,33),(82.6,47),(86.9,52)])
-        var profile = Profile(id: "school", name: "School", bundled: true, curves: [quietChip] + comfort, automaticAtIdle: true)
+        var profile = Profile(id: "school", name: "Silent", bundled: true, curves: [quietChip] + comfort, automaticAtIdle: true)
         profile.defaultRevision = 3; return profile
     }()
     /// Migrate only the unchanged factory definition, never a user's tuning.
@@ -122,7 +122,7 @@ public enum BuiltInProfiles {
         case 2: oldCurves[0] = FanCurve(.chip, [(45,0),(56.9,14),(66.1,35),(73.8,47),(79.3,50),(86.9,52)])
         default: return profile
         }
-        guard profile.id == "school", profile.name == "School", profile.defaultRevision < 3,
+        guard profile.id == "school", ["School", "Silent"].contains(profile.name), profile.defaultRevision < 3,
               profile.kind == .custom, profile.floor == 0, profile.automaticAtIdle,
               profile.targetTemperature == nil, profile.curves.count == oldCurves.count,
               zip(profile.curves, oldCurves).allSatisfy({ stored, original in
@@ -131,6 +131,11 @@ public enum BuiltInProfiles {
               }) else { return profile }
         var updated = profile; updated.curves[0] = school.curves[0]; updated.defaultRevision = 3
         return updated
+    }
+    /// Keep stable IDs and all user tuning; only the legacy built-in label changes.
+    public static func normalizeName(_ profile: Profile) -> Profile {
+        guard profile.id == "school", profile.bundled, profile.name == "School" else { return profile }
+        var updated = profile; updated.name = "Silent"; return updated
     }
     public static let all = [system, maximum, systemPlus, coolChassis, gaming, school]
 }

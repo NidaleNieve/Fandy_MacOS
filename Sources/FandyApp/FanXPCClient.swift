@@ -311,8 +311,18 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
         if service.status != .notRegistered { try await unregisterService() }
     }
     static func uninstall(client:FanXPCClient) async throws {
-        try await client.restoreAutomatic()
-        try await unregisterService()
+        try await remove(status: service.status, restore: { try await client.restoreAutomatic() },
+            unregister: { try await unregisterService() })
+    }
+    /// Approval and availability are separate; a live registration requires handback.
+    static func remove(status: SMAppService.Status, restore: () async throws -> Void,
+        unregister: () async throws -> Void) async throws {
+        switch status {
+        case .enabled: try await restore(); try await unregister()
+        case .requiresApproval: try await unregister()
+        case .notRegistered, .notFound: return
+        @unknown default: throw ControlError.helperUnavailable
+        }
     }
     static func unregisterService() async throws { try await unregister(service: service) }
     private static func unregister(service: SMAppService) async throws {

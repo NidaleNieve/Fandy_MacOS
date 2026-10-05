@@ -1,3 +1,5 @@
+> Naming note: School was renamed Silent in 0.2.4 build 21. Historical observations below retain the name used during measurement.
+
 # Compatibility release verification — 2026-10-04
 
 **Distribution update:** the current build 8 GitHub release is Developer ID-signed, notarized and stapled; see [current release verification](GITHUB_RELEASE.md). The older build 2 measurements and test-artifact record below are retained as historical evidence.

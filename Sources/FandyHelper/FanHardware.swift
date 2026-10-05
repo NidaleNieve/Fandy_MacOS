@@ -51,6 +51,11 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         let key = try qualifiedModeKey(fanID), mode = try reader.read(key)
         guard mode.type == "ui8 ", mode.size == 1, mode.bytes.count == 1 else { throw HardwareError.invalidMetadata }
         try interface.restoreMode(id: fanID, metadata: mode, transport: self)
+        if !interface.locallyTested {
+            try FanHandover.awaitRelease(deadline: ProcessInfo.processInfo.systemUptime + 1,
+                clock: { ProcessInfo.processInfo.systemUptime }, read: { [self] in try readMode(fanID: fanID) },
+                pause: { Thread.sleep(forTimeInterval: 0.05) })
+        }
     }
     func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool { interface?.locallyTested == true || !mode.isAutomatic }
     func acceptsAutomatic(_ mode: FanMode) -> Bool { interface?.locallyTested == true ? mode == .automatic : mode.isAutomatic }

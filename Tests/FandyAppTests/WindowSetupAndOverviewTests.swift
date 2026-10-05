@@ -210,7 +210,7 @@ import Testing
     let data = try JSONSerialization.jsonObject(with: model.sanitizedDiagnostics()) as! [String: Any]
     #expect(data["bootstrapStage"] as? String == "failed")
     #expect(data["bootstrapAttempt"] as? Int == 3)
-    #expect(data["build"] as? String == "20")
+    #expect(data["build"] as? String == "21")
 }
 
 private actor BootstrapClient: PrivilegedFanClient {

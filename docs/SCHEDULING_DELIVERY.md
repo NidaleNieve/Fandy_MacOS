@@ -20,12 +20,12 @@ The text-import sheet supplies a copyable chatbot prompt and copyable field-spec
 {
   "version": 1,
   "entries": [
-    {"profile": "School", "day": "Monday", "start": "08:30", "end": "12:30"},
-    {"profile": "School", "day": "Monday", "start": "14:20", "end": "16:30"},
+    {"profile": "Silent", "day": "Monday", "start": "08:30", "end": "12:30"},
+    {"profile": "Silent", "day": "Monday", "start": "14:20", "end": "16:30"},
     {"profile": "Gaming", "day": "Tuesday", "start": "18:30", "end": "02:25"}
   ],
   "pauses": [
-    {"profile": "School", "start": "2026-12-20T00:00:00Z", "end": "2027-01-04T00:00:00Z"}
+    {"profile": "Silent", "start": "2026-12-20T00:00:00Z", "end": "2027-01-04T00:00:00Z"}
   ]
 }
 ```

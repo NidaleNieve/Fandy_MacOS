@@ -531,3 +531,29 @@ func delayedReferenceAdmissionTargetsEachFanOnce(_ item: (String, String)) throw
     #expect(!report.verified && report.fans[1].releasedManual)
     #expect(io.attempts == [0, 1] && fixture.values["Ftst"]?.value == 0)
 }
+
+// Original PR regressions, adapted to the newer per-fan transaction order.
+@Test func delayedM2ManualAcknowledgementPrecedesEveryTarget() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+    fixture.modeDelays = ["F0Md": 0.2, "F1Md": 0.2]
+    try fixture.apply()
+    #expect(fixture.now >= 10.4)
+    #expect(fixture.writes.map(\.0) == ["F0Md", "F0Tg", "F1Md", "F1Tg"])
+}
+@Test func missingM2ManualAcknowledgementTimesOutWithoutTargets() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+    fixture.modeDelays["F0Md"] = 20
+    #expect(throws: ControlError.staleSession) { try fixture.apply() }
+    #expect(fixture.writes.map(\.0) == ["F0Md"])
+}
+
+@Test func boundsChangeAtAcknowledgementCannotReceiveAStaleTarget() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+    fixture.modeDelays["F0Md"] = 0.2
+    #expect(throws: (any Error).self) {
+        try fixture.apply(check: {
+            if fixture.now >= 10.2 { fixture.put("F0Mx", 5900, "flt ", attributes: 212) }
+        })
+    }
+    #expect(!fixture.writes.contains { $0.0.hasSuffix("Tg") })
+}

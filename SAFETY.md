@@ -10,7 +10,7 @@ Custom control replaces normal Apple fan demand. No Apple fan-floor behavior is 
 
 ## Curve-first cooling
 
-Under nominal or fair thermal pressure, requested demand is the maximum of enabled curves, minimum airflow and an optional temperature target. Profile response governs that demand. There is no independent temperature-triggered fan escalation: 75°C and 85°C do not override a profile's configured ceiling. School does not receive a hidden maximum-fan request.
+Under nominal or fair thermal pressure, requested demand is the maximum of enabled curves, minimum airflow and an optional temperature target. Profile response governs that demand. There is no independent temperature-triggered fan escalation: 75°C and 85°C do not override a profile's configured ceiling. Silent does not receive a hidden maximum-fan request.
 
 All required chip inputs remain mandatory even when CPU or GPU is deselected in the profile editor. Each frozen sensor group must be complete, correctly typed, plausible and freshly acquired. Missing/stale readings, invalid metadata, communication loss or conflicting ownership revoke control and attempt automatic restoration.
 

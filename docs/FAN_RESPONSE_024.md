@@ -1,3 +1,5 @@
+> Naming note: School was renamed Silent in 0.2.4 build 21. Historical observations below retain the name used during measurement.
+
 # Fandy 0.2.4 — build 20
 
 Local test release; GitHub publication and update-feed changes wait for user acceptance. Build 19's independent fan guard is superseded.

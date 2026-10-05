@@ -129,7 +129,7 @@ import FandyHardware
             model.select("school")
             while ProcessInfo.processInfo.systemUptime - started < 8 {
                 await model.tick()
-                guard model.machine.selected.id == "school", model.machine.fault == nil else { throw ControlError.invalidProfile(model.hardwareError ?? model.machine.fault ?? "School transition lost ownership.") }
+                guard model.machine.selected.id == "school", model.machine.fault == nil else { throw ControlError.invalidProfile(model.hardwareError ?? model.machine.fault ?? "Silent transition lost ownership.") }
                 try await Task.sleep(for: .milliseconds(500))
             }
             let samples = try await observer.value
