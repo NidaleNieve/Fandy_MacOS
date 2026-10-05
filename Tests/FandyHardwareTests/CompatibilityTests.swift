@@ -274,3 +274,80 @@ private final class ReferenceRestorationIO: FanHardwareIO, @unchecked Sendable {
     }
     #expect(fixture.writes.isEmpty)
 }
+
+@Test func connectionCancellationCannotRevokeAnotherOwnersTransaction() throws {
+    let fence = HardwareOperationFence(), a = UUID(), b = UUID()
+    #expect(fence.connect(owner: a)); #expect(fence.connect(owner: b))
+    let aToken = try fence.token(owner: a), bToken = try fence.token(owner: b)
+    let fixture = CompatibilitySMC()
+    fence.cancel(owner: b)
+    #expect(throws: ControlError.staleSession) { try fence.require(bToken) }
+    try fixture.apply(check: { try fence.require(aToken) })
+    #expect(!fixture.writes.isEmpty)
+    // Disconnect must revoke queued and watchdog work with the same owner token.
+    let beforeDisconnect = try fence.token(owner: b)
+    fence.disconnected(owner: b)
+    #expect(throws: ControlError.staleSession) { try fence.require(beforeDisconnect) }
+    try fence.require(aToken)
+    fence.cancel(owner: a)
+    #expect(throws: ControlError.staleSession) { try fence.require(aToken) }
+}
+
+@Test func globalCancellationRevokesEveryOwnerAndUnscopedWork() throws {
+    let fence = HardwareOperationFence(), owners = [UUID(), UUID()]
+    let global = fence.token()
+    for owner in owners { #expect(fence.connect(owner: owner)) }
+    let tokens = try owners.map { try fence.token(owner: $0) }
+    fence.cancel()
+    for token in tokens + [global] { #expect(throws: ControlError.staleSession) { try fence.require(token) } }
+    for owner in owners { try fence.require(fence.token(owner: owner)) }
+}
+
+@Test func cancellationConnectionsAreBoundedAndOldTokensNeverRevive() throws {
+    let fence = HardwareOperationFence(), owners = (0..<8).map { _ in UUID() }
+    for owner in owners { #expect(fence.connect(owner: owner)) }
+    #expect(!fence.connect(owner: UUID())); #expect(!fence.connect(owner: owners[0]))
+    let old = try fence.token(owner: owners[0])
+    fence.disconnected(owner: owners[0])
+    #expect(throws: ControlError.staleSession) { try fence.token(owner: owners[0]) }
+    fence.cancel(owner: UUID()) // Unknown peers cannot consume slots.
+    #expect(fence.connect(owner: owners[0]))
+    #expect(throws: ControlError.staleSession) { try fence.require(old) }
+    try fence.require(fence.token(owner: owners[0]))
+}
+
+@Test func concurrentOwnerCancellationLeavesOtherOwnerValid() throws {
+    let fence = HardwareOperationFence(), a = UUID(), b = UUID()
+    #expect(fence.connect(owner: a)); #expect(fence.connect(owner: b))
+    let token = try fence.token(owner: a)
+    DispatchQueue.concurrentPerform(iterations: 64) { _ in
+        fence.cancel(owner: b)
+        if let other = try? fence.token(owner: b) { try? fence.require(other) }
+        #expect(throws: Never.self) { try fence.require(token) }
+    }
+    try fence.require(token)
+}
+
+@Test(arguments: [false, true])
+func scopedCancellationDuringProtectedHandoverRespectsTransactionOwner(cancelOwner: Bool) throws {
+    let fixture = CompatibilitySMC(); fixture.blockDirect = true
+    let fence = HardwareOperationFence(), owner = UUID(), other = UUID()
+    #expect(fence.connect(owner: owner)); #expect(fence.connect(owner: other))
+    let token = try fence.token(owner: owner)
+    var observedHandover = false
+    func check() throws {
+        if fixture.values["Ftst"]?.value == 1 {
+            observedHandover = true
+            fence.cancel(owner: cancelOwner ? owner : other)
+        }
+        try fence.require(token)
+    }
+    if cancelOwner {
+        #expect(throws: ControlError.staleSession) { try fixture.apply(check: check) }
+        #expect(fixture.writes.allSatisfy { !$0.0.hasSuffix("Tg") })
+    } else {
+        try fixture.apply(check: check)
+        #expect(fixture.writes.suffix(2).map(\.0) == ["F0Tg", "F1Tg"])
+    }
+    #expect(observedHandover)
+}

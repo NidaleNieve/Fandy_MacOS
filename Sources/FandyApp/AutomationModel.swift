@@ -50,7 +50,8 @@ extension AppModel {
             activateFor(seconds: Double(rule.seconds))
         case .application:
             manualIntent = ActivationIntent(profileID: profile.id)
-            if let process = applicationCatalog().first(where: { $0.bundleID == rule.applicationID }) { activateWhile(process) }
+            refreshApplicationAvailability()
+            if let process = runningApplications.first(where: { $0.bundleID == rule.applicationID }) { activateWhile(process) }
             else { awaitingApplicationID = rule.applicationID; watchedProcessName = rule.applicationName }
         }
     }
@@ -128,7 +129,7 @@ extension AppModel {
     /// Called before sampling/commands. A delayed tick cannot renew an expired activation.
     func expireActivation() {
         guard let activeIntent = manualIntent else { return }
-        if let bundleID = awaitingApplicationID, let process = applicationCatalog().first(where: { $0.bundleID == bundleID }) {
+        if let bundleID = awaitingApplicationID, let process = runningApplications.first(where: { $0.bundleID == bundleID }) {
             manualIntent = ActivationIntent(profileID: activeIntent.profileID, limit: .process(pid: process.pid, launched: process.launched))
             awaitingApplicationID = nil; watchedProcessName = process.name
         }

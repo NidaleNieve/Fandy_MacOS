@@ -97,6 +97,7 @@ public final class RecoveryTrialCoordinator {
     private let restore: () -> RestorationReport?
     private let requireExclusive: () throws -> Void
     private var owner: UUID?
+    public var activeOwner: UUID? { owner }
     private var lastHeartbeat = 0.0
     private var lastClock = 0.0
     private var lastSnapshot: HardwareSnapshot?

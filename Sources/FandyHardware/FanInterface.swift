@@ -116,14 +116,46 @@ public struct FanInterface: Sendable {
 /// Cancellation arrives from the XPC ingress thread even while handover is waiting.
 /// The hardware queue remains the sole writer; cancellation only revokes admission.
 public final class HardwareOperationFence: @unchecked Sendable {
+    public struct Token: Sendable, Equatable {
+        fileprivate let generation: UUID
+        fileprivate let owner: UUID?
+        fileprivate let ownerGeneration: UUID?
+    }
     private let lock = NSLock()
-    private var generation: UInt64 = 0
+    private var generation = UUID()
+    private var owners: [UUID: UUID] = [:]
     public init() {}
-    public func token() -> UInt64 { lock.lock(); defer { lock.unlock() }; return generation }
-    public func cancel() { lock.lock(); defer { lock.unlock() }; generation &+= 1 }
-    public func require(_ token: UInt64) throws {
+    /// Mirrors the helper's bounded connection admission; tokens never register peers.
+    public func connect(owner: UUID) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        guard token == generation else { throw ControlError.staleSession }
+        guard owners.count < 8, owners[owner] == nil else { return false }
+        owners[owner] = UUID(); return true
+    }
+    public func token() -> Token {
+        lock.lock(); defer { lock.unlock() }
+        return Token(generation: generation, owner: nil, ownerGeneration: nil)
+    }
+    public func token(owner: UUID) throws -> Token {
+        lock.lock(); defer { lock.unlock() }
+        guard let epoch = owners[owner] else { throw ControlError.staleSession }
+        return Token(generation: generation, owner: owner, ownerGeneration: epoch)
+    }
+    /// System restoration and power transitions revoke all admitted work.
+    public func cancel() { lock.lock(); defer { lock.unlock() }; generation = UUID() }
+    public func cancel(owner: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        if owners[owner] != nil { owners[owner] = UUID() }
+    }
+    public func disconnected(owner: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        owners.removeValue(forKey: owner)
+    }
+    public func require(_ token: Token) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard token.generation == generation else { throw ControlError.staleSession }
+        if let owner = token.owner {
+            guard owners[owner] == token.ownerGeneration else { throw ControlError.staleSession }
+        }
     }
 }
 

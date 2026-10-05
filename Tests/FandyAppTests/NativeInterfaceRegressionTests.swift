@@ -44,7 +44,7 @@ import Testing
     model.refreshApplicationAvailability(); model.refreshApplicationAvailability()
     #expect(queries == initial)
     model.select("gaming")
-    #expect(queries == initial + 2 && model.machine.selected.id == "gaming")
+    #expect(queries == initial + 1 && model.machine.selected.id == "gaming")
 }
 
 @MainActor @Test func nativeMenuEmbedsHoverPickersAndCentersCompactReadouts() throws {

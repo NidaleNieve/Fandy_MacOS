@@ -92,7 +92,6 @@ public enum SensorRegistry {
         case .trackpad, .actuator, .charger: "Historical VirtualSMC names; TG Pro recordings"
         case .airflowTop: "iSMC Apple Ambient Top Proximity; complete Mac17,9 flt4 observations; 1156 paired readings across 18C and slow chassis response"
         case .powerSupply: "iSMC Power Supply Proximity candidate; TG Pro recordings"
-        default: "Contemporaneous TG Pro recordings"
         }
         let limitation: String = switch mapping.role {
         case .airflowTop: "Operational top-proximity proxy on the airflow temperature scale. Exact TG Pro Airflow Top identity is not certified; TRDd/TRDc remain numerical competitors."

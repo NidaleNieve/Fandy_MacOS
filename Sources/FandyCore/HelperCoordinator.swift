@@ -25,6 +25,8 @@ public final class HelperCoordinator {
     private var restoration: RestorationReport?
     private var startupRestoration: RestorationReport?
     public var lastRestoration: RestorationReport? { restoration }
+    /// Read only on the serial hardware queue when tagging watchdog work.
+    public var leaseOwner: UUID? { safety.lease?.owner }
     private let capabilities: HardwareCapabilities
     public init(io: any FanHardwareIO, capabilities: HardwareCapabilities, read: @escaping () throws -> HardwareSnapshot,
                 clock: @escaping () -> Double, event: @escaping (String) -> Void = { _ in }, requireExclusive: @escaping () throws -> Void = {}) {

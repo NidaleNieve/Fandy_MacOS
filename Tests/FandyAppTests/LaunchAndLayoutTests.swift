@@ -8,7 +8,9 @@ import Testing
 @MainActor @Test func cancellationWrapsFullTitleWhileOtherActionsRetainNativeRowsAndBoundedWidth() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }
-    let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
+    // Keep this native-row case outside Monday's schedule, regardless of test date.
+    let sunday = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 10))!
+    let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true, wallClock: { sunday })
     var school = BuiltInProfiles.school; school.name = String(String(repeating: "A very long school profile ", count: 4).prefix(80)); model.update(school)
     var automation = model.automation; automation.periods = [.init(profileID: "gaming", weekday: 1, startMinute: 0, endMinute: 1440)]
     model.setAutomation(automation); model.select("school"); model.activateFor(seconds: 300)
@@ -130,4 +132,36 @@ import Testing
     #expect(model.pendingApplicationLaunches.isEmpty)
     model.editorHistory.undo(); #expect(model.automation.activationDefaults["gaming"] == nil)
     model.editorHistory.redo(); #expect(model.automation.activationDefaults["gaming"]?.launchWhenOpened == true)
+}
+
+@MainActor @Test func waitingApplicationReusesOneCatalogSnapshotAcrossATick() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    var reads = 0
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false, simulation: true,
+                         applicationCatalog: { reads += 1; return [] }, clock: { 10 })
+    var rule = ProfileActivationDefault(); rule.kind = .application; rule.applicationID = "example.waiting"; rule.applicationName = "Waiting"
+    model.setActivationDefault(rule, profileID: "gaming")
+    model.select("gaming")
+    #expect(model.awaitingApplicationID == "example.waiting")
+    let beforeTick = reads
+    await model.tick(); model.expireActivation(); model.expireActivation()
+    #expect(reads == beforeTick && model.awaitingApplicationID == "example.waiting")
+    model.refreshApplicationAvailability(force: true)
+    #expect(reads == beforeTick + 1)
+    await model.prepareForTermination()
+}
+
+@MainActor @Test func scheduledSelectionDoesNotSaveDefinitionsOrRememberAnActiveLease() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("profiles.json")
+    let model = AppModel(storeURL: url, autoStart: false, simulation: true)
+    model.select("gaming", manual: false)
+    await Task.yield(); await Task.yield()
+    #expect(model.machine.selected.id == "gaming")
+    #expect(model.automation.preferences.defaultProfileID == "system")
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+    await model.prepareForTermination()
+    #expect(ProfileStore(url: url).load().automation.preferences.defaultProfileID == "system")
 }

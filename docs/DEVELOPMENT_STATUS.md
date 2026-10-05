@@ -1,4 +1,16 @@
-# Current checkpoint — 2026-10-04: notarized GitHub delivery
+# Current checkpoint — 2026-10-05: reviewed architecture, build 10
+
+The connection-scoped cancellation fence, helper watchdog ownership tagging, canonical persistence deduplication, shared import validation, application-catalog reuse and overnight schedule lookahead pass review. The physical fan command sequence, code-signing authentication and sensor-independent restoration remain intact. See [review and verification](ARCHITECTURE_REVIEW_2026_10_05.md).
+
+394 Swift tests, 48 tool tests and nine focused Thread Sanitizer tests pass. The final complete Swift run has no compiler warnings. Signed arm64 Release 0.2.0 build 10 succeeds and app/helper signatures and distribution payload validation pass. This build also includes the committed quiet School defaults, normalized observed percentages and Downloads export defaults from build 9.
+
+The Developer ID-signed, notarized and stapled DMG is in ignored `build/Distribution-Architecture-0.2.0-build10`. App/image tickets, Gatekeeper, final mounted payload/privacy and image integrity pass. SHA-256: `2ccebe9d9c3d3adabf22271e9a6dec3d74703a5622d272e438d21e3df127d198`. Checksum and verification report remain local.
+
+No installed app/helper was replaced, no user configuration changed and no physical fan test was run in this review. The public GitHub DMG remains build 8 until deliberately published. Preserve the running controller and private profiles when installing a future update. Existing other-Mac, physical sleep/wake and subjective calibration follow-ups remain; do not describe the new cancellation path as physically requalified from software tests alone.
+
+---
+
+# Previous checkpoint — 2026-10-04: notarized GitHub delivery
 
 Fandy 0.2.0 build 8 is Developer ID-signed, notarized and stapled. The verified artifacts are in ignored `build/Distribution-Notarized-0.2.0`; app/image tickets, signatures, Gatekeeper, mounted build/payload privacy and image integrity pass. The public v0.2.0 DMG is replaced with that artifact. Only the DMG remains attached, as requested; checksum and verification files stay local. Both public download links match SHA-256 `e7fc0c7f32500f2b8f0c2cc6e8893ae8e27106b855b3a695f7f8375a5787d510`.
 

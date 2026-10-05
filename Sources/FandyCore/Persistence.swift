@@ -105,13 +105,23 @@ public extension ProfileStore {
 
 /// Serial disk writes; older revisions cannot overwrite newer requests.
 public actor ProfilePersistence {
-    private let store: ProfileStore
+    private let write: @Sendable (ProfileArchive) throws -> Void
     private var newest: UInt64 = 0
-    public init(store: ProfileStore) { self.store = store }
+    private var acknowledged: PortableConfiguration?
+    public init(store: ProfileStore) {
+        write = { try store.save($0.profiles, previousSelection: $0.previousSelection, automation: $0.automation) }
+    }
+    /// A synchronous adapter preserves serial writes and permits deterministic failure tests.
+    init(write: @escaping @Sendable (ProfileArchive) throws -> Void) { self.write = write }
     public func save(_ profiles: [Profile], selection: String?, revision: UInt64, automation: AutomationConfiguration = .init()) throws {
         guard revision >= newest else { return }
         newest = revision
-        try store.save(profiles, previousSelection: selection, automation: automation)
+        let configuration = PortableConfiguration(profiles: profiles, automation: automation)
+        // Previous selection is legacy metadata, never persisted activation authority.
+        guard configuration != acknowledged else { return }
+        do { try write(ProfileArchive(profiles: profiles, previousSelection: selection, automation: automation)) }
+        catch { acknowledged = nil; throw error }
+        acknowledged = configuration
     }
 }
 
@@ -129,17 +139,12 @@ public enum ProfileInterchange {
         return data
     }
     public static func decode(_ data: Data, existingCount: Int) throws -> [Profile] {
-        guard data.count <= 1_048_576, jsonDepthIsBounded(data),
-              let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              Set(root.keys) == ["version", "profiles"],
-              let entries = root["profiles"] as? [[String: Any]], entries.count <= 128 else { throw ControlError.malformedMessage }
-        let allowed: Set<String> = ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle", "targetTemperature"]
-        guard entries.allSatisfy({ Set($0.keys).isSubset(of: allowed) }) else { throw ControlError.malformedMessage }
-        for entry in entries {
-            if let target = entry["targetTemperature"], !(target is NSNull) {
-                guard let fields = target as? [String: Any], Set(fields.keys).isSubset(of: ["input", "celsius"]) else { throw ControlError.malformedMessage }
-            }
-        }
+        let root: [String: Any]
+        do {
+            root = try ImportValidation.root(data)
+            try ImportValidation.profiles(root["profiles"])
+        } catch { throw ControlError.malformedMessage }
+        guard Set(root.keys) == ["version", "profiles"] else { throw ControlError.malformedMessage }
         let archive = try JSONDecoder().decode(Archive.self, from: data)
         guard archive.version == 1, !archive.profiles.isEmpty, existingCount >= 0,
               archive.profiles.count <= 128, archive.profiles.count <= 128 - min(existingCount, 128),
@@ -152,18 +157,4 @@ public enum ProfileInterchange {
             return copy
         }
     }
-    private static func jsonDepthIsBounded(_ data: Data) -> Bool {
-        var depth = 0, quoted = false, escaped = false
-        for byte in data {
-            if quoted {
-                if escaped { escaped = false }
-                else if byte == 92 { escaped = true }
-                else if byte == 34 { quoted = false }
-            } else if byte == 34 { quoted = true }
-            else if byte == 91 || byte == 123 { depth += 1; if depth > 32 { return false } }
-            else if byte == 93 || byte == 125 { depth -= 1; if depth < 0 { return false } }
-        }
-        return depth == 0 && !quoted
-    }
-
 }

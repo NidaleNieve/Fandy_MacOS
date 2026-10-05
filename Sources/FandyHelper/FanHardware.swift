@@ -11,10 +11,10 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     private let connection: io_connect_t
     let cancellation = HardwareOperationFence()
     // Written only on the serial hardware queue; captured at authenticated ingress.
-    var admittedOperation: UInt64?
+    var admittedOperation: HardwareOperationFence.Token?
     private let interface: FanInterface?
     private var ownsForceTest = false
-    private var transactionToken: UInt64?
+    private var transactionToken: HardwareOperationFence.Token?
     private var controlRequirements: Set<SensorRole> = []
     init() throws {
         let observationReader = try SMCReader(); reader = observationReader
@@ -192,6 +192,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         try requireRecoveryDeadline(deadline)
     }
     private func requireRecoveryDeadline(_ deadline: Double) throws {
+        if let admittedOperation { try cancellation.require(admittedOperation) }
         guard SensorRegistry.capabilities.forMachine(HardwareSnapshotReader.machineModel()).canQualifyRecovery,
               deadline.isFinite, ProcessInfo.processInfo.systemUptime < deadline else { throw ControlError.staleSession }
     }

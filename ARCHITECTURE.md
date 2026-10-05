@@ -42,6 +42,8 @@ Application diagnostics rotate at 1 MiB with three archives. The root helper use
 
 HelperRequestGate checks size, connection state, rate and outstanding-work limits before serial-queue dispatch. Ordinary traffic is capped at four queued/in-flight requests globally and two per connection. Restoration and rejection notifications each have a separate bounded allowance; disconnect invalidates tickets before queued work can execute. RestorationFlight shares overlapping app lifecycle releases through one RPC, propagates failures to every waiter and retries with a fresh RPC after completion. These controls cannot recover a dead or blocked helper by themselves.
 
+HardwareOperationFence owns typed global and connection cancellation epochs for at most eight connections. Rejection invalidates only that connection's work; disconnect removes its epoch immediately, including queued and active transaction tokens. Watchdog transactions carry the current lease owner. Explicit System restoration and power transitions revoke all work. Restoration itself remains available after cancellation.
+
 ## Production monitoring and qualification
 
 Normal startup uses real read-only monitoring and selects System; simulation is an explicit option. AppModel injects the sensor provider, privileged client, clock and helper availability for deterministic testing. It separately exposes observed fan ownership, helper health, local signed capabilities and profile eligibility. A custom profile checkmark requires genuine acknowledged control; Apple ownership is determined from fresh fan readings, not the selected profile name.
@@ -96,11 +98,15 @@ Automatic observation, unverified ownership and a pending physical release are d
 
 Collection operations commit through a serialized revision-aware persistence actor before publishing. Valid live edits update control independently of disk acknowledgement, with a visible unsaved state and debounced background persistence. UndoManager stores profile edits and full validated configuration snapshots across collection/schedule/preference changes, and groups direct-manipulation gestures; invalid local CurveDraft values never enter history/control. Native file panels use the profile-only interchange codec. Quit requests automatic restoration before waiting for persistence. Diagnostic file writes use a bounded utility queue; no storage work is added to the root IPC boundary.
 
+ProfilePersistence acknowledges unchanged profiles and automation without another disk transaction, while still advancing revision ordering. Only successful writes populate the acknowledgement; a failed write invalidates it so retries cannot assume unchanged storage. Previous selection remains legacy archive metadata and does not trigger writes by itself. Remembered defaults persist through the preference path, independently of scheduled/runtime selections. A synchronous filesystem adapter and an injected test adapter share the serial write interface.
+
 ## Automation layer — 2026-10-03
 
 `Scheduling.swift` models half-open ISO-week ranges, pauses, interval subtraction and ephemeral activation intent. `AutomationModel` chooses manual intent before a scheduled occurrence; neither edits controller safety nor supplies helper authority. Expiry checks surround acquisition/dispatch, and transitions restore System before schedule handoff. Faulted occurrences are blocked until an explicit retry or later occurrence. Native `NSStatusItem`/`NSMenu` supports hierarchical menus, persistent mouse-action rows and anchored native duration/application popovers; the existing SwiftUI editor remains separate.
 
 Version-two `ProfileArchive` includes `AutomationConfiguration`. Revisioned actor saves and collection transactions persist complete configurations before publication. Strict bounded interchange separates portable configuration, scheduled profile bundles and human-readable schedule text. Runtime intent and hardware/signing authority are absent. `SensorMenuModel` uses independent, coalesced display acquisition, complete groups and explicit estimate labels; display keys never enter the profile engine. See [delivery](docs/SCHEDULING_DELIVERY.md).
+
+Legacy and current profile imports share the same bounded JSON scanner and nested field validation. Schedule lookahead intersects weekly periods with each calendar day before projecting dates, including overnight and Sunday spillover; pauses retain half-open semantics. Application activation checks reuse the polling catalog rather than enumerating it repeatedly, while exact PID/start-time checks still reject exited instances before renewing control.
 
 ## Selection, defaults and global shortcuts
 

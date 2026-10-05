@@ -121,9 +121,11 @@ public enum ScheduleEngine {
         for _ in 0..<33 {
             guard day < end, let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { break }
             let weekday = (calendar.component(.weekday, from: day) + 5) % 7
+            let daySegment = WeekSegment(start: weekday * 1440, end: (weekday + 1) * 1440)
             for period in configuration.periods where period.enabled {
-                for segment in period.segments where segment.start / 1440 == weekday {
-                    let low = segment.start % 1440, high = segment.end - weekday * 1440
+                for segment in period.segments {
+                    guard let overlap = segment.intersection(daySegment) else { continue }
+                    let low = overlap.start - daySegment.start, high = overlap.end - daySegment.start
                     guard let begin = calendar.date(bySettingHour: low / 60, minute: low % 60, second: 0, of: day),
                           let finish = high == 1440 ? nextDay : calendar.date(bySettingHour: high / 60, minute: high % 60, second: 0, of: day) else { continue }
                     let lower = max(start, begin), upper = min(end, finish)

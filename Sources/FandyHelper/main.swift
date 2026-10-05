@@ -34,7 +34,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         queue.sync { _ = coordinator.startup() }
         let source = DispatchSource.makeTimerSource(queue: queue)
         source.schedule(deadline: .now(), repeating: .milliseconds(100))
-        source.setEventHandler { [weak self] in self?.recovery.watchdog(); self?.coordinator.watchdog() }
+        source.setEventHandler { [weak self] in self?.watchdog() }
         source.resume(); timer = source
         // Root launch daemons use IOPM notifications; the helper does not depend on GUI sleep messages.
         power = try PowerNotifications(queue: DispatchQueue(label: "is.dsr.fandy.helper.power")) { [self] in
@@ -47,15 +47,29 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         logger.notice("Helper ready; restoration qualification: \(DeviceRegistry.current.capabilities.canRestore), manual qualification: \(DeviceRegistry.current.capabilities.canControl)")
         listener.activate(); RunLoop.current.run()
     }
+    private func watchdog() {
+        let owner = coordinator.leaseOwner ?? recovery.activeOwner
+        do {
+            hardware.admittedOperation = try owner.map { try hardware.cancellation.token(owner: $0) } ?? hardware.cancellation.token()
+            defer { hardware.admittedOperation = nil }
+            recovery.watchdog(); coordinator.watchdog()
+        } catch {
+            if let owner { coordinator.disconnected(owner: owner); recovery.disconnected(owner: owner) }
+        }
+    }
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         guard connection.effectiveUserIdentifier != 0 else { return false }
         let object = HelperConnection(service: self)
         guard requests.connect(owner: object.owner) else { return false }
+        guard hardware.cancellation.connect(owner: object.owner) else {
+            _ = requests.close(owner: object.owner); requests.disconnected(owner: object.owner)
+            return false
+        }
         connection.exportedInterface = NSXPCInterface(with: FanHelperXPC.self)
         connection.exportedObject = object
         connection.invalidationHandler = { [self] in
             guard requests.close(owner: object.owner) else { return }
-            hardware.cancellation.cancel()
+            hardware.cancellation.disconnected(owner: object.owner)
             queue.async { [self] in
                 coordinator.disconnected(owner: object.owner)
                 recovery.disconnected(owner: object.owner)
@@ -80,7 +94,7 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
     init(service: HelperService) { self.service = service }
     private func reject() {
         guard let ticket = service.requests.rejection(owner: owner) else { return }
-        service.hardware.cancellation.cancel()
+        service.hardware.cancellation.cancel(owner: owner)
         service.queue.async { [self] in
             defer { service.requests.finish(ticket) }
             if service.requests.isOpen(ticket) { service.coordinator.reject(owner: owner); service.recovery.reject(owner: owner) }
@@ -91,7 +105,9 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
         let ticket: HelperRequestGate.Ticket
         do { ticket = try service.requests.admit(owner: owner, bytes: bytes, now: ProcessInfo.processInfo.systemUptime) }
         catch { reject(); reply.call(nil, error.localizedDescription); return }
-        let hardwareToken = service.hardware.cancellation.token()
+        let hardwareToken: HardwareOperationFence.Token
+        do { hardwareToken = try service.hardware.cancellation.token(owner: owner) }
+        catch { service.requests.finish(ticket); reply.call(nil, error.localizedDescription); return }
         service.queue.async { [self] in
             defer { service.requests.finish(ticket) }
             guard service.requests.isOpen(ticket) else { reply.call(nil, ControlError.staleSession.localizedDescription); return }

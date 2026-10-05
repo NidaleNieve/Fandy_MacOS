@@ -93,3 +93,98 @@ import Testing
         for line in data.split(separator: 10) { _ = try JSONSerialization.jsonObject(with: Data(line)) }
     }
 }
+
+/// Filesystem and failure adapters expose writes through the same serial interface.
+private final class PersistenceWrites: @unchecked Sendable {
+    private let lock = NSLock()
+    private var archives: [ProfileArchive] = []
+    private var shouldFail = false
+    var count: Int { lock.lock(); defer { lock.unlock() }; return archives.count }
+    var latest: ProfileArchive? { lock.lock(); defer { lock.unlock() }; return archives.last }
+    func failNext() { lock.lock(); defer { lock.unlock() }; shouldFail = true }
+    func write(_ archive: ProfileArchive) throws {
+        lock.lock(); defer { lock.unlock() }
+        archives.append(archive)
+        if shouldFail { shouldFail = false; throw ControlError.helperUnavailable }
+    }
+}
+
+@Test func unchangedPersistenceAcknowledgesRevisionWithoutSelectionOnlyWrites() async throws {
+    let writes = PersistenceWrites(), profiles = BuiltInProfiles.all
+    let persistence = ProfilePersistence(write: { try writes.write($0) })
+    try await persistence.save(profiles, selection: "system", revision: 1)
+    try await persistence.save(profiles, selection: "max", revision: 3)
+    #expect(writes.count == 1)
+    var old = AutomationConfiguration(); old.preferences.defaultProfileID = "gaming"
+    try await persistence.save(profiles, selection: "gaming", revision: 2, automation: old)
+    #expect(writes.count == 1) // Even a skipped write advances the stale-revision fence.
+    try await persistence.save(profiles, selection: "gaming", revision: 4, automation: old)
+    #expect(writes.count == 2 && writes.latest?.automation == old)
+    var edited = profiles; edited[2].floor = 12
+    try await persistence.save(edited, selection: "system-plus", revision: 5, automation: old)
+    #expect(writes.count == 3 && writes.latest?.profiles == edited)
+}
+
+@Test func failedPersistenceNeverAcknowledgesAndSameRevisionCanRetry() async throws {
+    let writes = PersistenceWrites(), persistence = ProfilePersistence(write: { try writes.write($0) })
+    try await persistence.save(BuiltInProfiles.all, selection: nil, revision: 1)
+    var changed = AutomationConfiguration(); changed.preferences.defaultProfileID = "school"
+    writes.failNext()
+    await #expect(throws: ControlError.helperUnavailable) {
+        try await persistence.save(BuiltInProfiles.all, selection: nil, revision: 3, automation: changed)
+    }
+    try await persistence.save(BuiltInProfiles.all, selection: nil, revision: 2)
+    #expect(writes.count == 2)
+    try await persistence.save(BuiltInProfiles.all, selection: nil, revision: 3, automation: changed)
+    #expect(writes.count == 3 && writes.latest?.automation == changed)
+    writes.failNext()
+    await #expect(throws: ControlError.helperUnavailable) {
+        try await persistence.save(BuiltInProfiles.all, selection: nil, revision: 4)
+    }
+    // A failed adapter may have written before throwing. Restore the previous successful
+    // configuration through a real write, rather than trusting the old acknowledgement.
+    try await persistence.save(BuiltInProfiles.all, selection: nil, revision: 5, automation: changed)
+    #expect(writes.count == 5 && writes.latest?.automation == changed)
+}
+
+@Test(arguments: ["curve", "point", "target"])
+func everyProfileImportRejectsUnknownNestedAuthorityFields(location: String) throws {
+    var custom = BuiltInProfiles.school.duplicated(); custom.name = "Shared"
+    let legacy = try ProfileInterchange.encode([custom])
+    let current = try ScheduledProfileInterchange.encode(custom, automation: .init())
+    let full = try ConfigurationInterchange.encode(.init(profiles: BuiltInProfiles.all + [custom], automation: .init()))
+    for (format, bytes) in [legacy, current, full].enumerated() {
+        var root = try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+        var profiles = try #require(root["profiles"] as? [[String: Any]])
+        let index = format == 2 ? profiles.count - 1 : 0
+        if location == "target" {
+            profiles[index]["targetTemperature"] = ["input": "chip", "celsius": 65, "qualified": true]
+        } else {
+            var curves = try #require(profiles[index]["curves"] as? [[String: Any]])
+            if location == "curve" { curves[0]["qualified"] = true }
+            else {
+                var points = try #require(curves[0]["points"] as? [[String: Any]])
+                points[0]["manualRPM"] = 8000; curves[0]["points"] = points
+            }
+            profiles[index]["curves"] = curves
+        }
+        root["profiles"] = profiles
+        let hostile = try JSONSerialization.data(withJSONObject: root)
+        if format == 0 {
+            #expect(throws: ControlError.malformedMessage) { try ProfileInterchange.decode(hostile, existingCount: 6) }
+        } else if format == 1 {
+            #expect(throws: ScheduleError.self) { try ScheduledProfileInterchange.decode(hostile, existingCount: 6) }
+        } else {
+            #expect(throws: ScheduleError.self) { try ConfigurationInterchange.decode(hostile) }
+        }
+    }
+}
+
+@Test func sharedImportDepthScannerIgnoresEscapedBracesAndRejectsDeepUnknownFields() throws {
+    var profile = BuiltInProfiles.school.duplicated(); profile.name = #"Braces [ { \"quoted\" } ]"#
+    let bytes = try ProfileInterchange.encode([profile])
+    #expect(try ProfileInterchange.decode(bytes, existingCount: 6).first?.name == profile.name)
+    let nested = Data((#"{"version":1,"profiles":[],"extra":"# + String(repeating: "[", count: 33) + "0" + String(repeating: "]", count: 33) + "}").utf8)
+    #expect(throws: ControlError.malformedMessage) { try ProfileInterchange.decode(nested, existingCount: 6) }
+    #expect(throws: ScheduleError.self) { try ConfigurationInterchange.decode(nested) }
+}

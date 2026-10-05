@@ -5,6 +5,10 @@ import Testing
 @testable import FandyApp
 @testable import FandyCore
 
+@MainActor private final class ApplicationConditionCatalog {
+    var processes: [RunningProcess] = []
+}
+
 @Test func fanMenuPreferencesDefaultOnAndRoundTrip() throws {
     let old = try JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8))
     #expect(old.showFanSpeedBar && old.showFanSpeedNumbers)
@@ -12,19 +16,23 @@ import Testing
     let restored = try ConfigurationInterchange.decode(ConfigurationInterchange.encode(.init(profiles: BuiltInProfiles.all, automation: config)))
     #expect(!restored.automation.preferences.showFanSpeedBar && !restored.automation.preferences.showFanSpeedNumbers)
 }
-@MainActor @Test func manualApplicationConditionWaitsThenExpiresWhenObservedInstanceEnds() {
+@MainActor @Test func manualApplicationConditionWaitsThenExpiresWhenObservedInstanceEnds() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }
-    var catalog: [RunningProcess] = []
-    let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true, applicationCatalog: { catalog })
+    let catalog = ApplicationConditionCatalog()
+    let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true, applicationCatalog: { catalog.processes })
     var rule = ProfileActivationDefault(); rule.kind = .application; rule.applicationID = "example.game"; rule.applicationName = "Game"
     model.setActivationDefault(rule, profileID: "gaming"); model.select("gaming")
     #expect(model.machine.selected.id == "gaming" && model.awaitingApplicationID == rule.applicationID)
     model.expireActivation(); #expect(model.manualIntent != nil)
-    catalog = [RunningProcess(pid: -1, launched: Date(), name: "Game", bundleID: rule.applicationID, icon: nil)]
+    let process = Process(); process.executableURL = URL(fileURLWithPath: "/bin/sleep"); process.arguments = ["30"]; try process.run()
+    defer { if process.isRunning { process.terminate() }; process.waitUntilExit() }
+    let observed = try #require(ProcessCatalog.list(includeHelpers: true).first { $0.pid == process.processIdentifier })
+    catalog.processes = [RunningProcess(pid: observed.pid, launched: observed.launched, name: "Game", bundleID: rule.applicationID, icon: nil)]
+    model.refreshApplicationAvailability(force: true)
+    process.terminate(); process.waitUntilExit()
     model.expireActivation()
-    // The catalog found an instance that already ended. Fresh process identity
-    // rejects it and releases the activation rather than retaining stale control.
+    // A cached observation cannot retain an instance that has since exited.
     #expect(model.manualIntent == nil && model.awaitingApplicationID == nil && model.machine.selected.id == "system")
 }
 @MainActor @Test func longCancellationKeepsFullAccessibleTitleInWrappedRow() throws {
@@ -74,7 +82,7 @@ import Testing
     #expect(model.manualIntent?.limit == .forever && model.activationDescription == "Manual · until changed")
 }
 
-@Test func compactMenuTemperaturesKeepMetadataOutOfVisibleReadings() {
+@MainActor @Test func compactMenuTemperaturesKeepMetadataOutOfVisibleReadings() {
     #expect(MenuTemperatureReadout.compact("CPU Average · estimate") == "CPU Average")
     #expect(MenuTemperatureReadout.temperature("48.2°C · estimate") == "48.2°C")
     #expect(MenuTemperatureReadout.temperature("48°C ≈") == "48°C")

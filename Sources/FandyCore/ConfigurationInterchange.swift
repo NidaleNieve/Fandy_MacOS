@@ -140,7 +140,7 @@ enum ImportValidation {
             if quoted { if escaped { escaped = false } else if byte == 92 { escaped = true } else if byte == 34 { quoted = false } }
             else if byte == 34 { quoted = true }
             else if byte == 123 || byte == 91 { depth += 1; if depth > 32 { throw ScheduleError("JSON nesting exceeds 32 levels.") } }
-            else if byte == 125 || byte == 93 { depth -= 1 }
+            else if byte == 125 || byte == 93 { depth -= 1; if depth < 0 { throw ScheduleError("Unbalanced JSON nesting.") } }
         }
         guard depth == 0, !quoted, let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ScheduleError("Expected a JSON object.") }
         return root

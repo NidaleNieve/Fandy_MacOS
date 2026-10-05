@@ -160,3 +160,31 @@ private func date(_ value: String) -> Date { ISO8601DateFormatter().date(from: v
     let text = #"{"version":true,"entries":[]}"#
     #expect(throws: ScheduleError.self) { try ScheduleTextImport.decode(text, profiles: BuiltInProfiles.all) }
 }
+
+@Test func overnightLookaheadClipsBothCalendarDaysAndQueryEndpoints() {
+    var config = AutomationConfiguration(); config.periods = [period("school", 2, 1110, 145)]
+    func activity(_ start: String, _ end: String) -> Bool {
+        ScheduleEngine.hasActivity(in: config, after: date(start), before: date(end), calendar: utc)
+    }
+    #expect(activity("2026-10-06T18:30:00Z", "2026-10-06T19:00:00Z"))
+    #expect(activity("2026-10-06T23:59:00Z", "2026-10-07T00:01:00Z"))
+    #expect(activity("2026-10-07T00:00:00Z", "2026-10-07T02:25:00Z"))
+    #expect(!activity("2026-10-06T18:00:00Z", "2026-10-06T18:30:00Z"))
+    #expect(!activity("2026-10-07T02:25:00Z", "2026-10-07T03:00:00Z"))
+    #expect(!activity("2026-10-07T00:00:00Z", "2026-10-07T00:00:00Z"))
+    config.pauses = [SchedulePause(start: date("2026-10-06T18:30:00Z"), end: date("2026-10-07T01:00:00Z"))]
+    #expect(!activity("2026-10-06T18:30:00Z", "2026-10-07T01:00:00Z"))
+    #expect(activity("2026-10-07T01:00:00Z", "2026-10-07T02:25:00Z"))
+    config.pauses.append(SchedulePause(profileID: "school", start: date("2026-10-07T01:00:00Z"), end: date("2026-10-07T02:25:00Z")))
+    #expect(!activity("2026-10-06T18:30:00Z", "2026-10-07T02:25:00Z"))
+    config.pauses[1].profileID = "gaming"
+    #expect(activity("2026-10-07T01:00:00Z", "2026-10-07T02:25:00Z"))
+}
+
+@Test func overnightLookaheadIncludesSundayWeekWrap() {
+    var config = AutomationConfiguration(); config.periods = [period("school", 7, 1110, 145)]
+    for (start, end) in [("2026-10-11T23:59:00Z", "2026-10-12T00:01:00Z"), ("2026-10-12T01:00:00Z", "2026-10-12T02:00:00Z")] {
+        #expect(ScheduleEngine.hasActivity(in: config, after: date(start), before: date(end), calendar: utc))
+    }
+    #expect(!ScheduleEngine.hasActivity(in: config, after: date("2026-10-12T02:25:00Z"), before: date("2026-10-12T03:00:00Z"), calendar: utc))
+}

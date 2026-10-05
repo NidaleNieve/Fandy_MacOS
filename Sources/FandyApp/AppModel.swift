@@ -28,6 +28,7 @@ import ServiceManagement
     var observedApplicationInstances: Set<String>?
     var pendingApplicationLaunches: Set<String> = []
     private var applicationCatalogRefreshedAt = -Double.infinity
+    private(set) var runningApplications: [RunningProcess] = []
     let applicationCatalog: @MainActor () -> [RunningProcess]
     var isQuitting: Bool { quitting }
     func clockNow() -> Double { clock() }
@@ -237,7 +238,6 @@ import ServiceManagement
             }
             logger.notice("Profile changed to \(profile.name, privacy: .public)")
             Task { await execute(effect) }
-            save()
         } catch { draftError = error.localizedDescription }
     }
     func refreshApplicationAvailability(force: Bool = false) {
@@ -248,6 +248,7 @@ import ServiceManagement
             pendingApplicationLaunches.formUnion(running.filter { !previous.contains("\($0.pid):\($0.launched.timeIntervalSince1970)") }.compactMap(\.bundleID))
         }
         observedApplicationInstances = instances
+        runningApplications = running
         runningApplicationIDs = Set(running.compactMap(\.bundleID))
         applicationCatalogRefreshedAt = clock()
     }
