@@ -12,6 +12,8 @@ private final class CompatibilitySMC: SMCStructTransport {
     var failKey: String?
     var failRead: String?
     var blockDirect = false
+    var modeDelay = 0.0
+    var pendingModes: [String: Double] = [:]
     var now = 10.0
     init(model: String = "Mac16,8", chip: String = "Apple M4 Pro", count: Int = 2, fixed: Bool = false, forceTest: Bool = true) {
         identity = DeviceIdentity(model: model, chip: chip, appleSilicon: true)
@@ -38,6 +40,9 @@ private final class CompatibilitySMC: SMCStructTransport {
             value: value, error: nil, sampledAt: now)
     }
     func read(_ key: String) throws -> DiscoveredSensor {
+        if let deadline = pendingModes[key], now >= deadline {
+            put(key, 1, "ui8 "); pendingModes[key] = nil
+        }
         if failRead == key { throw HardwareError.invalidMetadata }
         guard var value = values[key] else { throw HardwareError.smc(Int32(bitPattern: 0xFAD00084)) }
         value.sampledAt = now; return value
@@ -61,6 +66,9 @@ private final class CompatibilitySMC: SMCStructTransport {
             else {
                 let value = SMCDecoder.decode(type: old.type, bytes: Array(input[48..<(48 + old.size)]))!
                 put(key, value, old.type, attributes: old.attributes); writes.append((key, value))
+                if key.hasSuffix("Md"), value == 1, modeDelay > 0 {
+                    put(key, 0, "ui8 "); pendingModes[key] = now + modeDelay
+                }
                 if key == "Ftst" && value == 1 {
                     for id in 0..<Int(values["FNum"]!.value!) { put("F\(id)Md", 0, "ui8 ") }
                 }
@@ -151,6 +159,19 @@ func referenceFamiliesSelectTheirOwnCompleteGroups(_ item: (String, String)) thr
     #expect(fixture.values["Ftst"]?.value == 1)
     #expect(fixture.now < 17)
 }
+@Test func delayedM2ManualAcknowledgementPrecedesEveryTarget() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+    fixture.modeDelay = 0.2
+    try fixture.apply()
+    #expect(fixture.now >= 10.2)
+    #expect(fixture.writes.map(\.0) == ["F0Md", "F1Md", "F0Tg", "F1Tg"])
+}
+@Test func missingM2ManualAcknowledgementTimesOutWithoutTargets() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+    fixture.modeDelay = 20
+    #expect(throws: ControlError.staleSession) { try fixture.apply() }
+    #expect(fixture.writes.map(\.0) == ["F0Md", "F1Md"])
+}
 @Test func referenceFixedPointTargetsAndTwoDifferentBoundsAreValidated() throws {
     let fixture = CompatibilitySMC(fixed: true); try fixture.apply()
     #expect(fixture.values["F0Tg"]?.value == 2500); #expect(fixture.values["F1Tg"]?.value == 2600)
@@ -169,6 +190,21 @@ func referenceFamiliesSelectTheirOwnCompleteGroups(_ item: (String, String)) thr
     }
     #expect(throws: ControlError.restorationUnverified) {
         try FanHandover.awaitAutomatic(ids: [0], deadline: 12, clock: { 10 }, cancelled: {}, read: { _ in .manual }, pause: {})
+    }
+}
+@Test func M2ReleaseWaitsForAutomaticAcknowledgementWithoutRewriting() throws {
+    var now = 10.0
+    try FanHandover.awaitRelease(deadline: 11, clock: { now }, read: { now < 10.2 ? .manual : .automatic }, pause: { now += 0.05 })
+    #expect(now >= 10.2 && now < 11)
+    try FanHandover.awaitRelease(deadline: 11, clock: { now }, read: { .system }, pause: { Issue.record("Already released mode must not wait") })
+}
+@Test func stalledOrUnknownReleaseCannotReportSuccess() {
+    var now = 10.0
+    #expect(throws: ControlError.staleSession) {
+        try FanHandover.awaitRelease(deadline: 10.2, clock: { now }, read: { .manual }, pause: { now += 0.05 })
+    }
+    #expect(throws: ControlError.restorationUnverified) {
+        try FanHandover.awaitRelease(deadline: 11, clock: { now }, read: { .unknown }, pause: {})
     }
 }
 @Test func cancelledAdmissionAndPartialTargetFailureCannotFinishTransaction() {

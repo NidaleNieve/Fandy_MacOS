@@ -161,6 +161,22 @@ public final class HardwareOperationFence: @unchecked Sendable {
 
 /// Bounded handover polling, independent of transport and wall time in tests.
 public enum FanHandover {
+    /// An accepted automatic-mode write may remain manual briefly in readback.
+    /// Wait for acknowledgement without issuing another command or accepting
+    /// unknown ownership; the caller still attempts every fan on failure.
+    public static func awaitRelease(deadline: Double, clock: () -> Double,
+        read: () throws -> FanMode, pause: () -> Void) throws {
+        guard deadline.isFinite else { throw ControlError.invalidNumber }
+        while true {
+            let now = clock()
+            guard now.isFinite, now < deadline else { throw ControlError.staleSession }
+            switch try read() {
+            case .automatic, .system: return
+            case .manual: pause()
+            default: throw ControlError.restorationUnverified
+            }
+        }
+    }
     public static func awaitAutomatic(ids: [Int], deadline: Double, clock: () -> Double,
         cancelled: () throws -> Void, read: (Int) throws -> FanMode, pause: () -> Void) throws {
         var pending = Set(ids)

@@ -64,8 +64,21 @@ public enum ReferenceFanTransaction {
                 try interface.startManual(id: id, metadata: read(interface.modeKeys[id]!), transport: transport)
             }
         }
-        // Verify all manual modes and stable bounds before writing either target.
-        let admitted = try fans()
+        // Accepted writes can become visible asynchronously on M2 firmware.
+        // Poll readback within the existing admission deadline; never rewrite
+        // modes or send a target until every fan independently acknowledges.
+        var admitted = try fans()
+        while true {
+            try current()
+            guard admitted.count == baseline.count, admitted.allSatisfy({ fan in
+                (fan.mode == .automatic || fan.mode == .manual) && baseline.contains {
+                    $0.id == fan.id && $0.minimumRPM == fan.minimumRPM && $0.maximumRPM == fan.maximumRPM
+                }
+            }) else { throw ControlError.restorationUnverified }
+            if admitted.allSatisfy({ $0.mode == .manual }) { break }
+            pause()
+            admitted = try fans()
+        }
         guard admitted.count == baseline.count, admitted.allSatisfy({ fan in
             fan.mode == .manual && baseline.contains { $0.id == fan.id && $0.minimumRPM == fan.minimumRPM && $0.maximumRPM == fan.maximumRPM }
         }) else { throw ControlError.restorationUnverified }

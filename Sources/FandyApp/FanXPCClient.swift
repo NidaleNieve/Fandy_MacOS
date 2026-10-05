@@ -311,8 +311,13 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
         if service.status != .notRegistered { try await unregisterService() }
     }
     static func uninstall(client:FanXPCClient) async throws {
-        try await client.restoreAutomatic()
-        try await unregisterService()
+        // An unapproved service cannot accept XPC requests or own a fan lease.
+        // Unregister it directly so a disabled installation can be replaced.
+        // A running, approved helper still requires verified handback first.
+        if service.status == .enabled { try await client.restoreAutomatic() }
+        if service.status != .notRegistered && service.status != .notFound {
+            try await unregisterService()
+        }
     }
     static func unregisterService() async throws { try await unregister(service: service) }
     private static func unregister(service: SMAppService) async throws {
