@@ -24,6 +24,11 @@ class UpdateReleaseTests(unittest.TestCase):
         self.assertTrue(info['SUFeedURL'].startswith('https://raw.githubusercontent.com/'))
         self.assertEqual(len(info['SUPublicEDKey']), 44)
         self.assertIn('exact: "2.10.0"', (ROOT / 'Package.swift').read_text())
+    def test_helper_has_explicit_argument_vector(self):
+        helper = plistlib.loads((ROOT / 'Config/is.dsr.fandy.fan-service.plist').read_bytes())
+        self.assertEqual(helper['BundleProgram'], 'Contents/Library/HelperTools/FandyFanHelper')
+        self.assertEqual(helper['ProgramArguments'], ['FandyFanHelper'])
+        self.assertNotIn('Program', helper)
     def test_framework_signing_is_inside_out(self):
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory)/'Fandy.app'

@@ -10,6 +10,7 @@ import ServiceManagement
     private(set) var preparingUpdate = false
     private var updatePrepared = false
     private var helperRefreshAttempted = false
+    private var helperReconnectAttempted = false
     private var refreshingHelper = false
     var profiles: [Profile]
     var automation: AutomationConfiguration
@@ -210,8 +211,15 @@ import ServiceManagement
     }
     func start() {
         guard loop == nil, !quitting else { return }
-        observePower(); configureLogin(); prepareHelperSetup()
+        observePower(); configureLogin()
         loop = Task { [weak self] in
+            if let self, !self.simulation, let native = self.client as? FanXPCClient,
+               Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier {
+                do { try await HelperManager.migrateLegacyService(client: native) }
+                catch { self.helperSetupError = "Fan helper migration failed. Reopen Fandy to retry."; return }
+                guard !Task.isCancelled, !self.quitting else { return }
+                self.prepareHelperSetup()
+            }
             // First-launch/reconnect handback is an actual verified transaction, not
             // an assumed state or a temperature-gated operation.
             if let self, !self.simulation, self.capabilities.canRestore, self.helperAvailable() {
@@ -277,7 +285,7 @@ import ServiceManagement
                 let reading: HardwareSnapshot
                 var observedBlocker: String?
                 if helperAvailable() {
-                    let status = try await client.status()
+                    let status = try await connectedHelperStatus(token: token)
                     guard token == lifecycleToken, !quitting, !preparingUpdate else { return }
                     if client is FanXPCClient, Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
                        status.helperBuild != FandyBuild.identifier {
@@ -344,6 +352,32 @@ import ServiceManagement
                     await execute(machine.observationFailed(error, restoration: restorationReport))
                 }
             }
+        }
+    }
+    /// SMAppService can remain enabled while launchd retains a bundle reference
+    /// invalidated by app replacement. Rebind once; startup in the new helper
+    /// restores automatic control before accepting leases. No retry loop fights
+    /// a disabled service, authentication failure or another controller.
+    private func connectedHelperStatus(token: UUID) async throws -> HelperStatus {
+        do { return try await client.status() }
+        catch ControlError.helperUnavailable {
+            guard let native = client as? FanXPCClient,
+                  Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
+                  HelperManager.service.status == .enabled, !helperReconnectAttempted,
+                  token == lifecycleToken, !quitting, !preparingUpdate else { throw ControlError.helperUnavailable }
+            helperReconnectAttempted = true; refreshingHelper = true; helperHealth = .unavailable
+            defer { refreshingHelper = false }
+            automationFailed()
+            await execute(machine.fail(ControlError.helperUnavailable))
+            // Best-effort release is independent of sensor availability. If IPC
+            // is dead, only the replacement helper can verify startup handback.
+            try? await native.restoreAutomatic()
+            guard token == lifecycleToken, !quitting, !preparingUpdate else { throw ControlError.staleSession }
+            try await HelperManager.unregisterService()
+            native.disconnectForRecoveryTest()
+            guard token == lifecycleToken, !quitting, !preparingUpdate else { throw ControlError.staleSession }
+            try HelperManager.install()
+            throw ControlError.helperUnavailable // Next tick must independently acknowledge restoration.
         }
     }
     private func stepController(_ reading: HardwareSnapshot, now: Double) async {

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FandyCore
+import Sparkle
 @testable import FandyApp
 
 private actor UpdateClient: PrivilegedFanClient {
@@ -64,4 +65,14 @@ private actor UpdateClient: PrivilegedFanClient {
     do { try await model.prepareForUpdate(); Issue.record("Lost helper authorized replacement") } catch {}
     model.stop()
     #expect(!model.preparingUpdate && !model.canTerminate)
+}
+
+@MainActor @Test func acceptedDownloadNeedsNoSecondInstallConfirmation() {
+    let driver = AcceptedUpdateDriver(hostBundle: .main, delegate: nil)
+    driver.acceptedInstallation = true
+    var installed = false
+    driver.showReady(toInstallAndRelaunch: { installed = $0 == .install })
+    #expect(installed)
+    driver.dismissUpdateInstallation()
+    #expect(!driver.acceptedInstallation)
 }

@@ -267,7 +267,23 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
 @MainActor enum HelperManager {
     static var service:SMAppService { .daemon(plistName:FandyIdentity.launchDaemonPlist) }
     static var installed:Bool { service.status == .enabled }
+    private static var legacyService: SMAppService { .daemon(plistName: FandyIdentity.legacyLaunchDaemonPlist) }
+    /// Older development registrations retain validation category 3 after an
+    /// upgrade to Developer ID (category 6), even across unregister/register.
+    /// Remove that registration before creating the distribution service; the
+    /// XPC name, helper signing identity and caller authentication stay fixed.
+    static func migrateLegacyService(client: FanXPCClient) async throws {
+        try requireInstalledLocation()
+        guard legacyService.status == .enabled || legacyService.status == .requiresApproval else { return }
+        if legacyService.status == .enabled {
+            do { try await client.restoreAutomatic() }
+            catch ControlError.helperUnavailable { /* Dead legacy job: replacement startup must verify release. */ }
+        }
+        try await unregister(service: legacyService)
+        client.disconnectForRecoveryTest()
+    }
     static func install() throws {
+        guard legacyService.status != .enabled && legacyService.status != .requiresApproval else { throw ControlError.helperUnavailable }
         guard DeviceRegistry.current.capabilities.canRestore else { throw ControlError.hardwareUnqualified }
         try requireInstalledLocation()
         switch service.status {
@@ -298,7 +314,8 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
         try await client.restoreAutomatic()
         try await unregisterService()
     }
-    static func unregisterService() async throws {
+    static func unregisterService() async throws { try await unregister(service: service) }
+    private static func unregister(service: SMAppService) async throws {
         // Bridge the documented completion API on the main actor. macOS 15's SDK
         // does not mark SMAppService Sendable, so its actor-owned wrapper must not
         // be passed to the imported nonisolated async overload.
@@ -308,6 +325,13 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
                 else { continuation.resume(returning: ()) }
             }
         }
+        // Completion can precede publication of the new status. Do not treat a
+        // stale enabled observation as a successfully registered replacement.
+        for _ in 0..<50 {
+            if service.status == .notRegistered || service.status == .notFound { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        throw ControlError.helperUnavailable
     }
     private static func requireInstalledLocation() throws {
         let url = Bundle.main.bundleURL.resolvingSymlinksInPath()

@@ -76,6 +76,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .unregister: try await HelperManager.uninstallObservation(client: client)
             case .status, .check, .productionSecurity: break
             case .registerRestoration:
+                try await HelperManager.migrateLegacyService(client: client)
                 guard [.restorationQualification, .recoveryQualification, .maximumControl, .curveQualification, .qualifiedControl].contains(DeviceRegistry.current.capabilities.stage),
                       DeviceRegistry.current.capabilities.canRestore else { throw ControlError.unauthorized }
                 try HelperManager.install()

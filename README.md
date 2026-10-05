@@ -47,7 +47,7 @@ Create and edit custom profiles with intuitive graphs for chip and chassis tempe
 - **Schedules:** choose weekday periods, overnight schedules and vacation pauses.
 - **Customizable menu temperatures:** choose the sensor readings shown inside the menu, including CPU/GPU averages and chassis temperatures. Live readings are also available beside the profile editor.
 - **At a glance:** show fan speeds and assign keyboard shortcuts.
-- **Stay up to date:** automatic weekly update checks, or choose your own frequency in Settings. Verified updates install when Fandy quits.
+- **Stay up to date:** automatic updates at your preferred frequency, or check manually in Settings.
 - **Make it portable:** export individual profiles with their schedules, or move your whole configuration to another Mac.
 
 ## Compatibility

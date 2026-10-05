@@ -14,7 +14,7 @@ import Testing
 }
 @Test func updateIntervalsAndTwoWeekReminderUseDeterministicClock() {
     let epoch = Date(timeIntervalSince1970: 1_000)
-    var preferences = AppPreferences(); preferences.updateFrequency = .never
+    var preferences = AppPreferences(); preferences.updateFrequency = .weekly
     let automatic = UpdatePolicy(preferences)
     #expect(automatic.checksEnabled && automatic.interval == 604_800)
     #expect(!automatic.checkIsDue(lastCheck: epoch, now: epoch.addingTimeInterval(604_799)))
@@ -26,7 +26,10 @@ import Testing
     for frequency in [UpdateFrequency.daily, .weekly, .monthly] {
         preferences.updateFrequency = frequency
         #expect(UpdatePolicy(preferences).interval == frequency.interval)
+        #expect(!UpdatePolicy(preferences).checkIsDue(lastCheck: nil, now: epoch))
+        preferences.automaticUpdates = true
         #expect(UpdatePolicy(preferences).checkIsDue(lastCheck: nil, now: epoch))
+        preferences.automaticUpdates = false
         #expect(!UpdatePolicy(preferences).checkIsDue(lastCheck: epoch, now: epoch.addingTimeInterval(-1)))
     }
 }
@@ -52,5 +55,16 @@ import Testing
     let status = try JSONDecoder().decode(HelperStatus.self, from: JSONEncoder().encode(HelperStatus(automaticVerified: true)))
     #expect(status.helperBuild == nil)
     var current = status; current.helperBuild = FandyBuild.identifier
-    #expect(try JSONDecoder().decode(HelperStatus.self, from: JSONEncoder().encode(current)).helperBuild == "12")
+    #expect(try JSONDecoder().decode(HelperStatus.self, from: JSONEncoder().encode(current)).helperBuild == FandyBuild.identifier)
+}
+
+@Test func automaticUpdateFrequencyAppliesOnlyWhenEnabled() {
+    for frequency in UpdateFrequency.allCases {
+        var preferences = AppPreferences(); preferences.updateFrequency = frequency
+        preferences.automaticUpdates = false
+        #expect(!UpdatePolicy(preferences).checksEnabled)
+        preferences.automaticUpdates = true
+        #expect(UpdatePolicy(preferences).checksEnabled == (frequency != .never))
+        #expect(UpdatePolicy(preferences).interval == (frequency.interval ?? 604_800))
+    }
 }

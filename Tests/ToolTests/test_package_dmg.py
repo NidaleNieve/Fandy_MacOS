@@ -14,8 +14,8 @@ class PackagingTests(unittest.TestCase):
     def metadata(self):
         return ({'CFBundleIdentifier': 'is.dsr.fandy', 'CFBundleExecutable': 'Fandy',
                  'CFBundleShortVersionString': '0.1.0', 'CFBundleVersion': '1', 'LSMinimumSystemVersion': '15.0'},
-                {'Label': 'is.dsr.fandy.fan-helper', 'BundleProgram': str(PACKAGE.HELPER),
-                 'MachServices': {'is.dsr.fandy.fan-helper': True}})
+                {'Label': 'is.dsr.fandy.fan-service', 'BundleProgram': str(PACKAGE.HELPER),
+                 'MachServices': {'is.dsr.fandy.fan-helper': True}, 'ProgramArguments': ['FandyFanHelper']})
 
     def test_wrong_identity_helper_path_and_service_are_rejected(self):
         info, service = self.metadata()
@@ -26,7 +26,7 @@ class PackagingTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 PACKAGE.validate_metadata(invalid, service)
         for field, value in [('BundleProgram', '/bin/sh'), ('Label', 'example.fake'),
-                             ('MachServices', {'example.fake': True})]:
+                             ('MachServices', {'example.fake': True}), ('ProgramArguments', ['/bin/sh'])]:
             with self.assertRaises(ValueError):
                 PACKAGE.validate_metadata(info, dict(service, **{field: value}))
 

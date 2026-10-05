@@ -7,7 +7,11 @@ import FandyCore
 /// The application owns the safety boundary before replacing its embedded helper.
 @MainActor @Observable final class UpdateController: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate {
     private weak var model: AppModel?
-    private var controller: SPUStandardUpdaterController!
+    private var updater: SPUUpdater!
+    private var driver: AcceptedUpdateDriver!
+    private var installDownloaded: (() -> Void)?
+    private var reminderAt: Date?
+    private var installingNow = false
     private var appliedPolicy: UpdatePolicy?
     private var preparation: UpdatePreparation!
     private(set) var installationPending = false
@@ -20,9 +24,10 @@ import FandyCore
             guard let model else { throw ControlError.helperUnavailable }
             try await model.prepareForUpdate()
         }
-        controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: self)
+        driver = AcceptedUpdateDriver(hostBundle: .main, delegate: self)
+        updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: self)
         synchronize()
-        do { try controller.updater.start() }
+        do { try updater.start() }
         catch { status = "Updates unavailable. Please reinstall the latest release." }
         synchronize()
     }
@@ -30,17 +35,21 @@ import FandyCore
         guard let model else { return }
         let policy = UpdatePolicy(model.automation.preferences)
         if appliedPolicy != policy {
-            controller.updater.updateCheckInterval = policy.interval
-            controller.updater.automaticallyDownloadsUpdates = policy.automatic
-            controller.updater.automaticallyChecksForUpdates = policy.checksEnabled
-            controller.updater.sendsSystemProfile = false
+            updater.updateCheckInterval = policy.interval
+            updater.automaticallyDownloadsUpdates = policy.automatic
+            updater.automaticallyChecksForUpdates = policy.checksEnabled
+            updater.sendsSystemProfile = false
             appliedPolicy = policy
         }
-        canCheck = controller.updater.canCheckForUpdates
+        canCheck = (updater.canCheckForUpdates || installationPending) && !model.preparingUpdate && !installingNow
+        if policy.automatic, let reminderAt, Date() >= reminderAt, canCheck {
+            self.reminderAt = Date().addingTimeInterval(UpdatePolicy.reminderInterval)
+            presentPendingUpdate()
+        }
     }
     func check() {
-        guard appliedPolicy?.automatic == false, canCheck else { return }
-        controller.checkForUpdates(nil)
+        guard canCheck, model?.preparingUpdate != true else { return }
+        if installationPending { presentPendingUpdate() } else { updater.checkForUpdates() }
     }
     func prepareInstallation() async -> Bool {
         status = "Preparing update…"
@@ -49,8 +58,10 @@ import FandyCore
     }
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
         installationPending = true
-        status = "Update downloaded. Installs when Fandy quits."
-        return false // Retain Sparkle's native two-week reminder and install-on-quit path.
+        installDownloaded = immediateInstallationBlock
+        reminderAt = Date().addingTimeInterval(UpdatePolicy.reminderInterval)
+        status = "Update downloaded. Ready to install."
+        return true // Retain the supported install callback; Settings owns the staged prompt/reminder.
     }
     func updater(_ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem, untilInvokingBlock installHandler: @escaping () -> Void) -> Bool {
         installationPending = true
@@ -58,10 +69,11 @@ import FandyCore
         return true
     }
     func updater(_ updater: SPUUpdater, userDidMake choice: SPUUserUpdateChoice, forUpdate item: SUAppcastItem, state: SPUUserUpdateState) {
-        if choice == .skip { installationPending = false; status = "Update skipped" }
+        if choice == .install { driver.acceptedInstallation = true }
+        if choice == .skip { clearPending(); status = "Update skipped" }
     }
     func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
-        installationPending = false
+        clearPending()
         status = "Update check failed. Try again later."
     }
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
@@ -69,6 +81,25 @@ import FandyCore
             status = "Update check failed. Try again later."
         } else if !installationPending { status = "Up to date" }
         synchronize()
+    }
+    private func presentPendingUpdate() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "A Fandy update is ready to install"
+        alert.informativeText = "Install the downloaded update and restart Fandy now?"
+        alert.addButton(withTitle: "Install Update"); alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn { installNow() }
+    }
+    func installNow() {
+        guard let installDownloaded, !installingNow, model?.preparingUpdate != true else { return }
+        installingNow = true
+        Task {
+            defer { installingNow = false }
+            if await prepareInstallation() { installDownloaded() }
+        }
+    }
+    private func clearPending() {
+        installationPending = false; installDownloaded = nil; reminderAt = nil; driver.acceptedInstallation = false
     }
     nonisolated var supportsGentleScheduledUpdateReminders: Bool { true }
     nonisolated func standardUserDriverWillShowModalAlert() { Task { @MainActor in NSApp.activate(ignoringOtherApps: true) } }
@@ -78,15 +109,19 @@ struct UpdateSettings: View {
     @Bindable var model: AppModel
     var body: some View {
         Section("Updates") {
+            LabeledContent("Version", value: FandyBuild.version).accessibilityIdentifier("settings.updateVersion")
             Toggle("Automatic updates", isOn: Binding(get: { model.automation.preferences.automaticUpdates }, set: { value in
                 model.setPreferences { $0.automaticUpdates = value }; model.updates?.synchronize()
             }))
             Picker("Check frequency", selection: Binding(get: { model.automation.preferences.updateFrequency }, set: { value in
                 model.setPreferences { $0.updateFrequency = value }; model.updates?.synchronize()
             })) { ForEach(UpdateFrequency.allCases) { Text($0.title).tag($0) } }
-            .disabled(model.automation.preferences.automaticUpdates)
+            .disabled(!model.automation.preferences.automaticUpdates)
             Button("Check for Updates…") { model.updates?.check() }
-                .disabled(model.automation.preferences.automaticUpdates || model.updates?.canCheck != true)
+                .disabled(model.updates?.canCheck != true)
+            if model.updates?.installationPending == true {
+                Button("Install Update") { model.updates?.installNow() }.disabled(model.preparingUpdate)
+            }
             if let status = model.updates?.status, !status.isEmpty { Text(status).font(.caption).foregroundStyle(.secondary) }
         }
     }

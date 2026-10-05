@@ -276,9 +276,9 @@ struct SettingsView: View {
     @State private var confirmingReset = false
     @State private var helperStatus = HelperManager.service.status
     var body: some View {
+        VStack(spacing: 0) {
         ScrollView { Form {
             ConfigurationSettings(model: model)
-            UpdateSettings(model: model)
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: { model.setSimulation($0) }))
                 Text("Use simulated temperatures and fans for testing. Physical fan control is disabled.").font(.caption).foregroundStyle(.secondary)
@@ -307,7 +307,9 @@ struct SettingsView: View {
                     .disabled(model.savingCollection)
                 if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
             }
-        }.formStyle(.grouped).padding() }.frame(width: 500, height: 640)
+        }.formStyle(.grouped).padding() }
+        HStack { Spacer(); Text(FandyBuild.version).font(.caption2).foregroundStyle(.tertiary).accessibilityIdentifier("settings.version") }.padding(.trailing, 16).padding(.bottom, 8)
+        }.frame(width: 500, height: 640)
         .alert("Reset Fandy to Defaults?", isPresented: $confirmingReset) {
             Button("Cancel", role: .cancel) {}
             Button("Reset", role: .destructive) { model.resetToDefaults() }

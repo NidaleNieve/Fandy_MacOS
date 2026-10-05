@@ -84,21 +84,26 @@ public enum BuiltInProfiles {
     public static let school: Profile = {
         var comfort = [trackpad, actuator, airflow]
         for i in comfort.indices { for j in comfort[i].points.indices { comfort[i].points[j].percent = max(0, comfort[i].points[j].percent / 2 - 10) } }
-        let quietChip = FanCurve(.chip, [(45,0),(56.9,14),(66.1,35),(73.8,47),(79.3,50),(86.9,52)])
+        let quietChip = FanCurve(.chip, [(45,0),(57.8,9),(70.3,15),(77.2,33),(82.6,47),(86.9,52)])
         var profile = Profile(id: "school", name: "School", bundled: true, curves: [quietChip] + comfort, automaticAtIdle: true)
-        profile.defaultRevision = 2; return profile
+        profile.defaultRevision = 3; return profile
     }()
     /// Migrate only the unchanged factory definition, never a user's tuning.
     public static func upgradeSchoolDefault(_ profile: Profile) -> Profile {
-        var oldCurves = school.curves; oldCurves[0] = chip
-        guard profile.id == "school", profile.name == "School", profile.defaultRevision == 1,
+        var oldCurves = school.curves
+        switch profile.defaultRevision {
+        case 1: oldCurves[0] = chip
+        case 2: oldCurves[0] = FanCurve(.chip, [(45,0),(56.9,14),(66.1,35),(73.8,47),(79.3,50),(86.9,52)])
+        default: return profile
+        }
+        guard profile.id == "school", profile.name == "School", profile.defaultRevision < 3,
               profile.kind == .custom, profile.floor == 0, profile.automaticAtIdle,
               profile.targetTemperature == nil, profile.curves.count == oldCurves.count,
               zip(profile.curves, oldCurves).allSatisfy({ stored, original in
                   stored.enabled == original.enabled && stored.input == original.input &&
                   stored.points.map { [$0.temperature, $0.percent] } == original.points.map { [$0.temperature, $0.percent] }
               }) else { return profile }
-        var updated = profile; updated.curves[0] = school.curves[0]; updated.defaultRevision = 2
+        var updated = profile; updated.curves[0] = school.curves[0]; updated.defaultRevision = 3
         return updated
     }
     public static let all = [system, maximum, systemPlus, coolChassis, gaming, school]

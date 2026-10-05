@@ -4,6 +4,12 @@
 	"classes" = {};
 	"objectVersion" = 77;
 	"objects" = {
+		"634D49EAFD16E401B7DCC928" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/AcceptedUpdateDriver.swift";
+			"sourceTree" = "<group>";
+		};
 		"A7BB7E7C8A0EE64D56C9799C" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -472,6 +478,12 @@
 			"path" = "Sources/FandyMeasurement/main.swift";
 			"sourceTree" = "<group>";
 		};
+		"F4192AA9D6EB80EDACFBE056" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Config/is.dsr.fandy.fan-service.plist";
+			"sourceTree" = "<group>";
+		};
 		"59407258BF62199A2697374B" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "text.plist.xml";
@@ -526,6 +538,7 @@
 		"19F479106CE8C3BA8C106518" = {
 			"isa" = "PBXGroup";
 			"children" = (
+				634D49EAFD16E401B7DCC928,
 				A7BB7E7C8A0EE64D56C9799C,
 				3B4B7C88C79578697F216634,
 				00E82DE6D757878644A692D8,
@@ -605,6 +618,7 @@
 				F6B3CB705C2406A666E17CA8,
 				45E3598E5F4AC81F2D119516,
 				59407258BF62199A2697374B,
+				F4192AA9D6EB80EDACFBE056,
 				ED8F7DF021C9E9C519408A96,
 				7367AB9A454559025D4D8EE2,
 				0BC4784B182C10BFF6539405,
@@ -689,6 +703,10 @@
 			);
 			"defaultConfigurationIsVisible" = 0;
 			"defaultConfigurationName" = "Debug";
+		};
+		"A4D612C9D3910E4F10AAEA98" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 634D49EAFD16E401B7DCC928;
 		};
 		"6A652B1C1F82D240E42D500D" = {
 			"isa" = "PBXBuildFile";
@@ -854,6 +872,7 @@
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = 2147483647;
 			"files" = (
+				A4D612C9D3910E4F10AAEA98,
 				6A652B1C1F82D240E42D500D,
 				43FFA59EE5B6860410079F34,
 				8B498409790EB0DA406AB3A9,
@@ -996,6 +1015,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 59407258BF62199A2697374B;
 		};
+		"C858CF793488417DECF17A19" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = F4192AA9D6EB80EDACFBE056;
+		};
 		"EDC0263597BF60BDB8301E61" = {
 			"isa" = "PBXCopyFilesBuildPhase";
 			"buildActionMask" = 2147483647;
@@ -1014,6 +1037,7 @@
 			"dstSubfolderSpec" = 1;
 			"files" = (
 				1C17FDA0F9A5703C63602A24,
+				C858CF793488417DECF17A19,
 			);
 			"name" = "Embed Launch Daemon";
 			"runOnlyForDeploymentPostprocessing" = 0;

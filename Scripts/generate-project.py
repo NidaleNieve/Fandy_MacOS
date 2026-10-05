@@ -49,6 +49,7 @@ def value(v,level=0):
 files={}
 for path in sorted(root.glob('Sources/**/*.swift')):
  rel=str(path.relative_to(root));files[rel]=add(rel,'PBXFileReference',lastKnownFileType='sourcecode.swift',path=rel,sourceTree='<group>')
+currentplist=add('release-launchd-plist','PBXFileReference',lastKnownFileType='text.plist.xml',path='Config/is.dsr.fandy.fan-service.plist',sourceTree='<group>')
 plist=add('launchd-plist','PBXFileReference',lastKnownFileType='text.plist.xml',path='Config/is.dsr.fandy.fan-helper.plist',sourceTree='<group>')
 notices=add('notices','PBXFileReference',lastKnownFileType='text',path='THIRD_PARTY_NOTICES.md',sourceTree='<group>')
 projectLicense=add('project-license','PBXFileReference',lastKnownFileType='text',path='LICENSE',sourceTree='<group>')
@@ -57,7 +58,7 @@ info=add('app-plist','PBXFileReference',lastKnownFileType='text.plist.xml',path=
 appProduct=add('app-product','PBXFileReference',explicitFileType='wrapper.application',path='Fandy.app',sourceTree='BUILT_PRODUCTS_DIR')
 helperProduct=add('helper-product','PBXFileReference',explicitFileType='compiled.mach-o.executable',path='FandyFanHelper',sourceTree='BUILT_PRODUCTS_DIR')
 products=add('products','PBXGroup',children=[appProduct,helperProduct],name='Products',sourceTree='<group>')
-main=add('main-group','PBXGroup',children=list(files.values())+[plist,info,notices,projectLicense,licenses,products],sourceTree='<group>')
+main=add('main-group','PBXGroup',children=list(files.values())+[plist,currentplist,info,notices,projectLicense,licenses,products],sourceTree='<group>')
 package=add('package','XCLocalSwiftPackageReference',relativePath='.')
 sparkle=add('sparkle-package','XCRemoteSwiftPackageReference',repositoryURL='https://github.com/sparkle-project/Sparkle',requirement={'kind':'exactVersion','version':'2.10.0'})
 projectID=uid('project');helperID=uid('helper-target')
@@ -104,8 +105,9 @@ for name,folder,product,ptype,bundle in [('Fandy','FandyApp',appProduct,'com.app
   dependencies=[add('helper-dependency','PBXTargetDependency',target=helperID,targetProxy=proxy)]
   embed=add('helper-embed','PBXBuildFile',fileRef=helperProduct,settings={'ATTRIBUTES':['CodeSignOnCopy']})
   plistbuild=add('plist-build','PBXBuildFile',fileRef=plist)
+  currentplistbuild=add('release-plist-build','PBXBuildFile',fileRef=currentplist)
   for what,path,build in [('Helper','Contents/Library/HelperTools',embed),('Launch Daemon','Contents/Library/LaunchDaemons',plistbuild)]:
-   phases.append(add('copy-'+what,'PBXCopyFilesBuildPhase',buildActionMask=2147483647,dstPath=path,dstSubfolderSpec=1,files=[build],name='Embed '+what,runOnlyForDeploymentPostprocessing=0))
+   phases.append(add('copy-'+what,'PBXCopyFilesBuildPhase',buildActionMask=2147483647,dstPath=path,dstSubfolderSpec=1,files=([build,currentplistbuild] if what == 'Launch Daemon' else [build]),name='Embed '+what,runOnlyForDeploymentPostprocessing=0))
  else:extra.update({'OTHER_CODE_SIGN_FLAGS':'--identifier is.dsr.fandy.fan-helper','INSTALL_PATH':'/usr/local/libexec'})
  configsID=configs(name,extra)
  add('app-target' if folder=='FandyApp' else 'helper-target','PBXNativeTarget',buildConfigurationList=configsID,buildPhases=phases,buildRules=[],dependencies=dependencies,name=name,packageProductDependencies=packageDeps,productName=name,productReference=product,productType=ptype)

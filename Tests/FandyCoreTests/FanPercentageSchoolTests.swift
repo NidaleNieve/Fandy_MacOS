@@ -38,8 +38,8 @@ import Testing
 
 @Test func quietSchoolMatchesRequestedCurveAndRetainsChipSafety() throws {
     let school = BuiltInProfiles.school
-    #expect(school.defaultRevision == 2 && school.floor == 0 && school.automaticAtIdle)
-    #expect(school.curves[0].points.map { [$0.temperature, $0.percent] } == [[45,0],[56.9,14],[66.1,35],[73.8,47],[79.3,50],[86.9,52]])
+    #expect(school.defaultRevision == 3 && school.floor == 0 && school.automaticAtIdle)
+    #expect(school.curves[0].points.map { [$0.temperature, $0.percent] } == [[45,0],[57.8,9],[70.3,15],[77.2,33],[82.6,47],[86.9,52]])
     #expect(school.curves[1].points.map { [$0.temperature, $0.percent] } == [[27,0],[29,2.5],[31,10],[34,20],[38,32.5],[42,40]])
     #expect(school.curves[2].points.map { [$0.temperature, $0.percent] } == [[25,0],[27,2.5],[29,10],[32,20],[36,32.5],[40,40]])
     #expect(school.curves[3].points.map { [$0.temperature, $0.percent] } == [[33,0],[36,2.5],[40,10],[44,17.5],[50,27.5],[60,40]])
@@ -71,4 +71,12 @@ import Testing
         try JSONEncoder().encode(ProfileArchive(profiles: [edited])).write(to: store.url)
         #expect(store.load().profiles.first { $0.id == "school" } == edited)
     }
+}
+
+@Test func previousQuietSchoolMigratesOnlyUneditedFactoryCurve() {
+    var old = BuiltInProfiles.school; old.defaultRevision = 2
+    old.curves[0] = FanCurve(.chip, [(45,0),(56.9,14),(66.1,35),(73.8,47),(79.3,50),(86.9,52)])
+    #expect(BuiltInProfiles.upgradeSchoolDefault(old).curves == BuiltInProfiles.school.curves)
+    old.curves[0].points[2].percent = 34
+    #expect(BuiltInProfiles.upgradeSchoolDefault(old) == old)
 }
