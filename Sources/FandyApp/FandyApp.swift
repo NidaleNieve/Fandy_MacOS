@@ -62,6 +62,7 @@ struct FandyApp: App {
             guard model.needsHelperSetup, !model.isQuitting else { return }
             self?.showHelperSetup()
         }
+        model.updates = UpdateController(model: model)
         let shortcuts = GlobalShortcuts(); self.shortcuts = shortcuts
         shortcuts.invoke = { [weak self, weak model] action in
             if action == "menu" { self?.menu?.toggle() } else { model?.toggleProfile(action) }
@@ -70,6 +71,7 @@ struct FandyApp: App {
             while !Task.isCancelled {
                 guard let model, let shortcuts else { return }
                 model.shortcutErrors = shortcuts.update(model.automation.preferences.shortcuts)
+                model.updates?.synchronize()
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }

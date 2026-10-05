@@ -5,7 +5,7 @@
 <h1 align="center">Fandy</h1>
 <p align="center">Comfortable typing. Cooler gaming. One-click fan profiles.</p>
 <p align="center">
-  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.1-arm64.dmg"><strong>Download for Mac</strong></a>
+  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.2-arm64.dmg"><strong>Download for Mac</strong></a>
   · <a href="docs/INSTALLATION.md">Installation help</a>
   · <a href="https://github.com/NidaleNieve/Fandy_MacOS/issues">Report an issue</a>
 </p>
@@ -47,6 +47,7 @@ Create and edit custom profiles with intuitive graphs for chip and chassis tempe
 - **Schedules:** choose weekday periods, overnight schedules and vacation pauses.
 - **Customizable menu temperatures:** choose the sensor readings shown inside the menu, including CPU/GPU averages and chassis temperatures. Live readings are also available beside the profile editor.
 - **At a glance:** show fan speeds and assign keyboard shortcuts.
+- **Stay up to date:** automatic weekly update checks, or choose your own frequency in Settings. Verified updates install when Fandy quits.
 - **Make it portable:** export individual profiles with their schedules, or move your whole configuration to another Mac.
 
 ## Compatibility

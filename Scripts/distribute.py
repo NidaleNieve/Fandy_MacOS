@@ -34,8 +34,31 @@ def notarize(path, profile):
         raise ValueError('Apple did not accept the notarization submission; no release was published')
 
 
-def sign(path, identity, identifier):
-    PACKAGE.run(['codesign', '--force', '--sign', identity, '--options', 'runtime', '--timestamp', '--identifier', identifier, path])
+def sign(path, identity, identifier, preserve=False):
+    args = ['codesign', '--force', '--sign', identity, '--options', 'runtime', '--timestamp']
+    if identifier is not None:
+        args += ['--identifier', identifier]
+    if preserve:
+        args += ['--preserve-metadata=identifier,entitlements']
+    PACKAGE.run(args + [path])
+
+
+def sign_updater(app, identity):
+    framework = app / 'Contents/Frameworks/Sparkle.framework'
+    if not framework.exists():
+        raise ValueError('Release is missing its updater framework')
+    version = (framework / 'Versions/Current').resolve()
+    # Preserve Sparkle's identifiers and sign its nested code inside-out.
+    components = [('Autoupdate', None),
+                  ('Updater.app', 'org.sparkle-project.Sparkle.Updater'),
+                  ('XPCServices/Downloader.xpc', 'org.sparkle-project.DownloaderService'),
+                  ('XPCServices/Installer.xpc', 'org.sparkle-project.InstallerLauncher')]
+    for relative, identifier in components:
+        component = version / relative
+        if not component.exists():
+            raise ValueError('Pinned updater distribution has unexpected contents')
+        sign(component, identity, identifier, preserve=True)
+    sign(framework, identity, 'org.sparkle-project.Sparkle')
 
 
 def distribute(app, output, profile):
@@ -51,6 +74,7 @@ def distribute(app, output, profile):
         work = Path(directory)
         staged = work / 'Fandy.app'
         PACKAGE.run(['ditto', '--noqtn', app, staged])
+        sign_updater(staged, identity)
         sign(staged / PACKAGE.HELPER, identity, 'is.dsr.fandy.fan-helper')
         sign(staged, identity, 'is.dsr.fandy')
         PACKAGE.verify_app(staged)

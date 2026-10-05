@@ -232,6 +232,12 @@
 			"path" = "Sources/FandyApp/TimeDial.swift";
 			"sourceTree" = "<group>";
 		};
+		"FD6B1C8D4896F0427AA48067" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/UpdateController.swift";
+			"sourceTree" = "<group>";
+		};
 		"741B6893E7BAFB98ADF2F78C" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -368,6 +374,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyCore/TemperatureTarget.swift";
+			"sourceTree" = "<group>";
+		};
+		"B38C101597C7761960C8B0BA" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/UpdatePolicy.swift";
 			"sourceTree" = "<group>";
 		};
 		"7D4FCEE70A0EA2D08A3E0A93" = {
@@ -552,6 +564,7 @@
 				3217C5AE4A415B73290ADFE6,
 				BD4456D906A2D6FFA041D820,
 				74FE756E77D83ED759A813F0,
+				FD6B1C8D4896F0427AA48067,
 				741B6893E7BAFB98ADF2F78C,
 				D96A58088F00CD60907A1AF5,
 				925C545BBF5908A07D2A47AF,
@@ -575,6 +588,7 @@
 				A2E50DBBCC5E83BE37243CB7,
 				74A6605E5BC8A76E53AD7E30,
 				FE7D214DC9CDDA36563C9C4F,
+				B38C101597C7761960C8B0BA,
 				7D4FCEE70A0EA2D08A3E0A93,
 				7B1C300C779D9459C034B004,
 				8253352BB713CD2F539FD9A3,
@@ -608,6 +622,14 @@
 		"BC4A71180870F7945155FBB0" = {
 			"isa" = "XCLocalSwiftPackageReference";
 			"relativePath" = ".";
+		};
+		"D94C31394813EBCC311C44EE" = {
+			"isa" = "XCRemoteSwiftPackageReference";
+			"repositoryURL" = "https://github.com/sparkle-project/Sparkle";
+			"requirement" = {
+				"kind" = "exactVersion";
+				"version" = "2.10.0";
+			};
 		};
 		"2FF407783ED718C818AF1C27" = {
 			"isa" = "PBXFileReference";
@@ -820,6 +842,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 74FE756E77D83ED759A813F0;
 		};
+		"B5F1471840E3A415C3D7FEF5" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = FD6B1C8D4896F0427AA48067;
+		};
 		"FE11B4DEDBF1FFBA22EEDE4D" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = 741B6893E7BAFB98ADF2F78C;
@@ -866,6 +892,7 @@
 				8C817E85958EF70C743F350C,
 				9F11A5D5C42B3DE6979DEE69,
 				78C0F51341784B5DD8C73994,
+				B5F1471840E3A415C3D7FEF5,
 				FE11B4DEDBF1FFBA22EEDE4D,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
@@ -888,12 +915,22 @@
 			"isa" = "PBXBuildFile";
 			"productRef" = B3A0DECBF87295E75F7A68DD;
 		};
+		"B98791B3B7007E46266561EF" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = D94C31394813EBCC311C44EE;
+			"productName" = "Sparkle";
+		};
+		"6DEB2D210F91407B6480B6F5" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = B98791B3B7007E46266561EF;
+		};
 		"6FA21FD5D112574F2EC7C0FA" = {
 			"isa" = "PBXFrameworksBuildPhase";
 			"buildActionMask" = 2147483647;
 			"files" = (
 				8D6A72B3FDA83A8A363A8293,
 				F0DAA3158924557CDD43780C,
+				6DEB2D210F91407B6480B6F5,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};
@@ -1004,6 +1041,7 @@
 				"SKIP_INSTALL" = "NO";
 				"INFOPLIST_FILE" = "Config/App-Info.plist";
 				"GENERATE_INFOPLIST_FILE" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf";
 				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
@@ -1034,6 +1072,7 @@
 				"SKIP_INSTALL" = "NO";
 				"INFOPLIST_FILE" = "Config/App-Info.plist";
 				"GENERATE_INFOPLIST_FILE" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
 				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
@@ -1069,6 +1108,7 @@
 			"packageProductDependencies" = (
 				D8A47F4A5D560B797C7DF70C,
 				B3A0DECBF87295E75F7A68DD,
+				B98791B3B7007E46266561EF,
 			);
 			"productName" = "Fandy";
 			"productReference" = 681C948D238C526E9E3424E0;
@@ -1230,6 +1270,7 @@
 			"projectRoot" = "";
 			"packageReferences" = (
 				BC4A71180870F7945155FBB0,
+				D94C31394813EBCC311C44EE,
 			);
 			"targets" = (
 				C1E9827DB735CA9BAA54A540,

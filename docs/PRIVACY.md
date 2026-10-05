@@ -1,8 +1,8 @@
 # Fandy privacy policy
 
-Effective date: October 4, 2026.
+Effective date: October 5, 2026.
 
-Fandy operates locally. It has no account system, analytics, advertising, tracking, automatic crash uploads or background network requests. The application does not send temperature readings, profiles or schedules to its developer.
+Fandy operates locally. It has no account system, analytics, advertising, tracking or automatic crash uploads. The application does not send temperature readings, profiles or schedules to its developer.
 
 ## What stays on your Mac
 
@@ -23,7 +23,7 @@ Fandy does not request Accessibility, Screen Recording, Input Monitoring, Full D
 
 You control exports. Configuration/profile exports can contain profile names, schedules, application rules and preferences. Sharing those files shares their contents. Diagnostic exports use a restricted summary that omits custom names, paths and raw readings.
 
-GitHub downloads, issue reports and links opened in a browser are handled by GitHub or the destination website under their own policies. Anything you post in a public GitHub issue is public. These services are not contacted automatically by Fandy during fan control.
+GitHub downloads, issue reports and links opened in a browser are handled by GitHub or the destination website under their own policies. Anything you post in a public GitHub issue is public. Update checks contact GitHub for the release feed and update archives. GitHub receives ordinary network request information, including your IP address and updater/app version. Sparkle system profiling is disabled. No temperature readings, configurations, schedules or diagnostic logs are sent. Updates can be disabled in Settings by turning off Automatic updates and choosing Never.
 
 ## Removing data
 

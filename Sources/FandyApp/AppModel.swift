@@ -6,6 +6,11 @@ import os
 import ServiceManagement
 
 @MainActor @Observable final class AppModel {
+    var updates: UpdateController?
+    private(set) var preparingUpdate = false
+    private var updatePrepared = false
+    private var helperRefreshAttempted = false
+    private var refreshingHelper = false
     var profiles: [Profile]
     var automation: AutomationConfiguration
     var manualIntent: ActivationIntent?
@@ -157,6 +162,7 @@ import ServiceManagement
         ProfileEligibility.evaluate(profile, capabilities: capabilities, helper: helperHealth, snapshot: snapshot, now: clock())
     }
     func canActivate(_ profile: Profile) -> Bool {
+        if preparingUpdate || refreshingHelper { return false }
         if profile.kind != .system && needsHelperSetup { return false }
         if simulation || profile.kind == .system { return true }
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
@@ -253,7 +259,7 @@ import ServiceManagement
         applicationCatalogRefreshedAt = clock()
     }
     func tick() async {
-        guard !busy, !quitting else { return }
+        guard !busy, !quitting, !preparingUpdate else { return }
         refreshHelperSetup(); refreshApplicationAvailability(); expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
         var restorationReport: RestorationReport?
         var monitoringReading: HardwareSnapshot?
@@ -272,6 +278,22 @@ import ServiceManagement
                 var observedBlocker: String?
                 if helperAvailable() {
                     let status = try await client.status()
+                    guard token == lifecycleToken, !quitting, !preparingUpdate else { return }
+                    if client is FanXPCClient, Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
+                       status.helperBuild != FandyBuild.identifier {
+                        guard !helperRefreshAttempted else { throw ControlError.invalidProfile("Fan helper update needs approval. Reopen Fandy after approving Background App Activity.") }
+                        helperRefreshAttempted = true; refreshingHelper = true; helperHealth = .unavailable
+                        defer { refreshingHelper = false }
+                        try await client.restoreAutomatic()
+                        guard token == lifecycleToken, !quitting, !preparingUpdate else { return }
+                        try await HelperManager.unregisterService()
+                        (client as? FanXPCClient)?.disconnectForRecoveryTest()
+                        guard token == lifecycleToken, !quitting, !preparingUpdate else { return }
+                        try HelperManager.install()
+                        helperHealth = .unavailable
+                        hardwareError = "Updating fan helper…"
+                        return
+                    }
                     guard token == lifecycleToken, !quitting else { return }
                     restorationReport = status.restoration
                     monitoringReading = status.snapshot
@@ -331,6 +353,7 @@ import ServiceManagement
         await execute(effect)
     }
     private func execute(_ effect: ControlEffect) async {
+        if preparingUpdate || refreshingHelper { return }
         if case .apply = effect { expireActivation(); expireScheduledOccurrence() }
         let token = lifecycleToken
         switch effect {
@@ -572,8 +595,13 @@ import ServiceManagement
     func simulateRestart() { Task { await mock.helperRestart(); await execute(machine.fail(ControlError.helperUnavailable)) } }
     func quit() {
         guard !quitting else { return }
-        beginTermination()
-        Task { await finishTermination(); NSApp.terminate(nil) }
+        Task {
+            if updates?.installationPending == true {
+                guard await updates?.prepareInstallation() == true else { return }
+            }
+            guard !quitting else { return }
+            beginTermination(); await finishTermination(); NSApp.terminate(nil)
+        }
     }
     func prepareForTermination() async {
         guard !quitting else { return }
@@ -584,11 +612,38 @@ import ServiceManagement
     }
     func waitForCollection() async { await collectionTask?.value }
     private func finishTermination() async {
-        if simulation || capabilities.canRestore { await execute(machine.fail(ControlError.invalidProfile("App quit"))) }
+        if !updatePrepared && (simulation || capabilities.canRestore) { await execute(machine.fail(ControlError.invalidProfile("App quit"))) }
         await waitForCollection()
         await saveLatest()
         // Observation never owned a lease; control failures still rely on the helper watchdog.
         terminationReady = true
+    }
+    /// Sparkle may replace the embedded service only after acknowledged handback.
+    func prepareForUpdate() async throws {
+        if updatePrepared { return }
+        preparingUpdate = true; lifecycleToken = UUID(); stop()
+        defaultResumeBlocked = true; clearActivation()
+        do {
+            if !simulation, !helperAvailable(), machine.state != .system { throw ControlError.restorationUnverified }
+            if !simulation, helperAvailable() {
+                try await client.restoreAutomatic()
+                let status = try await client.status()
+                guard status.restoration?.verified == true else { throw ControlError.restorationUnverified }
+            }
+            await waitForCollection(); pendingSave?.cancel(); await saveLatest()
+            guard saveError == nil else { throw ControlError.invalidProfile("Save changes before updating.") }
+            if client is FanXPCClient, Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
+               HelperManager.service.status != .notRegistered && HelperManager.service.status != .notFound {
+                try await HelperManager.unregisterService()
+                (client as? FanXPCClient)?.disconnectForRecoveryTest()
+            }
+            machine = ControlMachine(chipPolicy: machine.chipPolicy)
+            helperHealth = .unavailable; updatePrepared = true
+        } catch {
+            preparingUpdate = false; hardwareError = "Update paused: fan handback or helper removal could not be verified."
+            machine = ControlMachine(chipPolicy: machine.chipPolicy); start()
+            throw error
+        }
     }
     func discardFailedConfiguration() { failedConfiguration = nil }
     private func scheduleSave() {

@@ -107,3 +107,9 @@ An optional temperature goal adds cooling demand and cannot reduce curves, floor
 ## Legacy force-test interfaces
 
 Ftst transfers normal thermal-controller ownership; it is not an Apple-supported safety API. Acquire is bounded to seven seconds with cancellation, fresh sensor/guard and metadata checks. Every release attempts all fans, clears/readbacks Ftst, then independently reads all modes. Partial fan failure cannot suppress global release; global failure prevents a verified System claim. Lost handover is not reasserted. Mode 3 is recognized only by reviewed reference recipes; the tested Mac17,9 recipe is unchanged. No Apple emergency or helper-death recovery guarantee is asserted. A dead or blocked helper cannot execute its watchdog; restart restores before sensor discovery if launchd and hardware I/O cooperate.
+
+## Installing updates
+
+Downloads do not interrupt cooling. Normal update installation stops pending controller work, verifies automatic restoration independently of temperatures, persists configuration and unregisters the old helper. A failed handback or service removal prevents Fandy from consenting to replacement. Startup refuses control from a helper with a stale build identity and performs a bounded service refresh under Apple control. New macOS approval may be required.
+
+Force-killing Fandy bypasses its normal quit gate. Sparkle may finish a previously staged install after process death; helper watchdog/restart recovery remains the protection in that case. A dead or blocked helper cannot execute its watchdog, and app updating does not eliminate that limitation.

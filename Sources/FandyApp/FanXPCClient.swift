@@ -298,7 +298,7 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
         try await client.restoreAutomatic()
         try await unregisterService()
     }
-    private static func unregisterService() async throws {
+    static func unregisterService() async throws {
         // Bridge the documented completion API on the main actor. macOS 15's SDK
         // does not mark SMAppService Sendable, so its actor-owned wrapper must not
         // be passed to the imported nonisolated async overload.

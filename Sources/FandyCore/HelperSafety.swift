@@ -122,6 +122,7 @@ public struct TargetRequest: Codable, Sendable, HelperCommand {
     public init(leaseID: UUID, generation: UInt64, snapshotID: UUID, targets: [FanTarget]) { version = Wire.version; self.leaseID = leaseID; self.generation = generation; self.snapshotID = snapshotID; self.targets = targets }
 }
 public struct HelperStatus: Codable, Sendable {
+    public var helperBuild: String?
     public var version: Int = Wire.version
     public var automaticVerified: Bool
     public var manualQualified: Bool

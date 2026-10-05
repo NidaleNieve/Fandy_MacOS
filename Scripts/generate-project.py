@@ -59,6 +59,7 @@ helperProduct=add('helper-product','PBXFileReference',explicitFileType='compiled
 products=add('products','PBXGroup',children=[appProduct,helperProduct],name='Products',sourceTree='<group>')
 main=add('main-group','PBXGroup',children=list(files.values())+[plist,info,notices,projectLicense,licenses,products],sourceTree='<group>')
 package=add('package','XCLocalSwiftPackageReference',relativePath='.')
+sparkle=add('sparkle-package','XCRemoteSwiftPackageReference',repositoryURL='https://github.com/sparkle-project/Sparkle',requirement={'kind':'exactVersion','version':'2.10.0'})
 projectID=uid('project');helperID=uid('helper-target')
 common={'MACOSX_DEPLOYMENT_TARGET':'15.0','SDKROOT':'macosx','ARCHS':'arm64','SWIFT_VERSION':'6.0','CLANG_ENABLE_MODULES':'YES','ENABLE_HARDENED_RUNTIME':'YES','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_INJECT_BASE_ENTITLEMENTS':'NO','SWIFT_STRICT_CONCURRENCY':'complete'}
 def configs(name,extra):
@@ -81,11 +82,14 @@ for name,folder,product,ptype,bundle in [('Fandy','FandyApp',appProduct,'com.app
  for lib in ['FandyCore','FandyHardware']:
   dep=add(name+'-'+lib,'XCSwiftPackageProductDependency',package=package,productName=lib);packageDeps.append(dep)
   frameworkBuild.append(add(name+'-link-'+lib,'PBXBuildFile',productRef=dep))
+ if folder=='FandyApp':
+  sparkleDep=add('sparkle-product','XCSwiftPackageProductDependency',package=sparkle,productName='Sparkle');packageDeps.append(sparkleDep)
+  frameworkBuild.append(add('sparkle-link','PBXBuildFile',productRef=sparkleDep))
  frameworks=add(name+'-frameworks','PBXFrameworksBuildPhase',buildActionMask=2147483647,files=frameworkBuild,runOnlyForDeploymentPostprocessing=0)
  phases=[sources,frameworks]
  extra={'PRODUCT_NAME':name,'PRODUCT_BUNDLE_IDENTIFIER':bundle,'SKIP_INSTALL':'NO'}
  if folder=='FandyApp':
-  extra.update({'INFOPLIST_FILE':'Config/App-Info.plist','GENERATE_INFOPLIST_FILE':'NO'})
+  extra.update({'INFOPLIST_FILE':'Config/App-Info.plist','GENERATE_INFOPLIST_FILE':'NO','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks'})
   noticebuild=add('notice-build','PBXBuildFile',fileRef=notices)
   licensebuild=add('license-build','PBXBuildFile',fileRef=licenses)
   projectLicenseBuild=add('project-license-build','PBXBuildFile',fileRef=projectLicense)
@@ -106,7 +110,7 @@ for name,folder,product,ptype,bundle in [('Fandy','FandyApp',appProduct,'com.app
  configsID=configs(name,extra)
  add('app-target' if folder=='FandyApp' else 'helper-target','PBXNativeTarget',buildConfigurationList=configsID,buildPhases=phases,buildRules=[],dependencies=dependencies,name=name,packageProductDependencies=packageDeps,productName=name,productReference=product,productType=ptype)
  targets.append(targetID)
-add('project','PBXProject',attributes={'BuildIndependentTargetsInParallel':'YES','LastUpgradeCheck':'2700'},buildConfigurationList=projectConfigs,compatibilityVersion='Xcode 16.0',developmentRegion='en',hasScannedForEncodings=0,knownRegions=['en','Base'],mainGroup=main,productRefGroup=products,projectDirPath='',projectRoot='',packageReferences=[package],targets=targets)
+add('project','PBXProject',attributes={'BuildIndependentTargetsInParallel':'YES','LastUpgradeCheck':'2700'},buildConfigurationList=projectConfigs,compatibilityVersion='Xcode 16.0',developmentRegion='en',hasScannedForEncodings=0,knownRegions=['en','Base'],mainGroup=main,productRefGroup=products,projectDirPath='',projectRoot='',packageReferences=[package,sparkle],targets=targets)
 folder=root/'Fandy.xcodeproj';folder.mkdir(exist_ok=True)
 (folder/'project.pbxproj').write_text('// !$*UTF8*$!\n'+value({'archiveVersion':1,'classes':{},'objectVersion':77,'objects':objects,'rootObject':projectID})+'\n')
 schemes=folder/'xcshareddata/xcschemes';schemes.mkdir(parents=True,exist_ok=True)

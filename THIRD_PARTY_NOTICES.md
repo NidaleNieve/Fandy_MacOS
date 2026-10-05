@@ -16,3 +16,7 @@ TG Pro and Macs Fan Control are proprietary reference applications. TG Pro's pub
 Fandy's original work is released under the [MIT license](LICENSE). Third-party notices retain their original licenses. No license here grants rights to Apple's proprietary implementations or guarantees that an undocumented interface is supported. The included permissive license texts are the original projects' notices, not a claim that those authors endorse or qualify Fandy's hardware behavior.
 
 Additional source inspection on 2026-10-01: [iSMC](https://github.com/dkorunic/iSMC), revision `db76170a7ede0386fd10143b2e8f6c5c127188aa`, LICENSE confirms GPLv3. Sensor descriptor facts and two reported M5 Pro raw catalogs were reviewed for provenance and conflicts. Only broad naming candidates for independently discovered keys are noted; no GPL implementation or descriptor table was copied or incorporated. MacMonitor's SENSORS documentation appeared in search results and its LICENSE is MIT; its different-model descriptions were not adopted as M5 identity proof and no code/data was incorporated. Reference: https://github.com/ryyansafar/MacMonitor.
+
+## Sparkle 2.10.0
+
+Fandy uses [Sparkle](https://github.com/sparkle-project/Sparkle/tree/2.10.0) for signed application updates. Its license and bundled component notices are reproduced in [docs/licenses/Sparkle.txt](docs/licenses/Sparkle.txt).

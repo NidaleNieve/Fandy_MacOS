@@ -278,6 +278,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView { Form {
             ConfigurationSettings(model: model)
+            UpdateSettings(model: model)
             Section("Backend") {
                 Toggle("Simulation", isOn: Binding(get: { model.simulation }, set: { model.setSimulation($0) }))
                 Text("Use simulated temperatures and fans for testing. Physical fan control is disabled.").font(.caption).foregroundStyle(.secondary)
@@ -298,7 +299,7 @@ struct SettingsView: View {
                     LabeledContent("Automatic handback", value: model.capabilities.automaticRestoration == .verified ? "Locally verified" : model.capabilities.automaticRestoration.supported ? "Reference supported" : "Unavailable")
                     LabeledContent("Manual control and recovery", value: model.capabilities.manualTransaction == .verified ? "Locally verified" : model.capabilities.manualTransaction.supported ? "Reference supported" : "Unavailable")
                 }.accessibilityIdentifier("settings.hardwareVerification")
-                Text("Startup and wake begin in System. No telemetry or networking.").font(.caption).foregroundStyle(.secondary)
+                Text("Startup and wake begin in System. Only update checks use the network; no telemetry.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Maintenance") {
                 Button("Export Diagnostics…") { exportDiagnostics() }

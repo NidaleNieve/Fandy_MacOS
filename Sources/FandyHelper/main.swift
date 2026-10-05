@@ -123,6 +123,7 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
     func status(withReply reply: @escaping (Data?, String?) -> Void) {
         request(reply: DataReply(reply)) { [service] coordinator in
             var status = coordinator.status(); status.recovery = service.recovery.status
+            status.helperBuild = FandyBuild.identifier
             if status.capabilities?.canQualifyRecovery == true || status.capabilities?.canControl == true {
                 do { try RecoveryOwnershipProbe.requireNoKnownController() }
                 catch { status.recoveryBlocker = error.localizedDescription }
