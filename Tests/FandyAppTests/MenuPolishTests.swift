@@ -56,9 +56,11 @@ import Testing
     model.editorHistory.undo(); #expect(model.automation.periods.isEmpty)
     model.editorHistory.undo(); #expect(model.automation.activationDefaults[created] == nil)
 }
-@Test func observedFanBarIncludesStoppedAutomaticAndDifferentMaximums() {
+@Test func observedFanBarUsesCurveScaleForStoppedAutomaticAndDifferentRanges() {
     #expect(StatusPresentation.observedFanPercent([Fan(id:0,min:2000,max:8000,actual:0)]) == 0)
-    #expect(StatusPresentation.observedFanPercent([Fan(id:0,min:2000,max:8000,actual:2000), Fan(id:1,min:1800,max:6000,actual:3000)]) == 50)
+    let fans = [Fan(id:0,min:2000,max:8000,actual:2000), Fan(id:1,min:1800,max:6000,actual:3000)]
+    let expected = (3000.0 - 1800) / (6000 - 1800) * 100
+    #expect(abs(StatusPresentation.observedFanPercent(fans) - expected) < 0.000001)
     #expect(StatusPresentation.observedFanPercent([Fan(id:0,min:2000,max:8000,actual:9000)]) == 100)
     #expect(StatusPresentation.observedFanPercent([Fan(id:0,min:2000,max:8000,actual:.nan)]) == 0)
 }

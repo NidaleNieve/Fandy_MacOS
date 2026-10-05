@@ -43,6 +43,7 @@ public struct ProfileStore: Sendable {
                         profile.curves = BuiltInProfiles.gaming.curves; profile.defaultRevision = 2
                     }
                     profile = BuiltInProfiles.upgradeCoolChassisDefault(profile)
+                    profile = BuiltInProfiles.upgradeSchoolDefault(profile)
                     try profile.validate()
                     guard ids.insert(profile.id).inserted else { throw ControlError.invalidProfile("Duplicate profile identifier.") }
                     profiles.append(profile)

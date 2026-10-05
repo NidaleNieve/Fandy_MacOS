@@ -45,6 +45,7 @@ struct FanSpeedReadout: View {
                 }
             } else if !respectsMenuPreferences || model.automation.preferences.showFanSpeedBar || model.automation.preferences.showFanSpeedNumbers { Text("Fan speed unavailable").font(.caption).foregroundStyle(.secondary) }
         }.multilineTextAlignment(centered ? .center : .leading)
+            .help("Fan percentage uses the curve’s minimum-to-maximum RPM scale; stopped fans show 0%.")
     }
 }
 struct FanMenuStatus: View {

@@ -5,22 +5,23 @@ import Testing
 @testable import FandyCore
 @testable import FandyApp
 
-@MainActor @Test func cancellationAndLongNamesAlwaysKeepNativeHighlightingAndBoundedWidth() throws {
+@MainActor @Test func cancellationWrapsFullTitleWhileOtherActionsRetainNativeRowsAndBoundedWidth() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
-    var school = BuiltInProfiles.school; school.name = String(repeating: "A very long school profile ", count: 4); model.update(school)
+    var school = BuiltInProfiles.school; school.name = String(String(repeating: "A very long school profile ", count: 4).prefix(80)); model.update(school)
     var automation = model.automation; automation.periods = [.init(profileID: "gaming", weekday: 1, startMinute: 0, endMinute: 1440)]
     model.setAutomation(automation); model.select("school"); model.activateFor(seconds: 300)
     let menu = NSMenu(), presenter = StatusMenu(model: model, install: false)
     for _ in 0..<8 {
         presenter.rebuild(menu)
-        #expect(menu.items.filter { $0.action != nil }.allSatisfy { $0.view == nil })
+        #expect(menu.items.filter { $0.action != nil && $0.toolTip != model.cancellationTitle }.allSatisfy { $0.view == nil })
         #expect(menu.size.width <= MenuLayout.maximumMenuWidth)
         #expect(menu.items.compactMap(\.view).allSatisfy { ($0 as? NSHostingView<FanMenuStatus>)?.sizingOptions.isEmpty ?? true })
     }
     let cancel = try #require(menu.items.first { $0.toolTip == model.cancellationTitle })
-    #expect(cancel.view == nil && MenuLayout.titleWidth(cancel.title) <= MenuLayout.nativeTitleWidth)
+    #expect(cancel.view?.frame.width == MenuLayout.width)
+    #expect(cancel.accessibilityLabel() == model.cancellationTitle)
 }
 @MainActor @Test func profileHostsDoNotGrowToChangingContentAndHideNativeScrollIndicators() {
     let hosting = ProfileHostingController(rootView: Text("Wide content"))

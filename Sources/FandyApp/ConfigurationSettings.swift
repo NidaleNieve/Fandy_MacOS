@@ -61,7 +61,7 @@ struct ConfigurationSettings: View {
     }
     private var firstRawID: String? { visibleChoices.first { $0.isRaw }?.id }
     private func exportFile() {
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Configuration.json"
+        let panel = ExportSavePanel.make(filename: "Fandy Configuration.json")
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             do {

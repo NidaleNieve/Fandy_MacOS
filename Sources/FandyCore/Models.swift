@@ -77,6 +77,13 @@ public struct Fan: Codable, Sendable, Equatable, Identifiable {
         guard percent.isFinite else { throw ControlError.invalidNumber }
         return minimumRPM + min(100, max(0, percent)) / 100 * (maximumRPM - minimumRPM)
     }
+    /// Inverse of the curve's minimum-to-maximum scale. Automatic speeds below
+    /// the manual minimum (including stopped fans) display as zero.
+    public func percent(rpm: Double) throws -> Double {
+        try validate()
+        guard rpm.isFinite, rpm >= 0 else { throw ControlError.invalidNumber }
+        return min(100, max(0, (rpm - minimumRPM) / (maximumRPM - minimumRPM) * 100))
+    }
 }
 public enum ThermalPressure: String, Codable, Sendable { case nominal, fair, serious, critical, unknown }
 public struct HardwareSnapshot: Codable, Sendable, Equatable {

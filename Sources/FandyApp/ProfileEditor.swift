@@ -39,7 +39,7 @@ struct ProfileEditor: View {
     }
     private func exportFile(_ id: String? = nil) {
         guard let profile = model.profiles.first(where: { $0.id == (id ?? model.editorSelection) }) else { return }
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = profile.exportFilename
+        let panel = ExportSavePanel.make(filename: profile.exportFilename)
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             let config = model.automation
@@ -317,7 +317,7 @@ struct SettingsView: View {
     }
     private func refreshRegistration() { model.refreshHelperSetup(); loginStatus = SMAppService.mainApp.status; helperStatus = HelperManager.service.status }
     private func exportDiagnostics() {
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Fandy Diagnostics.json"
+        let panel = ExportSavePanel.make(filename: "Fandy Diagnostics.json")
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             Task {
