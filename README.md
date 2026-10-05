@@ -5,7 +5,7 @@
 <h1 align="center">Fandy</h1>
 <p align="center">Comfortable typing. Cooler gaming. One-click fan profiles.</p>
 <p align="center">
-  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.2-arm64.dmg"><strong>Download for Mac</strong></a>
+  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.3-arm64.dmg"><strong>Download for Mac</strong></a>
   · <a href="docs/INSTALLATION.md">Installation help</a>
   · <a href="https://github.com/NidaleNieve/Fandy_MacOS/issues">Report an issue</a>
 </p>
