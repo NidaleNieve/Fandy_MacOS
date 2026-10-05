@@ -111,6 +111,7 @@ struct FandyApp: App {
         if helperSetupWindow == nil { helperSetupWindow = HelperSetupWindowController(model: model) }
         guard let controller = helperSetupWindow, let window = controller.window else { return }
         present(window); controller.monitorApproval()
+        model.openHelperSetup()
     }
     func showSettings() {
         guard let model else { return }

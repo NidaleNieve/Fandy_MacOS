@@ -39,10 +39,10 @@ extension AppModel {
         do { try HelperManager.install(); refreshHelperSetup() }
         catch { helperSetupError = error.localizedDescription }
     }
-    func openHelperSetup() {
+    func openHelperSetup(openSettings: () -> Void = { SMAppService.openSystemSettingsLoginItems() }) {
         prepareHelperSetup()
         guard shouldPresentHelperApproval else { return }
-        SMAppService.openSystemSettingsLoginItems()
+        openSettings()
     }
     static func approvalDot() -> NSImage? {
         let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: "Fan helper approval needed")?

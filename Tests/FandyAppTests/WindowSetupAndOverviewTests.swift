@@ -135,6 +135,24 @@ import Testing
 @Test func setupInstructionsHaveSeparateOrderedSteps() {
     #expect(HelperSetupInstructions.steps == ["Open System Settings.", "General → Login Items & Extensions", "Background App Activity → enable Fandy."])
 }
+@MainActor @Test func setupOpensSystemSettingsOnlyWithFreshMissingApproval() {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let permission = SetupPermission()
+    let capabilities = HardwareCapabilities(model: "Test", stage: .restorationQualification, topology: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false, capabilities: capabilities,
+                         helperAvailable: { permission.status == .enabled }, helperRegistrationStatus: { permission.status })
+    var opens = 0
+    model.openHelperSetup(openSettings: { opens += 1 })
+    #expect(opens == 1)
+    // Approval may arrive after the guide opens but before the Settings action.
+    permission.status = .enabled
+    model.openHelperSetup(openSettings: { opens += 1 })
+    #expect(opens == 1 && !model.needsHelperSetup)
+    permission.status = .notRegistered
+    model.openHelperSetup(openSettings: { opens += 1 })
+    #expect(opens == 1)
+}
 @MainActor @Test func dedicatedSetupClosesOnApprovalAndNeverRequiresASettingsWindow() {
     _ = NSApplication.shared
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
