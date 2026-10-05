@@ -39,8 +39,11 @@ import FandyCore
     }
     func updateTitle() {
         refreshSelection()
-        item?.button?.title = ""
-        item?.button?.toolTip = model.statusText + " · " + model.activationDescription
+        item?.button?.attributedTitle = NSAttributedString(
+            string: model.needsHelperSetup ? "●" : "",
+            attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.systemFont(ofSize: 8)])
+        item?.button?.setAccessibilityLabel(model.needsHelperSetup ? "Fandy — fan control approval needed" : "Fandy")
+        item?.button?.toolTip = model.needsHelperSetup ? model.helperSetupMessage : model.statusText + " · " + model.activationDescription
     }
     func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
     func menuDidClose(_ menu: NSMenu) { isOpen = false }
