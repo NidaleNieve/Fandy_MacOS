@@ -7,6 +7,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Fandy application updates</description>
     <language>en</language>
     <item>
+      <title>0.2.3</title>
+      <description>Improved update controls, helper startup recovery and quieter School cooling.</description>
+      <pubDate>Mon, 05 Oct 2026 12:04:33 GMT</pubDate>
+      <sparkle:version>15</sparkle:version>
+      <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.3/Fandy-0.2.3-arm64.dmg" length="3206628" type="application/octet-stream" sparkle:edSignature="6A05mccK5LJBITKI6X1/IFqwD1BvGLa2KU/Prq75WudF/f/XqFYI47ALuwhT3F5/KpejCSMhlsn7HNgjyzOWCg=="></enclosure>
+    </item>
+    <item>
       <title>0.2.2</title>
       <description>Automatic update checks and update preferences in Settings.</description>
       <pubDate>Mon, 05 Oct 2026 08:49:22 GMT</pubDate>
@@ -17,6 +26,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: lSXjRigadnWGzHqN3qhgONXGhQ8lI5bqIar7sHJXj5FY5TH9wzwux0EGH9F/uPCIngguVoMc1GQ1Em6ckDP7Cw==
-length: 1266
+edSignature: +7rbrVHIsCzdJsvvkyA4kveYOldf5Z0Zvixk+IiarDESJHq+8g9+86RjOIrKJ+AspV7GJcpKafoM2HZ5gonRCQ==
+length: 1953
 -->
