@@ -19,6 +19,8 @@
 
 Fandy is a native menu-bar fan controller and temperature monitor. View chip and chassis temperatures alongside fan speeds, switch cooling profiles, and schedule cooling around your day.
 
+Vibecoded with Codex, polished for everyday use.
+
 ## Get started
 
 1. Download the **DMG**, open it, and drag **Fandy** into **Applications**.
@@ -75,4 +77,6 @@ Open `Fandy.xcodeproj` with the **Fandy** scheme. Set up [local signing](docs/LO
 
 [Architecture](ARCHITECTURE.md) · [Distribution](docs/DISTRIBUTION.md) · [App Store assessment](docs/APP_STORE_READINESS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-Not currently available on the Mac App Store. Fandy’s original source has no separate open-source license; third-party licenses are included above.
+Released under the [MIT license](LICENSE). Third-party notices retain their original licenses.
+
+Not currently available on the Mac App Store.
