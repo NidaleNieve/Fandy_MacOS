@@ -8,12 +8,12 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <language>en</language>
     <item>
       <title>0.2.3</title>
-      <description>Improved update controls, helper startup recovery and quieter School cooling.</description>
-      <pubDate>Mon, 05 Oct 2026 12:04:33 GMT</pubDate>
-      <sparkle:version>15</sparkle:version>
+      <description>Improved helper permission setup and menu-bar approval indicator.</description>
+      <pubDate>Mon, 05 Oct 2026 12:52:35 GMT</pubDate>
+      <sparkle:version>18</sparkle:version>
       <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.3/Fandy-0.2.3-arm64.dmg" length="3206628" type="application/octet-stream" sparkle:edSignature="6A05mccK5LJBITKI6X1/IFqwD1BvGLa2KU/Prq75WudF/f/XqFYI47ALuwhT3F5/KpejCSMhlsn7HNgjyzOWCg=="></enclosure>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.3/Fandy-0.2.3-arm64.dmg?build=18" length="3212625" type="application/octet-stream" sparkle:edSignature="4JboOH6jb1iW/fvyCtTR636Dc6XCgPZ0D0KeQkpGadKfnJLCK/vSe1RMyZ+qV+BMhy2kfDcvIaUjVGSpoD9cBg=="></enclosure>
     </item>
     <item>
       <title>0.2.2</title>
@@ -26,6 +26,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: +7rbrVHIsCzdJsvvkyA4kveYOldf5Z0Zvixk+IiarDESJHq+8g9+86RjOIrKJ+AspV7GJcpKafoM2HZ5gonRCQ==
-length: 1953
+edSignature: ioAf/EOr+Z8NXgKe/4z24PtSRiIrh5QK6ROpjIvZYJgbudSccYd2JMuvxzYgMEqhxBxn2yPe0FvRhbrrmYkmBw==
+length: 1950
 -->
