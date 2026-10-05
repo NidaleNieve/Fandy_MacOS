@@ -11,6 +11,8 @@ private final class CompatibilitySMC: SMCStructTransport {
     var writes: [(String, Double)] = []
     var failKey: String?
     var failRead: String?
+    var modeDelays: [String: Double] = [:]
+    var pendingModes: [String: (Double, Double)] = [:]
     var blockDirect = false
     var now = 10.0
     init(model: String = "Mac16,8", chip: String = "Apple M4 Pro", count: Int = 2, fixed: Bool = false, forceTest: Bool = true) {
@@ -38,6 +40,9 @@ private final class CompatibilitySMC: SMCStructTransport {
             value: value, error: nil, sampledAt: now)
     }
     func read(_ key: String) throws -> DiscoveredSensor {
+        if let pending = pendingModes[key], now >= pending.0 {
+            put(key, pending.1, "ui8 "); pendingModes[key] = nil
+        }
         if failRead == key { throw HardwareError.invalidMetadata }
         guard var value = values[key] else { throw HardwareError.smc(Int32(bitPattern: 0xFAD00084)) }
         value.sampledAt = now; return value
@@ -61,6 +66,10 @@ private final class CompatibilitySMC: SMCStructTransport {
             else {
                 let value = SMCDecoder.decode(type: old.type, bytes: Array(input[48..<(48 + old.size)]))!
                 put(key, value, old.type, attributes: old.attributes); writes.append((key, value))
+                if (key.hasSuffix("Md") || key.hasSuffix("md")), let delay = modeDelays[key], delay > 0 {
+                    put(key, old.value!, old.type, attributes: old.attributes)
+                    pendingModes[key] = (now + delay, value)
+                }
                 if key == "Ftst" && value == 1 {
                     for id in 0..<Int(values["FNum"]!.value!) { put("F\(id)Md", 0, "ui8 ") }
                 }
@@ -237,6 +246,8 @@ private final class ReferenceRestorationIO: FanHardwareIO, @unchecked Sendable {
     func setAutomatic(fanID: Int) throws {
         attempts.append(fanID)
         try descriptor.restoreMode(id: fanID, metadata: fixture.read(descriptor.modeKeys[fanID]!), transport: fixture)
+        try FanHandover.awaitRelease(deadline: fixture.now + 1, clock: { self.fixture.now },
+            read: { try self.readMode(fanID: fanID) }, pause: { self.fixture.now += 0.05 })
     }
     func finishAutomaticRestoration() throws {
         let flag = try fixture.read("Ftst"); try FanInterface.validateFlag(flag)
@@ -440,4 +451,83 @@ private final class DirectRestorationIO: FanHardwareIO, @unchecked Sendable {
         }, clock: { fixture.now }, check: {})
     #expect(readsDuringMixedModes == 0)
     #expect(fixture.writes.map(\.0) == ["F0md","F0Tg","F1md","F1Tg"])
+}
+
+@Test(arguments: [("MacBookPro18,3", "Apple M1 Pro"), ("Mac14,9", "Apple M2 Pro"),
+    ("Mac15,6", "Apple M3 Pro"), ("Mac16,8", "Apple M4 Pro"), ("Mac17,8", "Apple M5 Pro")])
+func delayedReferenceAdmissionTargetsEachFanOnce(_ item: (String, String)) throws {
+    let fixture = CompatibilitySMC(model: item.0, chip: item.1, forceTest: false)
+    // The reference M5 spelling is lowercase; model aliases share the same behavior.
+    let keys = try fixture.interface().modeKeys
+    for key in keys.values { fixture.modeDelays[key] = 0.2 }
+    try fixture.apply()
+    #expect(fixture.now >= 10.4)
+    #expect(fixture.writes.map(\.0) == [keys[0]!, "F0Tg", keys[1]!, "F1Tg"])
+}
+@Test func missingManualAcknowledgementNeverTargetsAndUsesOriginalDeadline() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+    fixture.modeDelays["F0Md"] = 20
+    #expect(throws: ControlError.staleSession) { try fixture.apply() }
+    #expect(fixture.writes.map(\.0) == ["F0Md"])
+    #expect(fixture.now >= 17 && fixture.now < 17.1)
+}
+@Test func unequalAcknowledgementsStillTargetFirstFanBeforeAdmittingSecond() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+    fixture.modeDelays = ["F0Md": 0.1, "F1Md": 0.4]
+    try fixture.apply()
+    #expect(fixture.writes.map(\.0) == ["F0Md", "F0Tg", "F1Md", "F1Tg"])
+    #expect(fixture.now >= 10.5 && fixture.now < 10.7)
+}
+@Test func delayedAdmissionCancellationSensorLossAndBoundsChangePreventTargets() throws {
+    for failure in 0...2 {
+        let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro", forceTest: false)
+        fixture.modeDelays["F0Md"] = 0.3
+        #expect(throws: (any Error).self) {
+            try fixture.apply(check: {
+                if fixture.now >= 10.1 {
+                    if failure == 0 { throw ControlError.staleSession }
+                    if failure == 1 { throw ControlError.invalidSnapshot }
+                    fixture.put("F0Mx", 5900, "flt ", attributes: 212)
+                }
+            })
+        }
+        #expect(!fixture.writes.contains { $0.0.hasSuffix("Tg") })
+        #expect(fixture.now >= 10.1)
+    }
+}
+
+@Test func M2ReleaseWaitsForAutomaticAcknowledgementWithoutRewriting() throws {
+    var now = 10.0
+    try FanHandover.awaitRelease(deadline: 11, clock: { now }, read: { now < 10.2 ? .manual : .automatic }, pause: { now += 0.05 })
+    #expect(now >= 10.2 && now < 11)
+    try FanHandover.awaitRelease(deadline: 11, clock: { now }, read: { .system }, pause: { Issue.record("Already released mode must not wait") })
+}
+@Test func stalledOrUnknownReleaseCannotReportSuccess() {
+    var now = 10.0
+    #expect(throws: ControlError.staleSession) {
+        try FanHandover.awaitRelease(deadline: 10.2, clock: { now }, read: { .manual }, pause: { now += 0.05 })
+    }
+    #expect(throws: ControlError.restorationUnverified) {
+        try FanHandover.awaitRelease(deadline: 11, clock: { now }, read: { .unknown }, pause: {})
+    }
+    #expect(throws: ControlError.staleSession) {
+        try FanHandover.awaitRelease(deadline: 11, clock: { now }, read: { now = 11.1; return .automatic }, pause: {})
+    }
+}
+@Test func delayedRestorationStillAttemptsBothFansAndClearsHandover() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+    fixture.put("F0Md", 1, "ui8 "); fixture.put("F1Md", 1, "ui8 "); fixture.put("Ftst", 1, "ui8 ")
+    fixture.modeDelays = ["F0Md": 0.2, "F1Md": 0.3]
+    let report = try FanRestoration.report(using: ReferenceRestorationIO(fixture))
+    #expect(report.verified && report.fans.allSatisfy(\.releasedManual))
+    #expect(fixture.writes.map(\.0) == ["F0Md", "F1Md", "Ftst"])
+    #expect(fixture.now >= 10.5 && fixture.now < 11)
+}
+@Test func releaseTimeoutCannotSuppressOtherFanOrGlobalRelease() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+    fixture.put("F0Md", 1, "ui8 "); fixture.put("F1Md", 1, "ui8 "); fixture.put("Ftst", 1, "ui8 ")
+    fixture.modeDelays = ["F0Md": 20, "F1Md": 0.2]
+    let io = try ReferenceRestorationIO(fixture), report = try FanRestoration.report(using: io)
+    #expect(!report.verified && report.fans[1].releasedManual)
+    #expect(io.attempts == [0, 1] && fixture.values["Ftst"]?.value == 0)
 }
