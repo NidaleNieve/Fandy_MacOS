@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @testable import FandyCore
 
+@Test func release030UsesANewBuildAcrossAppAndHelper() {
+    #expect(FandyBuild.version == "0.3.0")
+    #expect(FandyBuild.identifier == "23")
+}
+
 @Test func updateFrequencyOffersOnlyIntervalsAndLegacyNeverUsesToggle() throws {
     #expect(UpdateFrequency.allCases == [.daily, .weekly, .monthly])
     for automatic in [true, false] {

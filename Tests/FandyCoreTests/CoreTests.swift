@@ -139,7 +139,8 @@ func fixture(at now: Double = 10, cpu: Double = 48, gpu: Double = 44, trackpad: 
     #expect(controller.state == .system);#expect(controller.selected.id == "system")
 }
 @Test func idleAutomaticTransitionAndReacquisition() throws {
-    var controller=ControlMachine();_ = try controller.select(BuiltInProfiles.systemPlus)
+    var profile = BuiltInProfiles.systemPlus; profile.fanResponse = 1
+    var controller=ControlMachine();_ = try controller.select(profile)
     for t in 1...20 {
         let effect=controller.step(fixture(at:Double(t),cpu:40,gpu:40),now:Double(t))
         if case .apply(_,let g,_,_) = effect { controller.applied(generation:g) }
