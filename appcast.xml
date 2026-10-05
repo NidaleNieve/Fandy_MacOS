@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Fandy updates</title>
+    <link>https://github.com/NidaleNieve/Fandy_MacOS/releases</link>
+    <description>Fandy application updates</description>
+    <language>en</language>
+    <item>
+      <title>0.2.2</title>
+      <description>Automatic update checks and update preferences in Settings.</description>
+      <pubDate>Mon, 05 Oct 2026 08:49:22 GMT</pubDate>
+      <sparkle:version>12</sparkle:version>
+      <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.2/Fandy-0.2.2-arm64.dmg" length="3190534" type="application/octet-stream" sparkle:edSignature="huRAa8yUWQPNSnDf2CSbO0/uumBL7feaRnF+d5uWqxdY3dpPTIkb8c2CHfnhm+IvHY1QKTCkvGCSfBGRju5CAQ=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: lSXjRigadnWGzHqN3qhgONXGhQ8lI5bqIar7sHJXj5FY5TH9wzwux0EGH9F/uPCIngguVoMc1GQ1Em6ckDP7Cw==
+length: 1266
+-->
