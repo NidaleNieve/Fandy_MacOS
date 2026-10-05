@@ -13,6 +13,8 @@ struct ConfigurationSettings: View {
     @State private var loginStatus = SMAppService.mainApp.status
     var body: some View {
         Section("Preferences") {
+            LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development")
+                .accessibilityIdentifier("settings.version")
             Toggle("Launch at login", isOn: Binding(get: { model.automation.preferences.launchAtLogin }, set: { enabled in
                 model.setPreferences { $0.launchAtLogin = enabled }; model.configureLogin(); loginStatus = SMAppService.mainApp.status
             }))

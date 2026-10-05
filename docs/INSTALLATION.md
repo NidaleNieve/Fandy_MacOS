@@ -2,7 +2,7 @@
 
 ## Download and open
 
-1. [Download Fandy](https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.0-arm64.dmg).
+1. [Download Fandy](https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.1-arm64.dmg).
 2. Open the DMG and drag **Fandy** onto **Applications**.
 3. Open Fandy. Click the fan icon in your menu bar to choose a profile.
 

@@ -472,6 +472,12 @@
 			"path" = "THIRD_PARTY_NOTICES.md";
 			"sourceTree" = "<group>";
 		};
+		"0BC4784B182C10BFF6539405" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text";
+			"path" = "LICENSE";
+			"sourceTree" = "<group>";
+		};
 		"46610887A7913B54A6B70E7D" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "folder";
@@ -587,6 +593,7 @@
 				59407258BF62199A2697374B,
 				ED8F7DF021C9E9C519408A96,
 				7367AB9A454559025D4D8EE2,
+				0BC4784B182C10BFF6539405,
 				46610887A7913B54A6B70E7D,
 				0A3E27B8CA818264D75C8D81,
 				2FF407783ED718C818AF1C27,
@@ -898,12 +905,17 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = 46610887A7913B54A6B70E7D;
 		};
+		"535E8099747A357A50ECE328" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 0BC4784B182C10BFF6539405;
+		};
 		"F9187E824FE171A6F0EFAE28" = {
 			"isa" = "PBXResourcesBuildPhase";
 			"buildActionMask" = 2147483647;
 			"files" = (
 				7F8F7749F99D3CD6A0BD1280,
 				715503FC66ACB177FDB9B741,
+				535E8099747A357A50ECE328,
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};

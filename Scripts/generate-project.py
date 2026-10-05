@@ -51,12 +51,13 @@ for path in sorted(root.glob('Sources/**/*.swift')):
  rel=str(path.relative_to(root));files[rel]=add(rel,'PBXFileReference',lastKnownFileType='sourcecode.swift',path=rel,sourceTree='<group>')
 plist=add('launchd-plist','PBXFileReference',lastKnownFileType='text.plist.xml',path='Config/is.dsr.fandy.fan-helper.plist',sourceTree='<group>')
 notices=add('notices','PBXFileReference',lastKnownFileType='text',path='THIRD_PARTY_NOTICES.md',sourceTree='<group>')
+projectLicense=add('project-license','PBXFileReference',lastKnownFileType='text',path='LICENSE',sourceTree='<group>')
 licenses=add('licenses','PBXFileReference',lastKnownFileType='folder',path='docs/licenses',sourceTree='<group>')
 info=add('app-plist','PBXFileReference',lastKnownFileType='text.plist.xml',path='Config/App-Info.plist',sourceTree='<group>')
 appProduct=add('app-product','PBXFileReference',explicitFileType='wrapper.application',path='Fandy.app',sourceTree='BUILT_PRODUCTS_DIR')
 helperProduct=add('helper-product','PBXFileReference',explicitFileType='compiled.mach-o.executable',path='FandyFanHelper',sourceTree='BUILT_PRODUCTS_DIR')
 products=add('products','PBXGroup',children=[appProduct,helperProduct],name='Products',sourceTree='<group>')
-main=add('main-group','PBXGroup',children=list(files.values())+[plist,info,notices,licenses,products],sourceTree='<group>')
+main=add('main-group','PBXGroup',children=list(files.values())+[plist,info,notices,projectLicense,licenses,products],sourceTree='<group>')
 package=add('package','XCLocalSwiftPackageReference',relativePath='.')
 projectID=uid('project');helperID=uid('helper-target')
 common={'MACOSX_DEPLOYMENT_TARGET':'15.0','SDKROOT':'macosx','ARCHS':'arm64','SWIFT_VERSION':'6.0','CLANG_ENABLE_MODULES':'YES','ENABLE_HARDENED_RUNTIME':'YES','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_INJECT_BASE_ENTITLEMENTS':'NO','SWIFT_STRICT_CONCURRENCY':'complete'}
@@ -87,7 +88,8 @@ for name,folder,product,ptype,bundle in [('Fandy','FandyApp',appProduct,'com.app
   extra.update({'INFOPLIST_FILE':'Config/App-Info.plist','GENERATE_INFOPLIST_FILE':'NO'})
   noticebuild=add('notice-build','PBXBuildFile',fileRef=notices)
   licensebuild=add('license-build','PBXBuildFile',fileRef=licenses)
-  phases.append(add('app-resources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[noticebuild,licensebuild],runOnlyForDeploymentPostprocessing=0))
+  projectLicenseBuild=add('project-license-build','PBXBuildFile',fileRef=projectLicense)
+  phases.append(add('app-resources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[noticebuild,licensebuild,projectLicenseBuild],runOnlyForDeploymentPostprocessing=0))
   phases.append(add('app-icon','PBXShellScriptBuildPhase',buildActionMask=2147483647,files=[],
       inputPaths=['$(SRCROOT)/Scripts/generate-icon.swift'],
       outputPaths=['$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Fandy.icns'],
