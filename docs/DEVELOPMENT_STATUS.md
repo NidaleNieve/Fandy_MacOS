@@ -1,4 +1,14 @@
-# Current checkpoint — 2026-10-05: reviewed architecture, build 10
+# Current checkpoint — 2026-10-05: actual 0.2.1 release
+
+The app's bundle version, Settings version row, release title, `v0.2.1` source tag and `Fandy-0.2.1-arm64.dmg` now agree. Internal build is 11. The MIT license is included in the app resources alongside third-party notices; local signing configuration and identities are preserved.
+
+394 Swift tests, 48 tool tests and the signed one-job Release build pass. App and DMG are Developer ID-signed, notarized and stapled. Read-only inspection of the final mounted DMG confirms 0.2.1/build 11 and the bundled license; signatures, Gatekeeper, privacy and integrity checks pass. Both anonymous public download links match SHA-256 `67d81528420a9c82b5740f3e27bae469070371d58497520b67c0fb43e825d8aa`. Source tag points to `cad933f`; only the DMG is attached to the release. Local reports are under ignored `build/Distribution-Release-0.2.1` and `build/public021-verification.json`.
+
+The mislabeled build 10 release was updated to this actual 0.2.1 artifact and tag. Older v0.2.0 remains available. No installed controller/helper, user profiles or fan state were changed. Existing physical compatibility, sleep/wake and calibration follow-ups remain. See [release verification](GITHUB_RELEASE.md).
+
+---
+
+# Previous checkpoint — 2026-10-05: reviewed architecture, build 10
 
 The connection-scoped cancellation fence, helper watchdog ownership tagging, canonical persistence deduplication, shared import validation, application-catalog reuse and overnight schedule lookahead pass review. The physical fan command sequence, code-signing authentication and sensor-independent restoration remain intact. See [review and verification](ARCHITECTURE_REVIEW_2026_10_05.md).
 
