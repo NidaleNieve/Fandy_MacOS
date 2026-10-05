@@ -8,6 +8,7 @@ corrupt = '--corrupt' in sys.argv
 manual = '--manual' in sys.argv
 pending = '--install-pending' in sys.argv
 fallback = '--fallback-installer' in sys.argv
+notarized = '--notarize-fixture' in sys.argv
 # This fixture has no fan helper and uses a separate defaults domain.
 subprocess.run(['xcrun','swiftc','-swift-version','6','-F',str(root/'build/SparkleTools'),'-framework','Sparkle','-framework','AppKit',str(root/'Sources/FandyApp/AcceptedUpdateDriver.swift'),str(root/'Tests/UpdaterIntegration/Fixture.swift'),'-o',str(root/'build/SparkleTools/UpdateFixture'),'-Xlinker','-rpath','-Xlinker','@executable_path/../Frameworks'],check=True)
 evidence=root/('build/UpdaterTamperQualification' if corrupt else 'build/UpdaterPendingQualification' if pending else 'build/UpdaterManualQualification' if manual else 'build/UpdaterQualification');evidence.mkdir(exist_ok=True)
@@ -36,6 +37,12 @@ for app,version in [(current,'11'),(nextapp,'12')]:
   subprocess.run(['codesign','--force','--sign','-','--options','runtime',str(app/'Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate')],check=True,capture_output=True)
   dist.sign(app/'Contents/Frameworks/Sparkle.framework',identity,'org.sparkle-project.Sparkle')
  dist.sign(app,identity,fixture_id);dist.PACKAGE.run(['codesign','--verify','--deep','--strict',app])
+ if notarized:
+  submission=work/('current.zip' if version=='11' else 'next.zip')
+  subprocess.run(['ditto','-c','-k','--keepParent',str(app),str(submission)],check=True)
+  dist.notarize(submission,'FandyNotary')
+  dist.PACKAGE.run(['xcrun','stapler','staple',app])
+  dist.PACKAGE.run(['spctl','--assess','--type','execute',app])
 archive=work/'fixture.zip';subprocess.run(['ditto','-c','-k','--keepParent',str(nextapp),str(archive)],check=True)
 signed=subprocess.run([str(root/'build/SparkleTools/bin/sign_update'),'--account','is.dsr.fandy',str(archive)],capture_output=True,text=True,check=True,timeout=120).stdout
 signature=re.search(r'sparkle:edSignature="([^"]+)"',signed)[1]
@@ -53,7 +60,7 @@ while time.monotonic()<deadline:
  if plistlib.loads((current/'Contents/Info.plist').read_bytes())['CFBundleVersion']=='12': break
  time.sleep(.25)
 text=log.read_text();updated=plistlib.loads((current/'Contents/Info.plist').read_bytes())['CFBundleVersion']=='12'
-report={'fixtureOnly':True,'fallbackInstaller':fallback,'productionDefaultsUntouched':True,'containsFanHelper':False,'archiveSigned':True,'exitCode':code,'archiveRequested': '/fixture.zip' in requests, 'feedRequested': '/appcast.xml' in requests,'manualCheck':manual,'resumedStagedUpdate':'install-staged-without-prompt' in text,'singleConfirmation': 'ready-without-second-confirmation' in text,'installOnQuit':'pending-on-quit' in text,'quitBoundary':'quit-boundary' in text,'replacedBuild12':updated,'tamperedArchiveRejected':corrupt and ('rejected:' in text or 'error:' in text) and not updated}
+report={'fixtureOnly':True,'notarizedFixture':notarized,'fallbackInstaller':fallback,'productionDefaultsUntouched':True,'containsFanHelper':False,'archiveSigned':True,'exitCode':code,'archiveRequested': '/fixture.zip' in requests, 'feedRequested': '/appcast.xml' in requests,'manualCheck':manual,'resumedStagedUpdate':'install-staged-without-prompt' in text,'singleConfirmation': 'ready-without-second-confirmation' in text,'installOnQuit':'pending-on-quit' in text,'quitBoundary':'quit-boundary' in text,'replacedBuild12':updated,'tamperedArchiveRejected':corrupt and ('rejected:' in text or 'error:' in text) and not updated}
 (evidence/'integration.log').write_text(text)
 (evidence/'report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report));server.shutdown()
 if corrupt:
