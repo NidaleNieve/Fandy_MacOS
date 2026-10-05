@@ -7,12 +7,16 @@ struct TemperatureTargetEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("Target temperature", isOn: Binding(get: { profile.targetTemperature != nil }, set: { enabled in
-                var next = profile; next.targetTemperature = enabled ? TemperatureTarget() : nil; model.update(next)
+                var next = profile
+                if enabled && next.chipSources.isEmpty { next.chipSources = [.cpu, .gpu] }
+                next.targetTemperature = enabled ? TemperatureTarget() : nil; model.update(next)
             })).accessibilityIdentifier("profile.target.enabled")
             if let target = profile.targetTemperature {
                 HStack {
                     Picker("Sensor", selection: Binding(get: { target.input }, set: { input in
-                        var next = profile; next.targetTemperature = TemperatureTarget(input: input, celsius: TemperatureTarget.defaultTemperature(for: input)); model.update(next)
+                        var next = profile
+                        if input == .chip && next.chipSources.isEmpty { next.chipSources = [.cpu, .gpu] }
+                        next.targetTemperature = TemperatureTarget(input: input, celsius: TemperatureTarget.defaultTemperature(for: input)); model.update(next)
                     })) {
                         Text("Chip (hottest)").tag(CurveInput.chip)
                         Text("Trackpad").tag(CurveInput.trackpad)

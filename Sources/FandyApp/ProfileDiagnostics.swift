@@ -14,7 +14,7 @@ import FandyHardware
             var custom = BuiltInProfiles.systemPlus.duplicated()
             custom.id = "diagnostic-custom"; custom.name = "Diagnostic Custom"; custom.floor = 5; custom.automaticAtIdle = false
             model.profiles.append(custom)
-            let ids = action == .profilesCalibration ? ["system", "system-plus", "cool-chassis"] : ["system-plus", "gaming", "cool-chassis", "school", custom.id]
+            let ids = action == .schoolResponse ? ["school"] : action == .profilesCalibration ? ["system", "system-plus", "cool-chassis"] : ["system-plus", "gaming", "cool-chassis", "school", custom.id]
             for id in ids {
                 guard let profile = model.profiles.first(where: { $0.id == id }), model.canActivate(profile) else { throw ControlError.hardwareUnqualified }
                 model.select(id)
@@ -36,9 +36,10 @@ import FandyHardware
                     guard fans.allSatisfy({ model.machine.automaticAtIdle || profile.kind == .system ? $0.mode == .automatic : $0.mode == .manual }) else { throw ControlError.restorationUnverified }
                     observedActuation = observedActuation || fans.allSatisfy { $0.actualRPM >= $0.minimumRPM * 0.9 }
                     emit(["event": "profileSample", "profile": id, "percent": model.machine.percent,
-                          "automaticAtIdle": model.machine.automaticAtIdle, "snapshot": try encoded(snapshot), "independentFans": try encoded(fans)])
+                          "automaticAtIdle": model.machine.automaticAtIdle, "snapshot": try encoded(snapshot), "independentFans": try encoded(fans),
+                          "control": try encoded(ControlDiagnostic(machine: model.machine, snapshot: snapshot))])
                     try await Task.sleep(for: .seconds(1))
-                } while ProcessInfo.processInfo.systemUptime - started < (action == .profilesCalibration ? 300 : 12)
+                } while ProcessInfo.processInfo.systemUptime - started < ([HelperDiagnosticAction.profilesCalibration, .schoolResponse].contains(action) ? 300 : 12)
                 guard model.machine.automaticAtIdle || profile.kind == .system || observedActuation else { throw ControlError.invalidFan }
                 if action == .profilesLive && id == custom.id {
                     var edited = custom; edited.floor = 10

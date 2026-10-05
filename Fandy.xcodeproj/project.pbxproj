@@ -274,6 +274,12 @@
 			"path" = "Sources/FandyCore/Curves.swift";
 			"sourceTree" = "<group>";
 		};
+		"67C95CB2DADFB621E33348F8" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/FanResponse.swift";
+			"sourceTree" = "<group>";
+		};
 		"5F3F4CF63DA77EBEC5901461" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -583,6 +589,7 @@
 				925C545BBF5908A07D2A47AF,
 				D2CEB122BCF9ECDC6BB42176,
 				FE86A99A33849697E1E79465,
+				67C95CB2DADFB621E33348F8,
 				5F3F4CF63DA77EBEC5901461,
 				5139C70DAC1DF582846ECB07,
 				E38AB440B2BCDAE2D4200AFB,

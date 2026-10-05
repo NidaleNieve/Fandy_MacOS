@@ -39,6 +39,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case profilesSleep = "--profiles-sleep-check"
     case profilesLive = "--profiles-live-check"
     case profilesCalibration = "--profiles-calibration-check"
+    case schoolResponse = "--school-response-check"
     case maximumCheck = "--profile-max-check"
     case maximumQuit = "--profile-max-quit-check"
     case maximumHeartbeat = "--profile-max-heartbeat-check"
@@ -70,7 +71,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .performance: return await PerformanceDiagnostics.run()
             case .performanceMonitoring, .performanceComfort: return await PerformanceDiagnostics.runLong(comfort: action == .performanceComfort)
             case .profilesSleep: return await SleepDiagnostics.run()
-            case .profilesLive, .profilesCalibration: return await ProfileDiagnostics.run(action)
+            case .profilesLive, .profilesCalibration, .schoolResponse: return await ProfileDiagnostics.run(action)
             case .maximumCheck, .maximumQuit, .maximumHeartbeat: return await checkMaximum(action)
             case .register: try HelperManager.installObservation()
             case .unregister: try await HelperManager.uninstallObservation(client: client)

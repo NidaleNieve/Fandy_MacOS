@@ -9,6 +9,7 @@ public protocol FanHardwareIO: Sendable {
     func finishAutomaticRestoration() throws
     func acceptsAutomatic(_ mode: FanMode) -> Bool
     func setControlRequirements(_ required: Set<SensorRole>)
+    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double)
 }
 public extension FanHardwareIO {
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { targets }
@@ -16,6 +17,7 @@ public extension FanHardwareIO {
     func finishAutomaticRestoration() throws {}
     func acceptsAutomatic(_ mode: FanMode) -> Bool { mode == .automatic }
     func setControlRequirements(_ required: Set<SensorRole>) {}
+    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double) {}
 }
 public enum FanRestoration {
     /// Attempt every independently known fan. No target clearing or alternate mode/key guesses.

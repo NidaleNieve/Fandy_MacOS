@@ -54,7 +54,7 @@ public enum ChipAggregation {
         return (values.reduce(0, +) / Double(values.count), values.max()!)
     }
 }
-/// One-way acoustic smoothing: raw rises are never smoothed; safety bypasses all limits.
+/// Downward hysteresis and configurable upward slew. Only Max bypasses this governor.
 public struct DemandGovernor: Sendable {
     public private(set) var output: Double = 0
     private var lastTime: Double?
@@ -62,13 +62,19 @@ public struct DemandGovernor: Sendable {
     private var filtered: Double = 0
     public init() {}
     public mutating func reset(_ value: Double = 0) { output = value; filtered = value; lastTime = nil; lowerSince = nil }
-    public mutating func update(_ demand: Double, at now: Double, urgent: Bool = false) throws -> Double {
-        guard demand.isFinite, now.isFinite, (0...100).contains(demand), lastTime.map({ now >= $0 }) ?? true else { throw ControlError.invalidNumber }
+    /// Lift only to the independent floor; retain downward hysteresis afterward.
+    public mutating func enforceMinimum(_ value: Double) throws -> Double {
+        guard value.isFinite, (0...100).contains(value) else { throw ControlError.invalidNumber }
+        if value > output { output = value; filtered = value; lowerSince = nil }
+        return output
+    }
+    public mutating func update(_ demand: Double, at now: Double, urgent: Bool = false, upwardRate: Double = 10) throws -> Double {
+        guard demand.isFinite, now.isFinite, (0...100).contains(demand), upwardRate.isFinite, (2...10).contains(upwardRate), lastTime.map({ now >= $0 }) ?? true else { throw ControlError.invalidNumber }
         let elapsed = lastTime.map { min(5, max(0, now - $0)) } ?? 1
         lastTime = now
         if urgent { output = max(output, demand); filtered = output; lowerSince = nil; return output }
         if demand >= output {
-            output = min(demand, output + 10 * elapsed); filtered = output; lowerSince = nil
+            output = min(demand, output + upwardRate * elapsed); filtered = output; lowerSince = nil
         } else if output - demand >= 2 {
             if lowerSince == nil { lowerSince = now; filtered = output }
             if now - lowerSince! >= 5 {

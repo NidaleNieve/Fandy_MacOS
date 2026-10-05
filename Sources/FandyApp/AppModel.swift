@@ -78,6 +78,7 @@ import ServiceManagement
     private var historyRevision: UInt64 = 0
     var canUndo: Bool { _ = historyRevision; return editorHistory.canUndo }
     var canRedo: Bool { _ = historyRevision; return editorHistory.canRedo }
+    private var latestHelperGuard: ChipGuardReading?
     private let diagnostics: RotatingDiagnostics?
     private let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "controller")
     private var sleepObserver: NSObjectProtocol?
@@ -139,9 +140,9 @@ import ServiceManagement
         return StatusPresentation.temperature(snapshot?.sensors.first { $0.role == role },
             now: simulation ? snapshot?.sampledAt ?? clock() : clock(), estimate: estimate)
     }
-    func curveTemperature(_ curve: FanCurve) -> Double? {
+    func curveTemperature(_ curve: FanCurve, profile: Profile) -> Double? {
         guard let snapshot else { return nil }
-        return try? curve.temperature(in: snapshot, now: simulation ? snapshot.sampledAt : clock(), chipPolicy: machine.chipPolicy)
+        return try? profile.temperature(for: curve.input, snapshot: snapshot, now: simulation ? snapshot.sampledAt : clock(), policy: machine.chipPolicy)
     }
     func sanitizedDiagnostics() throws -> Data {
         // Allowlist-only export: no arbitrary messages, names, paths or signing identity.
@@ -308,6 +309,7 @@ import ServiceManagement
                         return
                     }
                     guard token == lifecycleToken, !quitting else { return }
+                    latestHelperGuard = status.chipGuard
                     restorationReport = status.restoration
                     monitoringReading = status.snapshot
                     monitoringReading?.fans = []
@@ -345,7 +347,7 @@ import ServiceManagement
             evaluateApplicationLaunches()
             evaluateSchedule()
             sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: snapshot)
-            if let snapshot, tickCount % 5 == 0 { diagnostics?.enqueue(profile:machine.selected.name,snapshot:snapshot) }
+            if let snapshot, machine.selected.kind != .system || tickCount % 5 == 0 { diagnostics?.enqueue(profile:machine.selected.name,snapshot:snapshot,control:ControlDiagnostic(machine: machine, snapshot: snapshot)) }
         } catch {
             guard token == lifecycleToken, !quitting else { return }
             automationFailed()
@@ -387,7 +389,7 @@ import ServiceManagement
     }
     private func stepController(_ reading: HardwareSnapshot, now: Double) async {
         let wasCustom = machine.selected.kind != .system
-        let effect = machine.step(reading, now: now)
+        let effect = machine.step(reading, now: now, helperGuard: simulation ? nil : latestHelperGuard)
         if wasCustom && machine.selected.kind == .system && machine.fault != nil { automationFailed() }
         await execute(effect)
     }

@@ -23,7 +23,7 @@ import FandyCore
     #expect(SensorRegistry.capabilities.requiredControlRoles.isSubset(of: SensorRegistry.capabilities.verifiedRoles))
     #expect(SensorRegistry.capabilities.blockers.isEmpty)
     #expect(SensorRegistry.capabilities.sensorName(.airflowTop) == "Top proximity")
-    #expect(SensorRegistry.capabilities.verifiedRoles == SensorRegistry.reviewedComfortRoles.union([.socPeak]))
+    #expect(SensorRegistry.capabilities.verifiedRoles == SensorRegistry.reviewedComfortRoles.union([.socPeak, .cpuRegion, .gpuRegion]))
     #expect(!SensorRole.safety.isSubset(of: SensorRegistry.capabilities.verifiedRoles))
     #expect(SensorRegistry.mappings.first{$0.role == .airflowTop}?.keys==["TaTP"])
 }
@@ -55,6 +55,24 @@ import FandyCore
     }, fans: [Fan(id: 0, min: 2300, max: 7800, actual: 0), Fan(id: 1, min: 2300, max: 7800, actual: 0)])
     let status = HelperStatus(automaticVerified: true, manualQualified: true, snapshot: snapshot, capabilities: SensorRegistry.capabilities)
     #expect(try Wire.encode(status).count < Wire.maxBytes)
+}
+
+@Test func operationalRegionalManifestsExactlyPartitionTheExistingGuard() throws {
+    let cpu = try #require(SensorRegistry.mappings.first { $0.role == .cpuRegion })
+    let gpu = try #require(SensorRegistry.mappings.first { $0.role == .gpuRegion })
+    #expect(Set(cpu.keys).isDisjoint(with: Set(gpu.keys)))
+    #expect(Set(cpu.keys).union(gpu.keys) == Set(SensorRegistry.chipEnvelopeKeys))
+    #expect(cpu.reduction == .maximum && gpu.reduction == .maximum)
+    for mapping in [cpu, gpu] {
+        let missingKey = try #require(mapping.keys.first)
+        let reading = mapping.reading(sequence: 1, qualified: true, now: 10) { key in
+            if key == missingKey { throw HardwareError.invalidMetadata }
+            return DiscoveredSensor(key: key, type: "flt ", size: 4, attributes: 0, bytes: [0,0,0,0], value: 40, error: nil, sampledAt: 10)
+        }
+        #expect(reading.health == .missing && reading.celsius == nil)
+    }
+    #expect(!SensorRegistry.capabilities.verifiedRoles.contains(.cpuPeak))
+    #expect(!SensorRegistry.capabilities.verifiedRoles.contains(.gpuPeak))
 }
 
 @Test func fanModeDecoderRejectsUnqualifiedTypesAndStates() {

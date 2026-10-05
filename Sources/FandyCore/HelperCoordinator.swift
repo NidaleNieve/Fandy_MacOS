@@ -2,7 +2,7 @@ import Foundation
 
 /// Called only on the helper's serial queue. Owns all leases and hardware effects.
 /// Injected I/O makes every failure path testable without physical fan writes.
-public final class HelperCoordinator {
+public final class HelperCoordinator: @unchecked Sendable {
     private let io: any FanHardwareIO
     private let read: () throws -> HardwareSnapshot
     private let clock: () -> Double
@@ -33,6 +33,12 @@ public final class HelperCoordinator {
         self.requireExclusive = requireExclusive; self.capabilities = capabilities; self.io = io; self.qualified = capabilities.canControl
         self.writesPermitted = capabilities.canRestore; self.read = read; self.clock = clock; self.event = event
         self.safety = HelperSafety(chipPolicy: capabilities.chipPolicy)
+        // Hardware callbacks run only on the same serial helper queue. No IPC caller
+        // can provide this closure or select the compiled guard policy.
+        io.setGuardEvaluator { [weak self] snapshot, now in
+            guard let self else { throw ControlError.helperUnavailable }
+            return try self.safety.observeChipGuard(snapshot, now: now).enforcedPercent
+        }
     }
     @discardableResult public func startup() -> Bool {
         let result = restore(); startupRestoration = restoration; return result
@@ -69,6 +75,9 @@ public final class HelperCoordinator {
             guard snapshot.fans.count == leaseFans.count, snapshot.fans.allSatisfy({ fan in leaseFans.contains { $0.id == fan.id && $0.minimumRPM == fan.minimumRPM && $0.maximumRPM == fan.maximumRPM } }) else { throw ControlError.invalidFan }
         }
         try freshness.check(snapshot, required: safety.lease?.required ?? [], now: clock())
+        if (try? capabilities.chipPolicy.temperature(in: snapshot, now: clock())) != nil {
+            _ = try safety.observeChipGuard(snapshot, now: clock())
+        }
         healthy = min(5, healthy + 1)
     }
     public func status() -> HelperStatus {
@@ -92,7 +101,8 @@ public final class HelperCoordinator {
                 safety.observeIdleOwnership(automatic)
                 fault = automatic ? nil : ControlError.restorationUnverified.localizedDescription
             }
-            return HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, snapshot: snapshot, fault: fault, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
+            var status = HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, snapshot: snapshot, fault: fault, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
+            status.chipGuard = safety.guardReading; return status
         } catch {
             if safety.lease != nil { _ = restore() }
             else { safety.observationFailed() }
@@ -218,7 +228,7 @@ public final class HelperCoordinator {
             }
             if safety.lease?.required.isEmpty == true { return } // Maximum needs no thermal identities.
             // Independent thermal escalation does not renew the GUI heartbeat.
-            let percent = try BuiltInProfiles.guardCurve.evaluate(BuiltInProfiles.guardCurve.temperature(in: snapshot, now: clock(), chipPolicy: capabilities.chipPolicy))
+            let percent = try safety.observeChipGuard(snapshot, now: clock()).enforcedPercent
             let elevated = try targets.map { target -> FanTarget in
                 guard let fan = snapshot.fans.first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
                 return FanTarget(target.fanID, max(target.rpm, try fan.rpm(percent: percent)))

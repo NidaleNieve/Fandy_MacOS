@@ -16,6 +16,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     private var ownsForceTest = false
     private var transactionToken: HardwareOperationFence.Token?
     private var controlRequirements: Set<SensorRole> = []
+    private var guardEvaluator: (@Sendable (HardwareSnapshot, Double) throws -> Double)?
     init() throws {
         let observationReader = try SMCReader(); reader = observationReader
         interface = try? FanInterface.discover(identity: .current, read: { try observationReader.read($0) })
@@ -61,6 +62,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         ownsForceTest = false
     }
     func setControlRequirements(_ required: Set<SensorRole>) { controlRequirements = required }
+    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double) { guardEvaluator = evaluate }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] {
         if interface?.locallyTested == true { return try SMCProfileWriter.normalizedTargets(targets, fans: enumerateFans()) }
         let fans = try enumerateFans()
@@ -83,7 +85,8 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
                 let snapshot = try sampler.snapshot(), now = ProcessInfo.processInfo.systemUptime
                 try snapshot.validate(now: now, required: controlRequirements)
                 if !controlRequirements.isEmpty {
-                    let guardPercent = try BuiltInProfiles.guardCurve.evaluate(DeviceRegistry.current.capabilities.chipPolicy.temperature(in: snapshot, now: now))
+                    guard let guardEvaluator else { throw ControlError.helperUnavailable }
+                    let guardPercent = try guardEvaluator(snapshot, now)
                     guard targets.allSatisfy({ target in snapshot.fans.contains {
                         $0.id == target.fanID && target.rpm >= ((try? $0.rpm(percent: guardPercent)) ?? .infinity)
                     } }) else { throw ControlError.thermalPressure }

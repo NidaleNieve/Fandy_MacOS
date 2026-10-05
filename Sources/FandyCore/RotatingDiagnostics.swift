@@ -1,4 +1,23 @@
 import Foundation
+public struct ControlDiagnostic: Codable, Sendable {
+    public let profileDemand: Double?
+    public let rawGuardDemand: Double?
+    public let enforcedGuardDemand: Double?
+    public let governedPercent: Double
+    public let byCurve: [CurveInput: Double]?
+    public let targets: [FanTarget]
+    public let automaticAtIdle: Bool
+    public let state: ControllerState
+    public let reason: String
+    public init(machine: ControlMachine, snapshot: HardwareSnapshot) {
+        profileDemand = machine.lastDemand?.profilePercent; rawGuardDemand = machine.guardReading?.rawPercent
+        enforcedGuardDemand = machine.guardReading?.enforcedPercent; governedPercent = machine.percent
+        byCurve = machine.lastDemand?.byCurve; automaticAtIdle = machine.automaticAtIdle; state = machine.state; reason = machine.transitionReason
+        targets = machine.state == .customActive && !machine.automaticAtIdle ? snapshot.fans.compactMap { fan in
+            (try? fan.rpm(percent: machine.percent)).map { FanTarget(fan.id, $0) }
+        } : []
+    }
+}
 /// User-process diagnostics only. The root helper uses unified logging and accepts no paths.
 public final class RotatingDiagnostics: @unchecked Sendable {
     private let queue = DispatchQueue(label: "is.dsr.fandy.diagnostics", qos: .utility)
@@ -6,13 +25,13 @@ public final class RotatingDiagnostics: @unchecked Sendable {
     private let writer = NSLock()
     private var pending = false
     /// At most one outstanding write; diagnostic backpressure never blocks control.
-    public func enqueue(profile: String, snapshot: HardwareSnapshot) {
+    public func enqueue(profile: String, snapshot: HardwareSnapshot, control: ControlDiagnostic? = nil) {
         admission.lock()
         guard !pending else { admission.unlock(); return }
         pending = true; admission.unlock()
         queue.async { [self] in
             defer { admission.lock(); pending = false; admission.unlock() }
-            try? record(profile: profile, snapshot: snapshot)
+            try? record(profile: profile, snapshot: snapshot, control: control)
         }
     }
     private let directory:URL
@@ -21,11 +40,11 @@ public final class RotatingDiagnostics: @unchecked Sendable {
         self.directory=directory;self.limit=limit
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
     }
-    public func record(profile:String,snapshot:HardwareSnapshot) throws {
+    public func record(profile:String,snapshot:HardwareSnapshot,control:ControlDiagnostic? = nil) throws {
         writer.lock(); defer { writer.unlock() }
-        struct Entry:Encodable { let timestamp:Date;let profile:String;let sensors:[SensorReading];let fans:[Fan];let thermalPressure:ThermalPressure }
+        struct Entry:Encodable { let timestamp:Date;let profile:String;let sensors:[SensorReading];let fans:[Fan];let thermalPressure:ThermalPressure;let control:ControlDiagnostic? }
         let encoder=JSONEncoder();encoder.dateEncodingStrategy = .iso8601
-        var line=try encoder.encode(Entry(timestamp:Date(),profile:profile,sensors:snapshot.sensors,fans:snapshot.fans,thermalPressure:snapshot.thermalPressure));line.append(10)
+        var line=try encoder.encode(Entry(timestamp:Date(),profile:profile,sensors:snapshot.sensors,fans:snapshot.fans,thermalPressure:snapshot.thermalPressure,control:control));line.append(10)
         let file=directory.appendingPathComponent("diagnostics.jsonl"),manager=FileManager.default
         let bytes=(try? manager.attributesOfItem(atPath:file.path)[.size] as? NSNumber)?.intValue ?? 0
         if bytes+line.count>limit {

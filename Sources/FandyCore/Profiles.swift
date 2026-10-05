@@ -10,8 +10,25 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
     public var floor: Double
     public var automaticAtIdle: Bool
     public var targetTemperature: TemperatureTarget?
-    public init(id: String = UUID().uuidString, name: String, kind: ProfileKind = .custom, bundled: Bool = false, curves: [FanCurve], floor: Double = 0, automaticAtIdle: Bool = false, targetTemperature: TemperatureTarget? = nil) {
+    public var chipSources: Set<ChipSource>
+    public var fanResponse: Double
+    public init(id: String = UUID().uuidString, name: String, kind: ProfileKind = .custom, bundled: Bool = false, curves: [FanCurve], floor: Double = 0, automaticAtIdle: Bool = false, targetTemperature: TemperatureTarget? = nil, chipSources: Set<ChipSource> = [.cpu, .gpu], fanResponse: Double? = nil) {
         self.id = id; self.name = name; self.kind = kind; self.bundled = bundled; defaultRevision = 1; self.curves = curves; self.floor = floor; self.automaticAtIdle = automaticAtIdle; self.targetTemperature = targetTemperature
+        self.chipSources = chipSources; self.fanResponse = fanResponse ?? (id == "school" ? 0 : 1)
+    }
+    private enum CodingKeys: String, CodingKey { case id, name, kind, bundled, defaultRevision, curves, floor, automaticAtIdle, targetTemperature, chipSources, fanResponse }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id); name = try values.decode(String.self, forKey: .name)
+        kind = try values.decode(ProfileKind.self, forKey: .kind); bundled = try values.decode(Bool.self, forKey: .bundled)
+        defaultRevision = try values.decodeIfPresent(Int.self, forKey: .defaultRevision) ?? 1
+        curves = try values.decode([FanCurve].self, forKey: .curves); floor = try values.decode(Double.self, forKey: .floor)
+        automaticAtIdle = try values.decodeIfPresent(Bool.self, forKey: .automaticAtIdle) ?? false
+        targetTemperature = try values.decodeIfPresent(TemperatureTarget.self, forKey: .targetTemperature)
+        chipSources = try values.decodeIfPresent(Set<ChipSource>.self, forKey: .chipSources) ?? (curves.contains { $0.input == .chip && $0.enabled } || targetTemperature?.input == .chip ? [.cpu, .gpu] : [])
+        // Special modes have no chip curve; retain their canonical protected representation.
+        if kind != .custom && !values.contains(.chipSources) { chipSources = [.cpu, .gpu] }
+        fanResponse = try values.decodeIfPresent(Double.self, forKey: .fanResponse) ?? (id == "school" ? 0 : 1)
     }
     public var exportFilename: String {
         let forbidden = CharacterSet.controlCharacters.union(CharacterSet(charactersIn: "/:\\"))
@@ -22,16 +39,20 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
     public var requiredSensors: Set<SensorRole> { requiredSensors(chipPolicy: .cpuGPU) }
     public func requiredSensors(chipPolicy: ChipControlPolicy) -> Set<SensorRole> {
         if kind == .system || kind == .maximum { return [] }
-        return curves.filter(\.enabled).reduce(chipPolicy.required) { $0.union($1.input.required(chipPolicy: chipPolicy)) }.union(targetTemperature?.input.required(chipPolicy: chipPolicy) ?? [])
+        func required(_ input: CurveInput) -> Set<SensorRole> { input == .chip ? chipRoles(policy: chipPolicy) : input.required }
+        return curves.filter(\.enabled).reduce(chipPolicy.required) { $0.union(required($1.input)) }.union(targetTemperature.map { required($0.input) } ?? [])
     }
     public func validate() throws {
         guard !id.isEmpty, id.utf8.count <= 128, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 80,
-              floor.isFinite, (0...100).contains(floor), curves.count <= 4,
+              floor.isFinite, (0...100).contains(floor), fanResponse.isFinite, (0...1).contains(fanResponse), curves.count <= 4,
               Set(curves.map(\.input)).count == curves.count else { throw ControlError.invalidProfile("Invalid profile name, floor, or curve set.") }
         if protected {
             guard let original = BuiltInProfiles.all.first(where: { $0.id == id }), self == original else { throw ControlError.invalidProfile("System and Max are protected.") }
         } else { guard kind == .custom else { throw ControlError.invalidProfile("Only System and Max may use special modes.") } }
         try targetTemperature?.validate()
+        if targetTemperature?.input == .chip || curves.contains(where: { $0.input == .chip && $0.enabled }) {
+            guard !chipSources.isEmpty else { throw ControlError.invalidProfile("Select CPU or GPU for the chip curve or target.") }
+        }
         try curves.forEach { try $0.validate() }
     }
     public func duplicated() -> Profile {
@@ -74,7 +95,9 @@ public enum BuiltInProfiles {
             }
         }
         if (profile.defaultRevision == 1 && profile.floor == 20 && matches(original)) ||
-            (profile.defaultRevision == 2 && profile.floor == 0 && matches(previous)) { return coolChassis }
+            (profile.defaultRevision == 2 && profile.floor == 0 && matches(previous)) {
+            var updated = coolChassis; updated.fanResponse = profile.fanResponse; updated.chipSources = profile.chipSources; return updated
+        }
         return profile
     }
     public static let gaming: Profile = {
@@ -113,6 +136,7 @@ public struct Demand: Sendable, Equatable {
     public var safetyPercent: Double
     public var byCurve: [CurveInput: Double]
     public var targetPercent: Double? = nil
+    public var profilePercent: Double = 0
 }
 public struct ProfileEngine: Sendable {
     public init() {}
@@ -124,8 +148,9 @@ public struct ProfileEngine: Sendable {
         let guardCurve = BuiltInProfiles.guardCurve
         let safety = try guardCurve.evaluate(guardCurve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy))
         var byCurve: [CurveInput: Double] = [:]
-        for curve in profile.curves where curve.enabled { byCurve[curve.input] = try curve.evaluate(curve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy)) }
-        let target = try profile.targetTemperature?.demand(in: snapshot, now: now, chipPolicy: chipPolicy)
-        return Demand(percent: max(profile.floor, byCurve.values.max() ?? 0, safety, target ?? 0), safetyPercent: safety, byCurve: byCurve, targetPercent: target)
+        for curve in profile.curves where curve.enabled { byCurve[curve.input] = try curve.evaluate(profile.temperature(for: curve.input, snapshot: snapshot, now: now, policy: chipPolicy)) }
+        let target = try profile.targetTemperature.map { try $0.evaluate(profile.temperature(for: $0.input, snapshot: snapshot, now: now, policy: chipPolicy)) }
+        let ordinary = max(profile.floor, byCurve.values.max() ?? 0, target ?? 0)
+        return Demand(percent: max(ordinary, safety), safetyPercent: safety, byCurve: byCurve, targetPercent: target, profilePercent: ordinary)
     }
 }

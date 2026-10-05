@@ -30,3 +30,7 @@ The current [Stats M5 definitions](https://github.com/exelban/stats/blob/master/
 ## Production control distinction
 
 The separately named Chip envelope takes a complete fixed maximum across 105 observed Tp/Tm/Tg keys. It qualifies no individual CPU/GPU average or peak identity. Five operational chassis inputs retain separate scales; missing members fail the active policy. All temperature profiles are enabled after actual bounded recovery tests. See [delivery](TEMPERATURE_PROFILE_STATUS.md).
+
+## 0.2.4 operational region selection
+
+The fixed 63-key CPU-region and 42-key GPU-region manifests now also provide separate operational maxima. They are disjoint and their union remains exactly the tested 105-key Chip envelope. Every member must be typed, fresh and present. These maxima enable selecting a regional input for the ordinary profile curve; they do not qualify physical core identities, candidate CPU/GPU display peaks or display averaging semantics. The independent safety policy always uses the complete Chip envelope on Mac17,9. Other supported models continue using their own compiled CPU/GPU definitions.

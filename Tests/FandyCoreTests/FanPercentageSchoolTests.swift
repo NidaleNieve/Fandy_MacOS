@@ -22,7 +22,7 @@ import Testing
         var profile = BuiltInProfiles.school; profile.floor = floor
         var machine = ControlMachine(); _ = try machine.select(profile)
         var lastTargets: [FanTarget] = []
-        for time in 1...15 {
+        for time in 1...40 {
             let effect = machine.step(fixture(at: Double(time), cpu: 40, gpu: 40), now: Double(time))
             if case let .apply(targets, generation, _, _) = effect {
                 lastTargets = targets; machine.applied(generation: generation)

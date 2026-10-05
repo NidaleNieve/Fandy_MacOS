@@ -10,7 +10,7 @@ public enum ChipControlPolicy: String, Codable, Sendable {
 }
 
 public enum SensorRole: String, Codable, CaseIterable, Sendable, Identifiable {
-    case cpuAverage, gpuAverage, cpuPeak, gpuPeak, socPeak
+    case cpuAverage, gpuAverage, cpuPeak, gpuPeak, socPeak, cpuRegion, gpuRegion
     case trackpad, actuator, airflowLeft, airflowTop, airflowRight, charger, powerSupply, wireless
     public var id: String { rawValue }
     public var name: String {
@@ -20,6 +20,8 @@ public enum SensorRole: String, Codable, CaseIterable, Sendable, Identifiable {
         case .cpuPeak: "Hottest CPU"
         case .gpuPeak: "Hottest GPU"
         case .socPeak: "Chip envelope"
+        case .cpuRegion: "CPU region maximum"
+        case .gpuRegion: "GPU region maximum"
         case .trackpad: "Trackpad"
         case .actuator: "Trackpad Actuator"
         case .airflowLeft: "Airflow Left"

@@ -5,6 +5,12 @@ import ServiceManagement
 import FandyCore
 import FandyHardware
 
+enum ProfileEditorPresentation {
+    static func showsAirflowNote(input: CurveInput, simulation: Bool, topName: String) -> Bool {
+        input == .airflow && !simulation && topName == "Top proximity"
+    }
+}
+
 struct ProfileEditor: View {
     @Bindable var model: AppModel
     var body: some View {
@@ -160,10 +166,6 @@ private struct ProfileDetail: View {
         else {
             DisclosureGroup("Chip", isExpanded: $chipExpanded) {
                 CurveSection(profile: profile, input: .chip, model: model)
-                if !model.simulation && model.capabilities.chipPolicy == .conservativeEnvelope {
-                    Text("Chip uses the hottest reading in the reviewed chip-region envelope. CPU/GPU averages are estimates.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
             }
             Divider()
             DisclosureGroup("Chassis", isExpanded: $chassisExpanded) {
@@ -173,7 +175,7 @@ private struct ProfileDetail: View {
                     Text("Airflow").tag(CurveInput.airflow)
                 }.pickerStyle(.segmented).onAppear { if model.curveInput == .chip { model.curveInput = .trackpad } }
                 CurveSection(profile: profile, input: model.curveInput == .chip ? .trackpad : model.curveInput, model: model)
-                if !model.simulation && model.capabilities.sensorName(.airflowTop) == "Top proximity" {
+                if ProfileEditorPresentation.showsAirflowNote(input: model.curveInput, simulation: model.simulation, topName: model.capabilities.sensorName(.airflowTop)) {
                     Text("Airflow uses the hottest of Left, Right and the Top proximity input.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -189,6 +191,17 @@ private struct ProfileDetail: View {
             }
             Text("0% uses each fan’s minimum RPM. Apple auto at idle can release control instead.").font(.caption).foregroundStyle(.secondary)
             Toggle("Use Apple auto at idle", isOn: Binding(get: { profile.automaticAtIdle }, set: { var next = profile; next.automaticAtIdle = $0; model.update(next) }))
+            HStack {
+                Text("Fan response")
+                Text("Quiet").font(.caption).foregroundStyle(.secondary)
+                Slider(value: Binding(get: { profile.fanResponse }, set: { var next = profile; next.fanResponse = $0; model.update(next) }), in: 0...1,
+                       onEditingChanged: { editing in if editing { model.beginEditGroup() } else { model.endEditGroup() } })
+                    .accessibilityIdentifier("profile.fan-response")
+                Text("Fast").font(.caption).foregroundStyle(.secondary)
+                Button("Reset", systemImage: "arrow.counterclockwise") {
+                    var next = profile; next.fanResponse = profile.id == "school" ? 0 : 1; model.update(next)
+                }.controlSize(.small)
+            }
             Divider()
             TemperatureTargetEditor(model: model, profile: profile)
         }
@@ -219,11 +232,21 @@ struct CurveSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Toggle(input.label, isOn: Binding(get: { curve.enabled }, set: { var next = curve; next.enabled = $0; commit(next) }))
+                if input == .chip {
+                    ForEach(ChipSource.allCases, id: \.self) { source in
+                        Toggle(source == .cpu ? "CPU" : "GPU", isOn: Binding(get: { (curve.enabled || profile.targetTemperature?.input == .chip) && profile.chipSources.contains(source) }, set: { selected in
+                            var next = profile
+                            next.setChipSource(source, selected: selected)
+                            model.update(next)
+                        })).accessibilityIdentifier("profile.chip." + source.rawValue)
+                    }
+                } else {
+                    Toggle(input.label, isOn: Binding(get: { curve.enabled }, set: { var next = curve; next.enabled = $0; commit(next) }))
+                }
                 Spacer()
                 Button("Reset Curve") { resetCurve() }.font(.caption)
             }
-            CurveEditor(curve: curve, request: CurveRequestPreview(floor: profile.floor, target: profile.targetTemperature), resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve), onBegin: { model.beginEditGroup() }, onEnd: { model.endEditGroup() }, onChange: { commit($0) }).id(profile.id + input.rawValue).disabled(!curve.enabled)
+            CurveEditor(curve: curve, request: CurveRequestPreview(floor: profile.floor, target: profile.targetTemperature), resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve, profile: profile), onBegin: { model.beginEditGroup() }, onEnd: { model.endEditGroup() }, onChange: { commit($0) }).id(profile.id + input.rawValue).disabled(!curve.enabled)
         }
     }
     func resetCurve() {

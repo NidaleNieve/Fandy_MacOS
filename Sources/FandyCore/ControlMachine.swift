@@ -13,6 +13,12 @@ public struct ControlMachine: Sendable {
     public private(set) var percent: Double = 0
     public private(set) var automaticAtIdle = false
     private var governor = DemandGovernor()
+    private var ordinaryAverage = TimeWeightedDemand()
+    private var requestedGuard = SmoothedChipGuard()
+    private var independentGuard = SmoothedChipGuard()
+    public private(set) var lastDemand: Demand?
+    public private(set) var guardReading: ChipGuardReading?
+    public private(set) var transitionReason = "System"
     private var healthyCount = 0
     private var lastHealthySample: UUID?
     private var zeroSince: Double?
@@ -35,13 +41,16 @@ public struct ControlMachine: Sendable {
         selected = profile; fault = nil; restorationIsFault = false
         zeroSince = nil; demandSince = nil; automaticAtIdle = false
         if profile.kind == .system { state = .restoringSystem; return .restore(generation: generation) }
-        if !wasSameCustom { healthyCount = 0; lastHealthySample = nil; governor.reset(percent); state = .initializingCustom }
+        if !wasSameCustom { healthyCount = 0; lastHealthySample = nil; governor.reset(percent); ordinaryAverage.reset(); requestedGuard.reset(); independentGuard.reset(); state = .initializingCustom }
+        transitionReason = "Profile selected"
         return .none
     }
     public mutating func fail(_ error: Error) -> ControlEffect {
         generation &+= 1
         fault = error.localizedDescription; selected = BuiltInProfiles.system; state = .restoringSystem
         restorationIsFault = true; automaticAtIdle = false; healthyCount = 0; lastHealthySample = nil
+        ordinaryAverage.reset(); requestedGuard.reset(); independentGuard.reset(); guardReading = nil
+        transitionReason = "Failure: " + error.localizedDescription
         return .restore(generation: generation)
     }
     /// Idle monitoring does not own fans. Only active control or a failed release
@@ -53,32 +62,48 @@ public struct ControlMachine: Sendable {
         return fail(error)
     }
     public mutating func sleep() -> ControlEffect { fail(ControlError.invalidProfile("Sleep/wake reset; select a profile to resume.")) }
-    public mutating func step(_ snapshot: HardwareSnapshot, now: Double) -> ControlEffect {
+    public mutating func step(_ snapshot: HardwareSnapshot, now: Double, helperGuard: ChipGuardReading? = nil) -> ControlEffect {
         if state == .restoringSystem || state == .fault { return .restore(generation: generation) }
         guard selected.kind != .system else { return .none }
         do {
             let demand = try ProfileEngine().evaluate(selected, snapshot: snapshot, now: now, chipPolicy: chipPolicy)
+            lastDemand = demand
+            let ordinary = selected.kind == .maximum ? 100 : try ordinaryAverage.update(demand.profilePercent, at: snapshot.sampledAt, window: selected.responseWindow)
+            var guardPercent = 0.0, immediate = false
+            if selected.kind == .custom {
+                let local = try independentGuard.update(snapshot: snapshot, now: now, policy: chipPolicy)
+                let requested = try requestedGuard.update(snapshot: snapshot, now: now, policy: chipPolicy, window: selected.responseWindow)
+                guardReading = local; guardPercent = max(local.enforcedPercent, requested.enforcedPercent); immediate = local.immediate
+                if let helperGuard {
+                    guard helperGuard.rawPercent.isFinite, helperGuard.enforcedPercent.isFinite,
+                          (0...100).contains(helperGuard.rawPercent), (0...100).contains(helperGuard.enforcedPercent),
+                          helperGuard.sampledAt.isFinite, now >= helperGuard.sampledAt, now - helperGuard.sampledAt <= 3 else { throw ControlError.invalidSnapshot }
+                    guardReading = helperGuard; guardPercent = max(guardPercent, helperGuard.enforcedPercent)
+                }
+            }
+            let effective = selected.kind == .maximum ? 100 : max(ordinary, guardPercent)
             if snapshot.id != lastHealthySample { healthyCount += 1; lastHealthySample = snapshot.id }
             if state == .initializingCustom && healthyCount < (selected.kind == .maximum ? 1 : 5) { return .none }
-            if state == .initializingCustom && selected.automaticAtIdle && demand.percent == 0 {
+            if state == .initializingCustom && selected.automaticAtIdle && effective == 0 {
+                transitionReason = "Automatic at idle"
                 automaticAtIdle = true; state = .restoringSystem; return .restore(generation: generation)
             }
             if automaticAtIdle {
-                if demand.percent >= 5 {
+                if effective >= 5 {
                     if demandSince == nil { demandSince = now }
-                    if demand.safetyPercent == 0 && now - demandSince! < 3 { return .none }
+                    if !immediate && now - demandSince! < 3 { transitionReason = "Waiting for sustained demand"; return .none }
                     automaticAtIdle = false; demandSince = nil
                 } else { demandSince = nil; return .none }
             }
-            if selected.automaticAtIdle && demand.percent == 0 {
+            if selected.automaticAtIdle && effective == 0 {
                 if zeroSince == nil { zeroSince = now }
                 if now - zeroSince! >= 15 {
                     automaticAtIdle = true; state = .restoringSystem; return .restore(generation: generation)
                 }
             } else { zeroSince = nil }
-            percent = try governor.update(demand.percent, at: now, urgent: selected.kind == .maximum || demand.safetyPercent > percent)
-            // An independent safety request may never be attenuated by the acoustic governor.
-            percent = max(percent, demand.safetyPercent)
+            let governed = try governor.update(ordinary, at: now, urgent: selected.kind == .maximum, upwardRate: selected.upwardRate)
+            percent = selected.kind == .maximum ? 100 : try governor.enforceMinimum(guardPercent)
+            transitionReason = immediate ? "Immediate chip guard" : guardPercent > governed ? "Chip guard" : "Profile demand"
             let targets = try snapshot.fans.map { FanTarget($0.id, try $0.rpm(percent: percent)) }
             return .apply(targets: targets, generation: generation, snapshotID: snapshot.id, required: selected.requiredSensors(chipPolicy: chipPolicy))
         } catch { return fail(error) }

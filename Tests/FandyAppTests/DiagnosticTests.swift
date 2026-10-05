@@ -28,7 +28,7 @@ import FandyCore
     }
 }
 @Test func additionalDiagnosticsCannotAcceptCustomPayloadsOrDurations() throws {
-    for action in [HelperDiagnosticAction.productionSecurity, .performance, .profilesSleep, .productionHeartbeat, .productionDisconnect, .productionQuit, .productionHold] {
+    for action in [HelperDiagnosticAction.productionSecurity, .performance, .profilesSleep, .productionHeartbeat, .productionDisconnect, .productionQuit, .productionHold, .schoolResponse] {
         #expect(try HelperDiagnosticAction.parse(["Fandy", action.rawValue]) == action)
         #expect(throws: ControlError.malformedMessage) { try HelperDiagnosticAction.parse(["Fandy", action.rawValue, "--duration", "9999"]) }
     }

@@ -19,7 +19,7 @@ public actor MockBackend: TemperatureSensorProvider, FanController {
         if safety.expired(at: now) { restoreInternal() }
         let chip: (Double,Double) = switch scenario { case .gamingLoad: (81,83); case .gpuHot: (65,87); case .overheating: (100,103); default: (48,44) }
         let warm = scenario == .warmChassis
-        let values: [(SensorRole, Double)] = [(.cpuAverage,chip.0),(.cpuPeak,chip.0+1),(.gpuAverage,chip.1),(.gpuPeak,chip.1),(.socPeak,chip.0),(.trackpad,warm ? 31:27),(.actuator,warm ? 29:25),(.airflowLeft,warm ? 43:33),(.airflowTop,warm ? 44:33),(.airflowRight,warm ? 43:33),(.charger,33),(.powerSupply,33),(.wireless,32)]
+        let values: [(SensorRole, Double)] = [(.cpuAverage,chip.0),(.cpuPeak,chip.0+1),(.gpuAverage,chip.1),(.gpuPeak,chip.1),(.socPeak,max(chip.0+1,chip.1)),(.cpuRegion,chip.0+1),(.gpuRegion,chip.1),(.trackpad,warm ? 31:27),(.actuator,warm ? 29:25),(.airflowLeft,warm ? 43:33),(.airflowTop,warm ? 44:33),(.airflowRight,warm ? 43:33),(.charger,33),(.powerSupply,33),(.wireless,32)]
         var readings = values.map { SensorReading($0.0, $0.1, at: now, sequence: sequence) }
         if scenario == .sensorFailure { readings.removeAll { $0.role == .gpuPeak } }
         if scenario == .staleSensor { for i in readings.indices { readings[i].sampledAt = now - 4 } }

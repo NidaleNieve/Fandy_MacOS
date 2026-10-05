@@ -73,7 +73,9 @@ public enum SensorRegistry {
                                            keys: mapping.keys, reduction: .maximum)]
         }
         return [mapping]
-    } + [SensorMapping(role: .socPeak, keys: chipEnvelopeKeys, reduction: .maximum)]
+    } + [SensorMapping(role: .socPeak, keys: chipEnvelopeKeys, reduction: .maximum),
+         SensorMapping(role: .cpuRegion, keys: cpuRegionCandidates, reduction: .maximum),
+         SensorMapping(role: .gpuRegion, keys: gpuRegionCandidates, reduction: .maximum)]
     // Reviewed from independent published names, 1156 contemporaneous reference pairs,
     // competing-candidate analysis and the separate chassis temperature response.
     // Top is qualified as a proximity input, not certified as TG Pro's physical Airflow Top.
@@ -88,6 +90,7 @@ public enum SensorRegistry {
         case .cpuAverage, .cpuPeak: "Stats Tp anchors; Mac17,9 thermal Tp/Tm labels; typed candidate manifest and CPU pulse; earlier TG Pro recordings"
         case .gpuAverage, .gpuPeak: "Stats M5 table; contemporaneous TG Pro recordings"
         case .socPeak: "Mac17,9 typed catalog, full Tp/Tm/Tg region manifest; published chip anchors and bounded response recordings"
+        case .cpuRegion, .gpuRegion: "Subset of the reviewed complete Mac17,9 operational envelope; fixed region manifest and bounded response recordings"
         case .airflowLeft, .airflowRight, .wireless: "Stats names; contemporaneous TG Pro recordings"
         case .trackpad, .actuator, .charger: "Historical VirtualSMC names; TG Pro recordings"
         case .airflowTop: "iSMC Apple Ambient Top Proximity; complete Mac17,9 flt4 observations; 1156 paired readings across 18C and slow chassis response"
@@ -96,10 +99,11 @@ public enum SensorRegistry {
         let limitation: String = switch mapping.role {
         case .airflowTop: "Operational top-proximity proxy on the airflow temperature scale. Exact TG Pro Airflow Top identity is not certified; TRDd/TRDc remain numerical competitors."
         case .socPeak: "Reviewed operational envelope including disputed Tm regions; not a hottest-core identity certificate."
+        case .cpuRegion, .gpuRegion: "Operational regional maximum; not a physical core identity or complete CPU/GPU coverage certificate. Independent guard always retains the full chip envelope."
         case .cpuAverage, .cpuPeak, .gpuAverage, .gpuPeak: "Individual identities, aggregation and peak coverage remain unproved on Mac17,9."
         default: "Historical or broad-platform names plus rounded reference agreement need Mac17,9 identity review."
         }
-        let reviewed = reviewedComfortRoles.contains(mapping.role) || mapping.role == .socPeak
+        let reviewed = reviewedComfortRoles.contains(mapping.role) || [.socPeak, .cpuRegion, .gpuRegion].contains(mapping.role)
         return SensorEvidence(role: mapping.role, keys: mapping.keys, state: reviewed ? .verified : .pending,
                               source: source + (reviewed ? "; Mac17,9 operational review, CHIP_ENVELOPE / TEMPERATURE_PROFILE_STATUS" : ""),
                               limitation: mapping.role == .airflowTop ? limitation : reviewedComfortRoles.contains(mapping.role) ? "Operational comfort mapping; not an independently measured physical surface temperature." : limitation,

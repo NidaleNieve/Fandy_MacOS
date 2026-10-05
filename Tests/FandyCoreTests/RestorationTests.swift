@@ -3,6 +3,8 @@ import Testing
 @testable import FandyCore
 // Each test owns its spy. Production serializes I/O; unchecked Sendable supports that protocol boundary.
 final class FanSpy: FanHardwareIO, @unchecked Sendable {
+    var guardEvaluator: (@Sendable (HardwareSnapshot, Double) throws -> Double)?
+    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double) { guardEvaluator = evaluate }
     var normalize: ([FanTarget]) throws -> [FanTarget] = { $0 }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { try normalize(targets) }
     var fans=[Fan(id:0,min:2000,max:8000,actual:3000,mode:.manual),Fan(id:1,min:2200,max:7400,actual:3000,mode:.manual)]
