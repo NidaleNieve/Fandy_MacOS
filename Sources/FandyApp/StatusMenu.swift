@@ -8,6 +8,7 @@ import FandyCore
     let item: NSStatusItem?
     var openProfiles: () -> Void = {}
     var openSettings: () -> Void = {}
+    var openHelperSetup: () -> Void = {}
     private var observation: Task<Void, Never>?
     private var actions: [UUID: () -> Void] = [:]
     private var profileRows: [String: NSMenuItem] = [:]
@@ -95,7 +96,7 @@ import FandyCore
             let notice = NSMenuItem()
             notice.view = fitted(HelperApprovalNotice(model: model, showButton: false).frame(width: MenuLayout.textWidth).frame(maxWidth: .infinity).padding(.vertical, 4))
             menu.addItem(notice)
-            let setup = add("Allow Fan Control…", to: menu) { [weak model] in model?.openHelperSetup() }
+            let setup = add("Allow Fan Control…", to: menu) { [weak self] in self?.openHelperSetup() }
             setup.image = AppModel.approvalDot()
             menu.addItem(.separator())
         }

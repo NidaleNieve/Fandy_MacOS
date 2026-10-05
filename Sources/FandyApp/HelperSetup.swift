@@ -3,8 +3,21 @@ import SwiftUI
 import ServiceManagement
 import FandyCore
 
+/// Presentation only: never grants helper or hardware authority. A transient
+/// approval status during replacement must not flash an unnecessary window.
+struct HelperApprovalPromptGate {
+    private var requiredSince: Double?
+    mutating func shouldPresent(approvalRequired: Bool, now: Double) -> Bool {
+        guard approvalRequired else { requiredSince = nil; return false }
+        if requiredSince == nil { requiredSince = now }
+        return now - (requiredSince ?? now) >= 2
+    }
+}
+
 extension AppModel {
-    var needsHelperSetup: Bool { !simulation && capabilities.canRestore && helperSetupStatus != .enabled }
+    var needsHelperSetup: Bool { !simulation && capabilities.canRestore && !helperSetupInitializing && helperSetupStatus != .enabled }
+    /// Not registered yet is initialization, not evidence that permission was denied.
+    var shouldPresentHelperApproval: Bool { needsHelperSetup && helperSetupStatus == .requiresApproval }
     var helperSetupMessage: String {
         helperSetupError ?? (helperSetupStatus == .requiresApproval
             ? "Allow Fandy under Background App Activity in System Settings to enable fan control."
@@ -19,7 +32,8 @@ extension AppModel {
         refreshHelperSetup()
         // Tests/diagnostics never install a service. Distribution registration
         // retains the Applications-location and signed-client requirements.
-        guard needsHelperSetup, Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
+        guard !simulation, capabilities.canRestore, helperSetupStatus != .enabled,
+              Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
               !CommandLine.arguments.contains("--functional-check"),
               (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
         do { try HelperManager.install(); refreshHelperSetup() }
@@ -27,6 +41,7 @@ extension AppModel {
     }
     func openHelperSetup() {
         prepareHelperSetup()
+        guard shouldPresentHelperApproval else { return }
         SMAppService.openSystemSettingsLoginItems()
     }
     static func approvalDot() -> NSImage? {

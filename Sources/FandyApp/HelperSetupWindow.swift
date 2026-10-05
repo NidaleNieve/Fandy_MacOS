@@ -19,7 +19,9 @@ import SwiftUI
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     @discardableResult func refreshApproval() -> Bool {
         model.refreshHelperSetup()
-        if !model.needsHelperSetup { completed = true; close(); return true }
+        if model.helperSetupStatus == .enabled || model.simulation || !model.capabilities.canRestore {
+            completed = true; close(); return true
+        }
         return false
     }
     func monitorApproval() {
@@ -34,14 +36,27 @@ import SwiftUI
     override func close() { monitor?.cancel(); monitor = nil; super.close() }
     func windowWillClose(_ notification: Notification) { monitor?.cancel(); monitor = nil }
 }
+enum HelperSetupInstructions {
+    static let steps = [
+        "Open System Settings.",
+        "General → Login Items & Extensions",
+        "Background App Activity → enable Fandy."
+    ]
+}
 private struct HelperSetupView: View {
     @Bindable var model: AppModel
     let later: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Allow fan control", systemImage: "fan").font(.headline)
-            Text("System Settings → General → Login Items & Extensions → Background App Activity → enable Fandy.")
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(Array(HelperSetupInstructions.steps.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(index + 1).").foregroundStyle(.secondary).monospacedDigit()
+                        Text(step).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }.accessibilityIdentifier("helper.setup-steps")
             if let error = model.helperSetupError { Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
             Spacer(minLength: 0)
             HStack {

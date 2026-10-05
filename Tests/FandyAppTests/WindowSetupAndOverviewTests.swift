@@ -77,6 +77,64 @@ import Testing
     #expect(ProfileConditionOverviewRow.rows(profiles: BuiltInProfiles.all, automation: configuration).first { $0.id == "gaming" }?.limit == "Until changed")
 }
 @MainActor private final class SetupPermission { var status: SMAppService.Status = .requiresApproval }
+@Test func setupPromptRequiresStableApprovalAndDiscardsTransientUpdateStatus() {
+    var gate = HelperApprovalPromptGate()
+    for (required, now, expected) in [(false, 0.0, false), (true, 1, false), (true, 2.9, false),
+                                      (false, 3, false), (true, 10, false), (true, 12, true), (false, 13, false)] {
+        let present = gate.shouldPresent(approvalRequired: required, now: now)
+        #expect(present == expected)
+    }
+}
+@MainActor @Test func setupPromptUsesPermissionNotMissingRegistrationAndMenuOpensInstructions() throws {
+    _ = NSApplication.shared
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let permission = SetupPermission()
+    permission.status = .notRegistered
+    let capabilities = HardwareCapabilities(model: "Test", stage: .restorationQualification, topology: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false, capabilities: capabilities,
+                         helperAvailable: { permission.status == .enabled }, helperRegistrationStatus: { permission.status })
+    #expect(!model.shouldPresentHelperApproval)
+    permission.status = .requiresApproval; model.refreshHelperSetup()
+    #expect(model.shouldPresentHelperApproval)
+    let presenter = StatusMenu(model: model, install: false), menu = NSMenu()
+    var openedInstructions = false
+    presenter.openHelperSetup = { openedInstructions = true }
+    presenter.rebuild(menu)
+    let row = try #require(menu.items.first { $0.title == "Allow Fan Control…" })
+    let action = try #require(row.action)
+    #expect(NSApp.sendAction(action, to: row.target, from: row))
+    #expect(openedInstructions)
+    permission.status = .enabled; model.refreshHelperSetup()
+    #expect(!model.shouldPresentHelperApproval && !model.needsHelperSetup)
+    presenter.rebuild(menu)
+    #expect(!menu.items.contains { $0.title == "Allow Fan Control…" })
+}
+@MainActor @Test func setupPromptWaitsForStartupAndDoesNotCompleteWhileRegistrationIsPending() async {
+    _ = NSApplication.shared
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let permission = SetupPermission()
+    let capabilities = HardwareCapabilities(model: "Test", stage: .restorationQualification, topology: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: true, capabilities: capabilities,
+                         helperAvailable: { false }, helperRegistrationStatus: { permission.status })
+    defer { model.stop() }
+    #expect(model.helperSetupInitializing && !model.shouldPresentHelperApproval && !model.needsHelperSetup)
+    #expect(!model.canActivate(BuiltInProfiles.maximum))
+    let controller = HelperSetupWindowController(model: model)
+    defer { controller.close() }
+    #expect(!controller.refreshApproval() && !controller.completed)
+    permission.status = .enabled
+    for _ in 0..<10 {
+        await Task.yield()
+        if !model.helperSetupInitializing { break }
+    }
+    #expect(!model.helperSetupInitializing && !model.shouldPresentHelperApproval)
+    #expect(controller.refreshApproval() && controller.completed)
+}
+@Test func setupInstructionsHaveSeparateOrderedSteps() {
+    #expect(HelperSetupInstructions.steps == ["Open System Settings.", "General → Login Items & Extensions", "Background App Activity → enable Fandy."])
+}
 @MainActor @Test func dedicatedSetupClosesOnApprovalAndNeverRequiresASettingsWindow() {
     _ = NSApplication.shared
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

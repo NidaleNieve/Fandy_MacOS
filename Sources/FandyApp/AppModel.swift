@@ -22,6 +22,7 @@ import ServiceManagement
     private var defaultSelectionRevision: UInt64 = 0
     var defaultResumeBlocked = false
     var helperSetupStatus: SMAppService.Status = .notRegistered
+    private(set) var helperSetupInitializing = false
     var helperSetupError: String?
     let helperRegistrationStatus: @MainActor () -> SMAppService.Status
     var scheduledPeriodID: UUID?
@@ -115,6 +116,7 @@ import ServiceManagement
         let loaded = store.load(); profiles = loaded.profiles; issues = loaded.issues; automation = loaded.automation
         defaultResumeBlocked = !issues.isEmpty
         helperSetupStatus = self.helperRegistrationStatus()
+        helperSetupInitializing = autoStart && !simulation
         // Lifecycle begins from System regardless of persisted selection.
         if autoStart { Task { [weak self] in self?.start() } }
     }
@@ -164,7 +166,7 @@ import ServiceManagement
     }
     func canActivate(_ profile: Profile) -> Bool {
         if preparingUpdate || refreshingHelper { return false }
-        if profile.kind != .system && needsHelperSetup { return false }
+        if profile.kind != .system && (helperSetupInitializing || needsHelperSetup) { return false }
         if simulation || profile.kind == .system { return true }
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
            (try? snapshot.validate(now: clock(), required: profile.requiredSensors(chipPolicy: capabilities.chipPolicy))) != nil { return true }
@@ -212,18 +214,21 @@ import ServiceManagement
     func start() {
         guard loop == nil, !quitting else { return }
         observePower(); configureLogin()
+        helperSetupInitializing = !simulation
         loop = Task { [weak self] in
-            if let self, !self.simulation, let native = self.client as? FanXPCClient,
-               Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier {
-                do { try await HelperManager.migrateLegacyService(client: native) }
-                catch { self.helperSetupError = "Fan helper migration failed. Reopen Fandy to retry."; return }
-                guard !Task.isCancelled, !self.quitting else { return }
-                self.prepareHelperSetup()
-            }
-            // First-launch/reconnect handback is an actual verified transaction, not
-            // an assumed state or a temperature-gated operation.
-            if let self, !self.simulation, self.capabilities.canRestore, self.helperAvailable() {
-                if let effect = try? self.machine.select(BuiltInProfiles.system) { await self.execute(effect) }
+            if let self {
+                defer { self.refreshHelperSetup(); self.helperSetupInitializing = false }
+                if !self.simulation, let native = self.client as? FanXPCClient,
+                   Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier {
+                    do { try await HelperManager.migrateLegacyService(client: native) }
+                    catch { self.helperSetupError = "Fan helper migration failed. Reopen Fandy to retry."; return }
+                    guard !Task.isCancelled, !self.quitting else { return }
+                    self.prepareHelperSetup()
+                }
+                // Handback is verified before startup UI interprets registration.
+                if !self.simulation, self.capabilities.canRestore, self.helperAvailable() {
+                    if let effect = try? self.machine.select(BuiltInProfiles.system) { await self.execute(effect) }
+                }
             }
             while !Task.isCancelled {
                 guard self != nil else { break }; await self?.tick()

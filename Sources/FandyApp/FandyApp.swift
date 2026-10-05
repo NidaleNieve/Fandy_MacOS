@@ -44,6 +44,7 @@ struct FandyApp: App {
     private var profilesWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var helperSetupWindow: HelperSetupWindowController?
+    private var helperSetupTask: Task<Void, Never>?
     private var shortcuts: GlobalShortcuts?
     private var shortcutLoop: Task<Void, Never>?
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -52,15 +53,29 @@ struct FandyApp: App {
         let status = StatusMenu(model: model)
         status.openProfiles = { [weak self] in self?.showProfiles() }
         status.openSettings = { [weak self] in self?.showSettings() }
+        status.openHelperSetup = { [weak self] in self?.showHelperSetup() }
         menu = status
         guard !CommandLine.arguments.contains("--functional-check"), (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
-        Task { [weak self, weak model] in
-            // Registration is performed by the model's startup task. Give its
-            // native approval status a chance to settle before explaining it.
-            try? await Task.sleep(for: .seconds(1))
-            guard let model else { return }; model.refreshHelperSetup()
-            guard model.needsHelperSetup, !model.isQuitting else { return }
-            self?.showHelperSetup()
+        helperSetupTask = Task { [weak self, weak model] in
+            // A fixed delay races update-time re-registration. Wait for actual
+            // startup completion, then ask only for explicit native approval.
+            while model?.helperSetupInitializing == true {
+                guard !Task.isCancelled, model?.isQuitting == false else { return }
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            }
+            var gate = HelperApprovalPromptGate()
+            // Native registration status can briefly lag a completed register.
+            // Observe explicit approval continuously; enabled exits immediately.
+            for _ in 0..<40 {
+                guard !Task.isCancelled, let model, !model.isQuitting,
+                      !model.simulation, model.capabilities.canRestore else { return }
+                model.refreshHelperSetup()
+                if !model.helperSetupInitializing && model.helperSetupStatus == .enabled { return }
+                if gate.shouldPresent(approvalRequired: model.shouldPresentHelperApproval, now: model.clockNow()) {
+                    self?.showHelperSetup(); return
+                }
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
         }
         model.updates = UpdateController(model: model)
         let shortcuts = GlobalShortcuts(); self.shortcuts = shortcuts
@@ -90,7 +105,9 @@ struct FandyApp: App {
         if let profilesWindow { present(profilesWindow) }
     }
     private func showHelperSetup() {
-        guard let model, model.needsHelperSetup, !model.isQuitting else { return }
+        guard let model, !model.isQuitting, !model.helperSetupInitializing else { return }
+        model.prepareHelperSetup()
+        guard model.needsHelperSetup else { helperSetupWindow?.refreshApproval(); return }
         if helperSetupWindow == nil { helperSetupWindow = HelperSetupWindowController(model: model) }
         guard let controller = helperSetupWindow, let window = controller.window else { return }
         present(window); controller.monitorApproval()
@@ -111,7 +128,7 @@ struct FandyApp: App {
             guard let window else { return }; NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
         }
     }
-    func applicationWillTerminate(_ notification: Notification) { helperSetupWindow?.close(); shortcutLoop?.cancel(); shortcuts?.stop() }
+    func applicationWillTerminate(_ notification: Notification) { helperSetupTask?.cancel(); helperSetupWindow?.close(); shortcutLoop?.cancel(); shortcuts?.stop() }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model else { return .terminateNow }
         if model.canTerminate { return .terminateNow }
