@@ -1,10 +1,10 @@
 # Current checkpoint — 0.2.4 build 21
 
-Tests-first M2 acknowledgement integration and the Silent rename are described in [verification and remaining acceptance](M2_SILENT_024.md). Work is based on build 20, preserving the curve-first policy and helper bootstrap corrections.
+Tests-first M2 acknowledgement integration and the Silent rename are merged. The local signed, notarized build 21 DMG and installed app pass verification; 454 Swift tests, 52 tool tests, focused sanitizers and both CI Release builds pass. M5 transition/recovery checks finish in System. See [verification and remaining acceptance](M2_SILENT_024.md). Public release/updater publication waits for user testing; official-signature M2 startup remains pending.
 
 > Naming note: School was renamed Silent in 0.2.4 build 21. Historical observations below retain the name used during measurement.
 
-> Latest local delivery: [0.2.4 build 20](FAN_RESPONSE_024.md). This document retains historical measurements below; current curve-first behavior supersedes prior hidden guard escalation.
+> Previous local delivery: [0.2.4 build 20](FAN_RESPONSE_024.md). This document retains historical measurements below; current curve-first behavior supersedes prior hidden guard escalation.
 
 # Current checkpoint — 2026-10-05: actual 0.2.1 release
 
