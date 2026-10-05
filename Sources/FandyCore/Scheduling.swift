@@ -76,6 +76,7 @@ public struct AppPreferences: Codable, Sendable, Equatable {
         shortcuts = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcuts) ?? [:]
         automaticUpdates = try c.decodeIfPresent(Bool.self, forKey: .automaticUpdates) ?? true
         updateFrequency = try c.decodeIfPresent(UpdateFrequency.self, forKey: .updateFrequency) ?? .weekly
+        if updateFrequency == .never { automaticUpdates = false; updateFrequency = .weekly }
     }
 }
 public struct AutomationConfiguration: Codable, Sendable, Equatable {

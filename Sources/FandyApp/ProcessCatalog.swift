@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Darwin
+import FandyCore
 
 struct RunningProcess: Identifiable, Equatable {
     let pid: Int32
@@ -9,6 +10,11 @@ struct RunningProcess: Identifiable, Equatable {
     let bundleID: String?
     let icon: NSImage?
     var id: String { "\(pid):\(launched.timeIntervalSince1970)" }
+    var activationIdentifiers: Set<String> { Set([bundleID, "process:" + name].compactMap { $0 }) }
+    var activationCondition: ProfileApplication {
+        if let bundleID { return .init(id: bundleID, name: name) }
+        return .init(id: name, name: name, kind: .process)
+    }
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id && lhs.name == rhs.name }
 }
 

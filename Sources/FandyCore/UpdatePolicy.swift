@@ -3,11 +3,13 @@ import Foundation
 /// Shared with the signed helper. Release verification checks this against Info.plist.
 public enum FandyBuild {
     public static let version = "0.2.4"
-    public static let identifier = "21"
+    public static let identifier = "22"
 }
 
 public enum UpdateFrequency: String, Codable, Sendable, CaseIterable, Identifiable {
     case never, daily, weekly, monthly
+    // Retain the retired value for legacy decoding, but never offer it in Settings.
+    public static let allCases: [Self] = [.daily, .weekly, .monthly]
     public var id: String { rawValue }
     public var title: String { rawValue.capitalized }
     public var interval: TimeInterval? {

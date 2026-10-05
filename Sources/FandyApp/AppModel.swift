@@ -18,6 +18,8 @@ import ServiceManagement
     var activationDeadline: Double?
     var watchedProcessName: String?
     var awaitingApplicationID: String?
+    var watchedApplications: [ProfileApplication] = []
+    var watchedApplicationsHaveRun = false
     var previousDefaultProfileID = "system"
     private var defaultSelectionRevision: UInt64 = 0
     var defaultResumeBlocked = false
@@ -41,7 +43,7 @@ import ServiceManagement
     var pendingApplicationLaunches: Set<String> = []
     private var applicationCatalogRefreshedAt = -Double.infinity
     private(set) var runningApplications: [RunningProcess] = []
-    let applicationCatalog: @MainActor () -> [RunningProcess]
+    let applicationCatalog: (@MainActor () -> [RunningProcess])?
     var isQuitting: Bool { quitting }
     func clockNow() -> Double { clock() }
     var editorSelection = "system-plus"
@@ -104,7 +106,7 @@ import ServiceManagement
          helperRegistrationStatus: (@MainActor () -> SMAppService.Status)? = nil,
          powerCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
          wallClock: @escaping @Sendable () -> Date = { Date() },
-         applicationCatalog: @escaping @MainActor () -> [RunningProcess] = { ProcessCatalog.list(includeHelpers: false, includeIcons: false) },
+         applicationCatalog: (@MainActor () -> [RunningProcess])? = nil,
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
         self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
@@ -278,16 +280,21 @@ import ServiceManagement
             Task { await execute(effect) }
         } catch { draftError = error.localizedDescription }
     }
-    func refreshApplicationAvailability(force: Bool = false) {
-        guard force || (automation.activationDefaults.values.contains { $0.kind == .application || $0.launchWhenOpened } && clock() - applicationCatalogRefreshedAt >= 1) else { return }
-        let running = applicationCatalog().filter { ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }
+    func refreshApplicationAvailability(force: Bool = false, configuration: AutomationConfiguration? = nil) {
+        let rules = configuration ?? automation
+        guard force || (rules.activationDefaults.values.contains { $0.kind == .application || $0.launchWhenOpened } && clock() - applicationCatalogRefreshedAt >= 1) else { return }
+        let needsProcesses = rules.activationDefaults.values.contains { $0.applications.contains { $0.kind == .process } } || watchedApplications.contains { $0.kind == .process }
+        let running = (applicationCatalog?() ?? ProcessCatalog.list(includeHelpers: needsProcesses, includeIcons: false)).filter { ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }
         let instances = Set(running.map { "\($0.pid):\($0.launched.timeIntervalSince1970)" })
         if let previous = observedApplicationInstances {
-            pendingApplicationLaunches.formUnion(running.filter { !previous.contains("\($0.pid):\($0.launched.timeIntervalSince1970)") }.compactMap(\.bundleID))
+            for process in running where !previous.contains(process.id) { pendingApplicationLaunches.formUnion(process.activationIdentifiers) }
         }
         observedApplicationInstances = instances
         runningApplications = running
-        runningApplicationIDs = Set(running.compactMap(\.bundleID))
+        runningApplicationIDs = running.reduce(into: Set<String>()) { $0.formUnion($1.activationIdentifiers) }
+        if !watchedApplications.isEmpty, !runningApplicationIDs.isDisjoint(with: Set(watchedApplications.map(\.matchingIdentifier))) {
+            watchedApplicationsHaveRun = true; awaitingApplicationID = nil
+        }
         applicationCatalogRefreshedAt = clock()
     }
     func tick() async {

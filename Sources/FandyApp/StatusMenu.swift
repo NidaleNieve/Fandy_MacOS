@@ -79,8 +79,8 @@ import FandyCore
         applications.addItem(appControls)
         timing.addItem(.separator())
         let forever = add("Until Changed", to: timing) { [weak model] in model?.activateForever() }
-        if case .forever = model.manualIntent?.limit, model.awaitingApplicationID == nil { forever.state = .on }
-        if (model.manualIntent.map { $0.limit != .forever } ?? false) || model.awaitingApplicationID != nil || model.scheduledPeriodID != nil {
+        if case .forever = model.manualIntent?.limit, model.awaitingApplicationID == nil, model.watchedApplications.isEmpty { forever.state = .on }
+        if (model.manualIntent.map { $0.limit != .forever } ?? false) || !model.watchedApplications.isEmpty || model.awaitingApplicationID != nil || model.scheduledPeriodID != nil {
             let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); menu.addItem(explanation)
         }
         if model.showsCancellation {

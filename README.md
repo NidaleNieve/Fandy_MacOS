@@ -46,6 +46,7 @@ Create and edit custom profiles with intuitive graphs for chip and chassis tempe
 ## Fit it around your day
 
 - **Temporary cooling:** activate a profile for minutes or hours, until a time, or until an application closes.
+- **App triggers:** choose several programs for a profile. Activate when any opens and keep it active until all close.
 - **Schedules:** choose weekday periods, overnight schedules and vacation pauses.
 - **Customizable menu temperatures:** choose the sensor readings shown inside the menu, including CPU/GPU averages and chassis temperatures. Live readings are also available beside the profile editor.
 - **At a glance:** show fan speeds and assign keyboard shortcuts.

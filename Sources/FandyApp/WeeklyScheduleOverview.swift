@@ -90,11 +90,11 @@ struct ProfileConditionOverviewRow: Identifiable, Equatable {
     static func rows(profiles: [Profile], automation: AutomationConfiguration) -> [Self] {
         profiles.compactMap { profile in
             guard let rule = automation.activationDefaults[profile.id], rule.launchWhenOpened || rule.kind != .forever else { return nil }
-            let app = rule.applicationName.isEmpty ? rule.applicationID : rule.applicationName
+            let app = rule.applicationNames
             let limit: String
             switch rule.kind {
             case .forever: limit = "Until changed"
-            case .application: limit = "Until \(app) closes"
+            case .application: limit = rule.applications.count > 1 ? "Until all selected applications close" : "Until \(app) closes"
             case .duration:
                 let hours = rule.seconds / 3600, minutes = (rule.seconds % 3600) / 60, seconds = rule.seconds % 60
                 limit = "For " + [hours > 0 ? "\(hours) hr" : nil, minutes > 0 ? "\(minutes) min" : nil, seconds > 0 ? "\(seconds) sec" : nil].compactMap { $0 }.joined(separator: " ")

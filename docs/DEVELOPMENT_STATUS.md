@@ -1,4 +1,8 @@
-# Current checkpoint — 0.2.4 build 21
+# Current checkpoint — 0.2.4 build 22
+
+Per-profile multiple application triggers and all-close conditions are implemented, including helper-process selection and legacy rule migration. Never is removed from the automatic-update frequency picker; legacy Never uses the disabled Automatic Updates toggle. 463 Swift and 52 tool tests pass, with a signed Release build and notarized local DMG. See [behavior and verification](MULTIPLE_APPLICATION_CONDITIONS.md). Public release/updater publication remains held for user testing.
+
+# Previous checkpoint — 0.2.4 build 21
 
 Tests-first M2 acknowledgement integration and the Silent rename are merged. The local signed, notarized build 21 DMG and installed app pass verification; 454 Swift tests, 52 tool tests, focused sanitizers and both CI Release builds pass. M5 transition/recovery checks finish in System. See [verification and remaining acceptance](M2_SILENT_024.md). Public release/updater publication waits for user testing; official-signature M2 startup remains pending.
 
