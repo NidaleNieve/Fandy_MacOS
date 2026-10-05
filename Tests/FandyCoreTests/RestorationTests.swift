@@ -3,8 +3,6 @@ import Testing
 @testable import FandyCore
 // Each test owns its spy. Production serializes I/O; unchecked Sendable supports that protocol boundary.
 final class FanSpy: FanHardwareIO, @unchecked Sendable {
-    var guardEvaluator: (@Sendable (HardwareSnapshot, Double) throws -> Double)?
-    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double) { guardEvaluator = evaluate }
     var normalize: ([FanTarget]) throws -> [FanTarget] = { $0 }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { try normalize(targets) }
     var fans=[Fan(id:0,min:2000,max:8000,actual:3000,mode:.manual),Fan(id:1,min:2200,max:7400,actual:3000,mode:.manual)]
@@ -23,12 +21,13 @@ final class FanSpy: FanHardwareIO, @unchecked Sendable {
     func setManual(fanID:Int) throws { calls.append("manual\(fanID)");if failManual==fanID { throw ControlError.invalidFan };fans[fanID].mode = .manual }
     func setTarget(fanID:Int,rpm:Double) throws { calls.append("target\(fanID)");if failTarget==fanID { throw ControlError.invalidFan };fans[fanID].targetRPM=rpm }
     func applyValidatedTargets(_ targets: [FanTarget]) throws {
-        // Match the reviewed production adapter: all modes, then all targets.
+        // Each fan receives its target promptly after its mode acknowledgement.
         for target in targets where fans[target.fanID].mode == .automatic {
             try setManual(fanID: target.fanID)
             guard try readMode(fanID: target.fanID) == .manual else { throw ControlError.restorationUnverified }
+            try setTarget(fanID: target.fanID, rpm: target.rpm)
         }
-        for target in targets { try setTarget(fanID: target.fanID, rpm: target.rpm) }
+        for target in targets where fans[target.fanID].targetRPM != target.rpm { try setTarget(fanID: target.fanID, rpm: target.rpm) }
     }
     func snapshot() -> HardwareSnapshot {
         let readings=SensorRole.allCases.map { SensorReading($0,invalid && $0 == .gpuPeak ? nil : hot ? 85 : 40,at:now,sequence:UInt64(now*10)) }
@@ -71,7 +70,7 @@ func leasedCoordinator(_ spy:FanSpy) throws -> (HelperCoordinator,ControlLease,U
     let spy=FanSpy();let (coordinator,lease,owner)=try leasedCoordinator(spy)
     let snapshot=coordinator.status().snapshot!
     try coordinator.apply(TargetRequest(leaseID:lease.id,generation:1,snapshotID:snapshot.id,targets:[FanTarget(0,3000),FanTarget(1,3000)]),owner:owner)
-    spy.now=11;spy.hot=true;coordinator.watchdog();#expect(spy.fans.map(\.targetRPM)==[8000,7400])
+    spy.now=11;spy.hot=true;coordinator.watchdog();#expect(spy.fans.map(\.targetRPM)==[3000,3000])
     spy.now=12;spy.invalid=true;coordinator.watchdog();#expect(spy.fans.allSatisfy{$0.mode == .automatic})
 }
 @Test func connectionOwnerAndStaleSnapshotAreEnforced() throws {
@@ -207,7 +206,7 @@ func qualifiedCapabilities(stage: HardwareStage = .qualifiedControl) -> Hardware
     #expect(spy.fans.allSatisfy { $0.targetRPM == 3001 })
     spy.hot = true; spy.now += 1; coordinator.watchdog()
     #expect(coordinator.status().fault == nil)
-    #expect(spy.fans.allSatisfy { $0.targetRPM! == ceil($0.targetRPM!) && $0.targetRPM! > 3001 })
+    #expect(spy.fans.allSatisfy { $0.targetRPM == 3001 })
     spy.normalize = { $0.map { FanTarget($0.fanID, $0.rpm - 1) } }
     let fresh = coordinator.status().snapshot!
     #expect(throws: ControlError.invalidFan) { try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: fresh.id, targets: [FanTarget(0, 3000.2), FanTarget(1, 3000.7)]), owner: owner) }

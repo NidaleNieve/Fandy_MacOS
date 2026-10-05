@@ -58,12 +58,16 @@ private func delayedCoordinator(_ spy: FanSpy, stage: HardwareStage = .qualified
     }
 }
 
-@Test func returningLateNormalizationCannotEscalateAnExpiredLease() throws {
+@Test func returningLateNormalizationCannotApplyAnExpiredLease() throws {
     let spy = FanSpy()
-    let (coordinator, _, _) = try delayedCoordinator(spy) {}
-    spy.hot = true; spy.calls = []
+    let (coordinator, lease, owner) = try delayedCoordinator(spy) {}
+    let snapshot = try #require(coordinator.status().snapshot)
+    spy.calls = []
     spy.normalize = { targets in spy.now += 11; return targets }
-    coordinator.watchdog()
+    #expect(throws: ControlError.staleSession) {
+        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+            targets: [FanTarget(0,4100),FanTarget(1,4100)]), owner: owner)
+    }
     #expect(spy.calls == ["auto0", "auto1"])
 }
 
@@ -82,18 +86,18 @@ private func delayedCoordinator(_ spy: FanSpy, stage: HardwareStage = .qualified
     #expect(spy.fans.allSatisfy { $0.mode == .automatic })
 }
 
-@Test func batchAdapterEstablishesEveryModeBeforeAnyTarget() throws {
+@Test func batchAdapterTargetsEachFanBeforeNextAdmission() throws {
     let spy = FanSpy(); spy.fans = spy.fans.map { var fan = $0; fan.mode = .automatic; return fan }
     try FanRestoration.apply([FanTarget(0, 4000), FanTarget(1, 4000)], using: spy)
-    #expect(spy.calls == ["manual0", "manual1", "target0", "target1"])
+    #expect(spy.calls == ["manual0", "target0", "manual1", "target1"])
 }
 
-@Test func secondModeFailureRestoresBothWithoutWritingAnyTargets() {
+@Test func secondModeFailureRestoresBothAfterFirstTarget() {
     let spy = FanSpy(); spy.fans = spy.fans.map { var fan = $0; fan.mode = .automatic; return fan }; spy.failManual = 1
     #expect(throws: (any Error).self) {
         try FanRestoration.apply([FanTarget(0, 4000), FanTarget(1, 4000)], using: spy)
     }
-    #expect(spy.calls == ["manual0", "manual1", "auto0", "auto1"])
+    #expect(spy.calls == ["manual0", "target0", "manual1", "auto0", "auto1"])
     #expect(spy.fans.allSatisfy { $0.mode == .automatic })
 }
 
@@ -137,7 +141,7 @@ private func delayedCoordinator(_ spy: FanSpy, stage: HardwareStage = .qualified
     coordinator.watchdog(); #expect(reads == initial + 1)
     spy.now += 0.1; coordinator.watchdog(); #expect(reads == initial + 1)
     spy.now = 10.5; spy.hot = true; coordinator.watchdog()
-    #expect(reads == initial + 2); #expect(spy.fans.map(\.targetRPM) == [8000, 7400])
+    #expect(reads == initial + 2); #expect(spy.fans.map(\.targetRPM) == [4000, 4000])
     spy.now = 19.9; coordinator.watchdog()
     let lastRead = reads; spy.calls = []
     spy.now = 20; coordinator.watchdog()

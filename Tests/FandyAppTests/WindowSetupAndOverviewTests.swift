@@ -191,3 +191,52 @@ import Testing
     for _ in 0..<8 { await model.tick() }
     #expect(model.isSelected("cool-chassis") && !model.showsCancellation)
 }
+
+@MainActor @Test func approvedFailedHelperShowsRecoveryInsteadOfPermissionAndExportsStructuredFailure() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let capabilities = HardwareCapabilities(model: "Test", stage: .restorationQualification, topology: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+        capabilities: capabilities, helperAvailable: { true }, helperRegistrationStatus: { .enabled })
+    model.helperBootstrap = .init(stage: .failed, attempt: 3, failureCode: "smc_open")
+    model.helperSetupError = "Bootstrap error retained"
+    model.refreshHelperSetup()
+    #expect(model.helperSetupError == "Bootstrap error retained")
+    #expect(!model.needsHelperSetup && !model.shouldPresentHelperApproval && model.needsHelperAttention)
+    let menu = NSMenu(), presenter = StatusMenu(model: model, install: false); presenter.rebuild(menu)
+    #expect(!menu.items.contains { $0.title == "Allow Fan Control…" })
+    #expect(menu.items.contains { $0.title == "Retry Fan Helper" })
+    #expect(menu.items.contains { $0.title == "Export Diagnostics…" })
+    let data = try JSONSerialization.jsonObject(with: model.sanitizedDiagnostics()) as! [String: Any]
+    #expect(data["bootstrapStage"] as? String == "failed")
+    #expect(data["bootstrapAttempt"] as? Int == 3)
+    #expect(data["build"] as? String == "20")
+}
+
+private actor BootstrapClient: PrivilegedFanClient {
+    var applies = 0
+    let stage: HelperBootstrapStatus.Stage
+    init(stage: HelperBootstrapStatus.Stage) { self.stage = stage }
+    func status() -> HelperStatus {
+        var value = HelperStatus(automaticVerified: false, observationOnly: true, fault: "Fan helper could not start")
+        value.bootstrap = .init(stage: stage, attempt: 3, failureCode: stage == .failed ? "unsupported_metadata" : nil)
+        return value
+    }
+    func apply(_ targets: [FanTarget], generation: UInt64) { applies += 1 }
+    func apply(_ targets: [FanTarget], generation: UInt64, required: Set<SensorRole>) { applies += 1 }
+    func restoreAutomatic() throws { throw ControlError.restorationUnverified }
+}
+@MainActor @Test(arguments: [HelperBootstrapStatus.Stage.failed, .initializing, .restoring])
+func nonReadyApprovedBackendRemainsObservableWithoutApprovalOrControl(stage: HelperBootstrapStatus.Stage) async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let client = BootstrapClient(stage: stage)
+    let capabilities = HardwareCapabilities(model: "Test", stage: .restorationQualification, topology: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false, client: client,
+        capabilities: capabilities, helperAvailable: { true }, helperRegistrationStatus: { .enabled })
+    for _ in 0..<4 { await model.tick() }
+    #expect(model.helperBootstrap?.stage == stage && !model.shouldPresentHelperApproval)
+    #expect(model.helperHealth != .controlReady && !model.canActivate(BuiltInProfiles.maximum))
+    #expect(await client.applies == 0)
+    if stage == .failed { #expect(model.needsHelperAttention && model.hardwareError == "Fan helper could not start") }
+}

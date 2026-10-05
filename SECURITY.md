@@ -18,7 +18,7 @@ The production qualifiedControl build is registered through SMAppService. Its co
 | --- | --- | --- |
 | status | No arguments | Bounded versioned status with independently sampled sensors/fans and fresh observed ownership. Wire version 2 includes observationOnly and optional informational capability/per-fan and retained startup restoration reports. Never renews heartbeat. |
 | beginLease | Version, UInt64 generation, enumerated required sensor roles | Creates one connection-owned expiring UUID lease after valid fan telemetry and policy-required sensors; empty roles designate fixed maximum. |
-| applyTargets | Version, lease UUID, generation, recent helper snapshot UUID, complete fan-ID/RPM list | Validates again inside helper, enforces fixed maximum or qualified chip guard, applies a bounded transaction and renews heartbeat. |
+| applyTargets | Version, lease UUID, generation, recent helper snapshot UUID, complete fan-ID/RPM list | Validates again inside helper, enforces fixed maximum or validated curve targets and complete required inputs, applies a bounded transaction and renews heartbeat. |
 | restoreAutomatic | No arguments | Revoke/release ordinary and recovery ownership, verify every fan; reserved admission capacity. |
 | qualifyRecovery | Version2, fixed initial/recovery/heartbeat action, heartbeat session UUID | Historical recovery-stage finite trial; disabled in production qualifiedControl. No caller-supplied RPM, IDs, keys, duration or qualification. |
 
@@ -30,7 +30,7 @@ The historical separate `recoveryQualification` compiled authority permitted onl
 
 The listener uses the public macOS 13+ `NSXPCListener.setConnectionCodeSigningRequirement`. It accepts only `anchor apple generic`, its own signing Team ID and exact `is.dsr.fandy` identifier. The client uses `NSXPCConnection.setCodeSigningRequirement` with the same Team ID and exact helper identifier. No PID-only trust, private audit-token KVC or unrestricted same-team check is used. The framework's requirement enforcement authenticates connecting code before messages are dispatched. Ordinary root-origin connections are additionally rejected; the intended GUI is unprivileged.
 
-A genuine signed app from another user can request safe release, but a UUID lease is owned by one connection and cannot be renewed by another. An already authenticated compromised GUI can request fans within policy bounds; this is the deliberately granted capability. Helper-side sensor sampling, immutable chip guard and expiry restrict that capability.
+A genuine signed app from another user can request safe release, but a UUID lease is owned by one connection and cannot be renewed by another. An already authenticated compromised GUI can request fans within policy bounds; this is the deliberately granted capability. Helper-side sensor sampling, complete chip-input validation and expiry restrict that capability.
 
 JSON input is capped at 16 KiB before queueing, versioned and decoded into fixed types. Unknown roles, negative/overflowing unsigned generations, malformed numeric values and non-finite floats are rejected. IDs must exactly cover actual enumerated fans with no duplicates; targets must be within each fan's own valid finite bounds. Snapshots must have been issued recently by this helper. All transactions validate before writes and restore on partial failure. A token bucket permits a burst of ten messages and four/sec afterwards, checked before serial-queue admission.
 
@@ -70,7 +70,7 @@ The temporary helper restart test could signal only its own process during an au
 
 ## Production temperature integration
 
-The helper computes a fresh independent chip guard from the complete fixed 105-key envelope. Each required member must be typed, plausible and freshly acquired; no estimate/partial group substitutes on failure. Top proximity remains a mandatory airflow-group input with its uncertainty disclosed. Profile and helper escalation targets round upward to whole RPM within each fan's verified integral limits, and acknowledgement tracking uses normalized values. Invalid normalization restores both fans. Curves themselves retain continuous interpolation.
+The helper validates the complete fixed 105-key chip envelope. Each required member must be typed, plausible and freshly acquired; no estimate/partial group substitutes on failure. Top proximity remains a mandatory airflow-group input with its uncertainty disclosed. Profile targets round upward to whole RPM within each fan's verified integral limits, and acknowledgement tracking uses normalized values. Invalid normalization restores both fans. Curves themselves retain continuous interpolation.
 
 The reviewed transaction establishes both manual modes before writing validated targets. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
 
@@ -112,6 +112,8 @@ The GUI uses pinned Sparkle 2.10.0. Update archives require Ed25519 signatures b
 
 The old `is.dsr.fandy.fan-helper.plist` remains embedded only for ServiceManagement removal during migration from cached development-signing launch constraints. The distribution launchd label is `is.dsr.fandy.fan-service`; the authenticated Mach service and helper signing identity remain unchanged.
 
-## 0.2.4 fan response
+## 0.2.4 build 20
 
-Profile imports may select CPU/GPU inputs and ordinary fan response, but cannot change helper guard timing or remove the complete compiled chip safety requirement. The five XPC methods and closed command shapes are unchanged. Optional guard telemetry is response-only. Nominal moderate guard averaging has a fixed three-second window; high demand and fair-pressure guard enforcement bypass it. Reference hardware callbacks invoke the same coordinator-owned evaluator exclusively on the serial helper queue. No caller-supplied callback, sensor key, duration or hardware authority is accepted.
+Profile imports select CPU/GPU inputs and response settings, but cannot remove the complete compiled chip-input requirement or grant hardware authority. The helper no longer raises valid targets through an independent temperature-to-fan curve; pressure and sensor failure revoke ownership instead. The five authenticated XPC methods, closed shapes, per-fan bounds, bounded request gate and connection-owned heartbeat remain unchanged.
+
+The authenticated listener remains available after bootstrap failure. A failed or initializing backend cannot admit leases; status carries fixed startup stages/error codes and a capped transition history. The GUI exports only allowlisted build/macOS/native registration/startup/fan-interface fields, plus sanitized control evidence; no personal paths, profile names, schedules, signing identity or arbitrary log text. Native `requiresApproval` alone opens the permission guide. Retry preserves failed-handback evidence and limits automatic rebind to one attempt for an enabled stale registration.

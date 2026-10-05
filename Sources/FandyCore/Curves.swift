@@ -62,7 +62,10 @@ public struct DemandGovernor: Sendable {
     private var filtered: Double = 0
     public init() {}
     public mutating func reset(_ value: Double = 0) { output = value; filtered = value; lastTime = nil; lowerSince = nil }
-    /// Lift only to the independent floor; retain downward hysteresis afterward.
+    public mutating func constrain(to ceiling: Double) {
+        output = min(output, ceiling); filtered = min(filtered, ceiling)
+    }
+    /// Retained for decoding/testing older policies; production has no hidden floor.
     public mutating func enforceMinimum(_ value: Double) throws -> Double {
         guard value.isFinite, (0...100).contains(value) else { throw ControlError.invalidNumber }
         if value > output { output = value; filtered = value; lowerSince = nil }

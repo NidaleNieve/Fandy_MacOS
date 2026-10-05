@@ -125,7 +125,7 @@ public enum RecoveryTargetReadback {
 /// Uses only the two reviewed fan IDs and their freshly validated limits/metadata.
 public enum SMCProfileWriter {
     /// Observed Mac17,9 targets acknowledge whole RPM. Round upward so quantization
-    /// cannot attenuate either the profile request or the immutable chip guard.
+    /// preserves the requested profile level within whole-RPM hardware resolution.
     public static func normalizedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> [FanTarget] {
         guard targets.count == fans.count, Set(targets.map(\.fanID)) == Set(fans.map(\.id)),
               Set(targets.map(\.fanID)).count == targets.count else { throw ControlError.invalidFan }
@@ -138,8 +138,8 @@ public enum SMCProfileWriter {
         }
     }
     /// Mac17,9 automatic preloading does not retain its target. Reviewed production
-    /// admission therefore writes manual once, verifies it, then immediately writes the
-    /// validated target in the helper batch. No alternate sequence or unlock key fallback.
+    /// admission therefore writes manual once, verifies only its mode, then immediately
+    /// writes that fan’s validated target before admitting another fan. No alternate sequence or unlock key fallback.
     public static func startAutomatic(fan: Fan, mode: DiscoveredSensor, previous: DiscoveredSensor,
                                       transport: any SMCStructTransport) throws {
         try fan.validate()
@@ -166,7 +166,7 @@ public enum SMCProfileWriter {
         let bytes = (0..<4).map { UInt8(truncatingIfNeeded: encoded.bitPattern >> ($0 * 8)) }
         try SMCRecoveryWriter.write(key: metadata.key, type: metadata.type, attributes: metadata.attributes, bytes: bytes, transport: transport)
     }
-    private static func validateTargetMetadata(_ metadata: DiscoveredSensor, fan: Fan) throws {
+    public static func validateTargetMetadata(_ metadata: DiscoveredSensor, fan: Fan) throws {
         guard metadata.key == "F\(fan.id)Tg", metadata.type == "flt ", metadata.size == 4,
               metadata.attributes == 212, metadata.bytes.count == 4, metadata.error == nil,
               let value = metadata.value, value == SMCDecoder.decode(type: metadata.type, bytes: metadata.bytes),

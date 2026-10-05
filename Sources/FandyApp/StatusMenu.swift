@@ -40,10 +40,10 @@ import FandyCore
     func updateTitle() {
         refreshSelection()
         item?.button?.attributedTitle = NSAttributedString(
-            string: model.needsHelperSetup ? "●" : "",
+            string: model.needsHelperAttention ? "●" : "",
             attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.systemFont(ofSize: 8)])
-        item?.button?.setAccessibilityLabel(model.needsHelperSetup ? "Fandy — fan control approval needed" : "Fandy")
-        item?.button?.toolTip = model.needsHelperSetup ? model.helperSetupMessage : model.statusText + " · " + model.activationDescription
+        item?.button?.setAccessibilityLabel(model.needsHelperAttention ? "Fandy — fan control unavailable" : "Fandy")
+        item?.button?.toolTip = model.needsHelperAttention ? model.helperSetupMessage : model.statusText + " · " + model.activationDescription
     }
     func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
     func menuDidClose(_ menu: NSMenu) { isOpen = false }
@@ -51,10 +51,10 @@ import FandyCore
         actions.removeAll(); profileRows.removeAll(); menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
         for profile in model.profiles {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
-            if profile.kind != .system && model.needsHelperSetup { row.image = AppModel.approvalDot() }
+            if profile.kind != .system && model.needsHelperAttention { row.image = AppModel.approvalDot() }
             row.isEnabled = model.canActivate(profile)
             profileRows[profile.id] = row; row.state = model.menuSelectionID == profile.id ? .on : .off
-            row.toolTip = profile.kind != .system && model.needsHelperSetup ? model.helperSetupMessage : model.activationConditionNote(profile) ?? model.eligibility(profile).reason ?? profile.name
+            row.toolTip = profile.kind != .system && model.needsHelperAttention ? model.helperSetupMessage : model.activationConditionNote(profile) ?? model.eligibility(profile).reason ?? profile.name
         }
         menu.addItem(.separator())
         let timing = submenu("Activate for/until", in: menu)
@@ -95,12 +95,17 @@ import FandyCore
         menu.addItem(.separator())
         let status = NSMenuItem(); status.view = fitted(FanMenuStatus(model: model)); menu.addItem(status)
         menu.addItem(.separator())
-        if model.needsHelperSetup {
+        if model.needsHelperAttention {
             let notice = NSMenuItem()
             notice.view = fitted(HelperApprovalNotice(model: model, showButton: false).frame(width: MenuLayout.textWidth).frame(maxWidth: .infinity).padding(.vertical, 4))
             menu.addItem(notice)
-            let setup = add("Allow Fan Control…", to: menu) { [weak self] in self?.openHelperSetup() }
-            setup.image = AppModel.approvalDot()
+            if model.shouldPresentHelperApproval {
+                let setup = add("Allow Fan Control…", to: menu) { [weak self] in self?.openHelperSetup() }
+                setup.image = AppModel.approvalDot()
+            } else {
+                add("Retry Fan Helper", to: menu) { [weak model] in model?.retryFanHelper() }
+                add("Export Diagnostics…", to: menu) { [weak model] in model?.exportDiagnostics() }
+            }
             menu.addItem(.separator())
         }
         add("Edit Profiles…", to: menu) { [weak self] in self?.openProfiles() }

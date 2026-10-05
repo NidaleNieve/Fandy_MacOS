@@ -18,12 +18,6 @@ public struct HelperSafety: Sendable {
     private var previousOwner: UUID?
     public let timeout: Double
     public let chipPolicy: ChipControlPolicy
-    private var chipGuard = SmoothedChipGuard()
-    public private(set) var guardReading: ChipGuardReading?
-    public mutating func observeChipGuard(_ snapshot: HardwareSnapshot, now: Double) throws -> ChipGuardReading {
-        let reading = try chipGuard.update(snapshot: snapshot, now: now, policy: chipPolicy)
-        guardReading = reading; return reading
-    }
     public init(timeout: Double = 10, chipPolicy: ChipControlPolicy = .cpuGPU) { self.timeout = timeout; self.chipPolicy = chipPolicy }
     public mutating func restorationFinished(_ verified: Bool) { automaticState = verified ? .observed : .restoring; if verified { lease = nil } }
     /// External ownership loss while idle is a conflict, not a failed release transaction.
@@ -37,7 +31,7 @@ public struct HelperSafety: Sendable {
     public mutating func observationFailed() {
         if !restoring { automaticState = .unverified }
     }
-    public mutating func revoke() { lease = nil; automaticState = .restoring; chipGuard.reset(); guardReading = nil }
+    public mutating func revoke() { lease = nil; automaticState = .restoring }
     public mutating func begin(owner: UUID, generation requested: UInt64, required: Set<SensorRole>, snapshot: HardwareSnapshot, now: Double, qualification: Bool = false) throws -> ControlLease {
         guard systemVerified, !restoring, lease == nil, (owner != previousOwner || requested >= generation) else { throw ControlError.staleSession }
         try snapshot.validate(now: now, required: required)
@@ -54,7 +48,6 @@ public struct HelperSafety: Sendable {
         try snapshot.validate(now: now, required: current.required)
         guard targets.count == snapshot.fans.count, Set(targets.map(\.fanID)).count == targets.count,
               Set(targets.map(\.fanID)) == Set(snapshot.fans.map(\.id)) else { throw ControlError.invalidFan }
-        let safety = current.required.isEmpty ? 0 : try observeChipGuard(snapshot, now: now).enforcedPercent
         var safe: [FanTarget] = []
         for target in targets {
             guard let fan = snapshot.fans.first(where: { $0.id == target.fanID }), target.rpm.isFinite,
@@ -62,7 +55,7 @@ public struct HelperSafety: Sendable {
             if current.required.isEmpty {
                 guard target.rpm == fan.maximumRPM else { throw ControlError.invalidFan }
             }
-            safe.append(FanTarget(target.fanID, max(target.rpm, try fan.rpm(percent: safety))))
+            safe.append(FanTarget(target.fanID, target.rpm))
         }
         current.renewedAt = now; lease = current
         return safe
@@ -128,6 +121,9 @@ public struct TargetRequest: Codable, Sendable, HelperCommand {
     public init(leaseID: UUID, generation: UInt64, snapshotID: UUID, targets: [FanTarget]) { version = Wire.version; self.leaseID = leaseID; self.generation = generation; self.snapshotID = snapshotID; self.targets = targets }
 }
 public struct HelperStatus: Codable, Sendable {
+    public var transitions: [FanTransition]? = nil
+    public var fanInterface: HelperFanInterface? = nil
+    public var bootstrap: HelperBootstrapStatus? = nil
     public var chipGuard: ChipGuardReading? = nil
     public var helperBuild: String?
     public var version: Int = Wire.version

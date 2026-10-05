@@ -1,23 +1,25 @@
 import Foundation
 public protocol FanHardwareIO: Sendable {
+    var transitions: [FanTransition] { get }
     func enumerateFans() throws -> [Fan]
     func fanIDsForRestoration() throws -> [Int]
     func setAutomatic(fanID: Int) throws
     func readMode(fanID: Int) throws -> FanMode
+    func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool
     func applyValidatedTargets(_ targets: [FanTarget]) throws
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget]
     func finishAutomaticRestoration() throws
     func acceptsAutomatic(_ mode: FanMode) -> Bool
     func setControlRequirements(_ required: Set<SensorRole>)
-    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double)
 }
 public extension FanHardwareIO {
+    var transitions: [FanTransition] { [] }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { targets }
     func fanIDsForRestoration() throws -> [Int] { try enumerateFans().map(\.id) }
     func finishAutomaticRestoration() throws {}
+    func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool { true }
     func acceptsAutomatic(_ mode: FanMode) -> Bool { mode == .automatic }
     func setControlRequirements(_ required: Set<SensorRole>) {}
-    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double) {}
 }
 public enum FanRestoration {
     /// Attempt every independently known fan. No target clearing or alternate mode/key guesses.
@@ -30,14 +32,16 @@ public enum FanRestoration {
             var initial: FanMode?
             do { initial = try io.readMode(fanID: id) } catch { failure = error.localizedDescription }
             var commandSucceeded = false
-            do { try io.setAutomatic(fanID: id); commandSucceeded = true } catch { failure = failure ?? error.localizedDescription }
+            let alreadyAutomatic = initial.map { io.acceptsAutomatic($0) && !io.restorationNeedsWrite(fanID: id, mode: $0) } ?? false
+            if alreadyAutomatic { commandSucceeded = false }
+            else { do { try io.setAutomatic(fanID: id); commandSucceeded = true } catch { failure = failure ?? error.localizedDescription } }
             var mode: FanMode?
             do {
                 mode = try io.readMode(fanID: id)
                 if let mode, !io.acceptsAutomatic(mode) { failure = failure ?? ControlError.restorationUnverified.localizedDescription }
             } catch { failure = failure ?? error.localizedDescription }
             outcomes.append(FanRestorationOutcome(fanID: id, initialMode: initial, commandSucceeded: commandSucceeded,
-                                                  immediateMode: mode, observedMode: mode, failure: failure))
+                                                  immediateMode: mode, observedMode: mode, failure: failure, alreadyAutomatic: alreadyAutomatic))
         }
         // Global force/test handover is released only after every fan was attempted.
         // Failure on one fan cannot suppress the global release or another fan's attempt.
@@ -80,7 +84,8 @@ public struct FanRestorationOutcome: Codable, Sendable, Equatable {
     public var immediateMode: FanMode? = nil
     public var observedMode: FanMode?
     public var failure: String?
-    public var verified: Bool { failure == nil && commandSucceeded == true && immediateMode?.isAutomatic == true && observedMode?.isAutomatic == true }
+    public var alreadyAutomatic: Bool? = nil
+    public var verified: Bool { failure == nil && (commandSucceeded == true || alreadyAutomatic == true) && immediateMode?.isAutomatic == true && observedMode?.isAutomatic == true }
     public var releasedManual: Bool { verified && initialMode == .manual }
 }
 public struct RestorationReport: Codable, Sendable, Equatable {

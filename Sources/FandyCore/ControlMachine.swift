@@ -14,8 +14,7 @@ public struct ControlMachine: Sendable {
     public private(set) var automaticAtIdle = false
     private var governor = DemandGovernor()
     private var ordinaryAverage = TimeWeightedDemand()
-    private var requestedGuard = SmoothedChipGuard()
-    private var independentGuard = SmoothedChipGuard()
+    private var seedFromObservation = true
     public private(set) var lastDemand: Demand?
     public private(set) var guardReading: ChipGuardReading?
     public private(set) var transitionReason = "System"
@@ -41,7 +40,9 @@ public struct ControlMachine: Sendable {
         selected = profile; fault = nil; restorationIsFault = false
         zeroSince = nil; demandSince = nil; automaticAtIdle = false
         if profile.kind == .system { state = .restoringSystem; return .restore(generation: generation) }
-        if !wasSameCustom { healthyCount = 0; lastHealthySample = nil; governor.reset(percent); ordinaryAverage.reset(); requestedGuard.reset(); independentGuard.reset(); state = .initializingCustom }
+        if !wasSameCustom { healthyCount = 0; lastHealthySample = nil; governor.reset(percent); ordinaryAverage.reset(); seedFromObservation = true; state = .initializingCustom }
+        percent = min(percent, profile.maximumConfiguredDemand)
+        governor.constrain(to: profile.maximumConfiguredDemand)
         transitionReason = "Profile selected"
         return .none
     }
@@ -49,7 +50,7 @@ public struct ControlMachine: Sendable {
         generation &+= 1
         fault = error.localizedDescription; selected = BuiltInProfiles.system; state = .restoringSystem
         restorationIsFault = true; automaticAtIdle = false; healthyCount = 0; lastHealthySample = nil
-        ordinaryAverage.reset(); requestedGuard.reset(); independentGuard.reset(); guardReading = nil
+        ordinaryAverage.reset(); seedFromObservation = true; guardReading = nil
         transitionReason = "Failure: " + error.localizedDescription
         return .restore(generation: generation)
     }
@@ -62,26 +63,17 @@ public struct ControlMachine: Sendable {
         return fail(error)
     }
     public mutating func sleep() -> ControlEffect { fail(ControlError.invalidProfile("Sleep/wake reset; select a profile to resume.")) }
-    public mutating func step(_ snapshot: HardwareSnapshot, now: Double, helperGuard: ChipGuardReading? = nil) -> ControlEffect {
+    public mutating func step(_ snapshot: HardwareSnapshot, now: Double) -> ControlEffect {
         if state == .restoringSystem || state == .fault { return .restore(generation: generation) }
         guard selected.kind != .system else { return .none }
         do {
             let demand = try ProfileEngine().evaluate(selected, snapshot: snapshot, now: now, chipPolicy: chipPolicy)
             lastDemand = demand
             let ordinary = selected.kind == .maximum ? 100 : try ordinaryAverage.update(demand.profilePercent, at: snapshot.sampledAt, window: selected.responseWindow)
-            var guardPercent = 0.0, immediate = false
-            if selected.kind == .custom {
-                let local = try independentGuard.update(snapshot: snapshot, now: now, policy: chipPolicy)
-                let requested = try requestedGuard.update(snapshot: snapshot, now: now, policy: chipPolicy, window: selected.responseWindow)
-                guardReading = local; guardPercent = max(local.enforcedPercent, requested.enforcedPercent); immediate = local.immediate
-                if let helperGuard {
-                    guard helperGuard.rawPercent.isFinite, helperGuard.enforcedPercent.isFinite,
-                          (0...100).contains(helperGuard.rawPercent), (0...100).contains(helperGuard.enforcedPercent),
-                          helperGuard.sampledAt.isFinite, now >= helperGuard.sampledAt, now - helperGuard.sampledAt <= 3 else { throw ControlError.invalidSnapshot }
-                    guardReading = helperGuard; guardPercent = max(guardPercent, helperGuard.enforcedPercent)
-                }
-            }
-            let effective = selected.kind == .maximum ? 100 : max(ordinary, guardPercent)
+            // Chip inputs remain mandatory, but custom demand is never increased by a hidden guard.
+            guardReading = nil
+            let ceiling = selected.maximumConfiguredDemand
+            let effective = ordinary
             if snapshot.id != lastHealthySample { healthyCount += 1; lastHealthySample = snapshot.id }
             if state == .initializingCustom && healthyCount < (selected.kind == .maximum ? 1 : 5) { return .none }
             if state == .initializingCustom && selected.automaticAtIdle && effective == 0 {
@@ -91,7 +83,7 @@ public struct ControlMachine: Sendable {
             if automaticAtIdle {
                 if effective >= 5 {
                     if demandSince == nil { demandSince = now }
-                    if !immediate && now - demandSince! < 3 { transitionReason = "Waiting for sustained demand"; return .none }
+                    if now - demandSince! < 3 { transitionReason = "Waiting for sustained demand"; return .none }
                     automaticAtIdle = false; demandSince = nil
                 } else { demandSince = nil; return .none }
             }
@@ -101,9 +93,14 @@ public struct ControlMachine: Sendable {
                     automaticAtIdle = true; state = .restoringSystem; return .restore(generation: generation)
                 }
             } else { zeroSince = nil }
+            if seedFromObservation {
+                let observed = try snapshot.fans.map { try $0.percent(rpm: $0.actualRPM) }.max() ?? 0
+                governor.reset(min(ceiling, observed)); seedFromObservation = false
+            }
+            governor.constrain(to: ceiling)
             let governed = try governor.update(ordinary, at: now, urgent: selected.kind == .maximum, upwardRate: selected.upwardRate)
-            percent = selected.kind == .maximum ? 100 : try governor.enforceMinimum(guardPercent)
-            transitionReason = immediate ? "Immediate chip guard" : guardPercent > governed ? "Chip guard" : "Profile demand"
+            percent = min(ceiling, governed)
+            transitionReason = demand.winningInput
             let targets = try snapshot.fans.map { FanTarget($0.id, try $0.rpm(percent: percent)) }
             return .apply(targets: targets, generation: generation, snapshotID: snapshot.id, required: selected.requiredSensors(chipPolicy: chipPolicy))
         } catch { return fail(error) }
@@ -115,7 +112,7 @@ public struct ControlMachine: Sendable {
     public mutating func restored(generation reply: UInt64, verified: Bool) {
         guard reply == generation else { return }
         guard verified else { state = .fault; fault = ControlError.restorationUnverified.localizedDescription; return }
-        governor.reset(); percent = 0
+        governor.reset(); percent = 0; seedFromObservation = true
         if automaticAtIdle && selected.kind != .system { state = .customActive }
         else { state = .system; if !restorationIsFault || fault == ControlError.restorationUnverified.localizedDescription { fault = nil } }
     }

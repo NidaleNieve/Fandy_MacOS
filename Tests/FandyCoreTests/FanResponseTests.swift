@@ -34,40 +34,48 @@ import Testing
     }
 }
 
-@Test func chipGuardSmoothsModerateBurstsButEscalatesImmediately() throws {
-    var guardPolicy = SmoothedChipGuard()
-    _ = try guardPolicy.update(snapshot: fixture(at: 0, cpu: 40), now: 0, policy: .cpuGPU)
-    let burst = try guardPolicy.update(snapshot: fixture(at: 1, cpu: 70), now: 1, policy: .cpuGPU)
-    #expect(burst.rawPercent == 27.5 && burst.enforcedPercent == 0 && !burst.immediate)
-    let delayed = try guardPolicy.update(snapshot: fixture(at: 2, cpu: 40), now: 2, policy: .cpuGPU)
-    #expect(abs(delayed.enforcedPercent - 27.5 / 3) < 0.0001)
-    for (temperature, expected) in [(75.0, 40.0), (80, 70), (85, 100)] {
-        let reading = try guardPolicy.update(snapshot: fixture(at: temperature, cpu: temperature), now: temperature, policy: .cpuGPU)
-        #expect(reading.immediate && reading.enforcedPercent == expected)
+@Test func quietProfilesFollowCurvesAtHighTemperaturesWithoutHiddenEscalation() throws {
+    var profile = Profile(name: "Capped", curves: [FanCurve(.chip, [(30,0),(70,50)])], fanResponse: 0)
+    for pressure in [ThermalPressure.nominal, .fair] {
+        var machine = ControlMachine(); _ = try machine.select(profile)
+        for time in 0...45 {
+            let temperature = time < 10 ? 75.0 : time < 20 ? 85 : 105
+            let effect = machine.step(fixture(at: Double(time), cpu: temperature, pressure: pressure), now: Double(time))
+            if case .apply(let targets, let generation, _, _) = effect {
+                #expect(machine.percent <= 50)
+                for target in targets { #expect(target.rpm <= (try fixture().fans.first { $0.id == target.fanID }!.rpm(percent: 50))) }
+                machine.applied(generation: generation)
+            }
+        }
+        #expect(machine.percent == 50)
     }
-    let fair = try guardPolicy.update(snapshot: fixture(at: 86, cpu: 65, pressure: .fair), now: 86, policy: .cpuGPU)
-    #expect(fair.immediate && fair.enforcedPercent == 15)
+    profile.floor = 0
     for pressure in [ThermalPressure.serious, .critical, .unknown] {
-        #expect(throws: ControlError.thermalPressure) { try guardPolicy.update(snapshot: fixture(at: 87, pressure: pressure), now: 87, policy: .cpuGPU) }
+        var machine = ControlMachine(); _ = try machine.select(profile)
+        guard case .restore = machine.step(fixture(pressure: pressure), now: 10) else { Issue.record("Pressure must restore without maximum targets"); continue }
+        #expect(machine.selected.kind == .system)
     }
-    #expect(throws: (any Error).self) { try guardPolicy.update(snapshot: fixture(at: 87), now: 91, policy: .cpuGPU) }
 }
 
-@Test func risingGuardDoesNotMakeAnUnrelatedLargeProfileRequestImmediate() throws {
-    var profile = Profile(name: "Large floor", curves: [], floor: 90)
-    profile.fanResponse = 1
-    var machine = ControlMachine(); _ = try machine.select(profile)
-    for time in 0..<4 { _ = machine.step(fixture(at: Double(time), cpu: 40), now: Double(time)) }
-    let effect = machine.step(fixture(at: 4, cpu: 56), now: 4)
-    guard case .apply = effect else { Issue.record("Expected a target request"); return }
-    #expect(machine.percent == 10) // A small guard rise must not jump to the 90% floor.
-    _ = machine.step(fixture(at: 5, cpu: 85), now: 5)
+@Test func freshStoppedEntryAndInheritedHighOutputRespectNewCeiling() throws {
+    var machine = ControlMachine(); _ = try machine.select(BuiltInProfiles.maximum)
+    let first = machine.step(fixture(at: 0), now: 0)
+    if case .apply(_, let generation, _, _) = first { machine.applied(generation: generation) }
     #expect(machine.percent == 100)
-    _ = machine.step(fixture(at: 6, cpu: 40), now: 6)
-    #expect(machine.percent == 100) // Preserve downward hold after escalation.
+    let low = Profile(name: "Quiet", curves: [], floor: 20, fanResponse: 0)
+    _ = try machine.select(low)
+    for time in 1...6 {
+        var snapshot = fixture(at: Double(time)); for i in snapshot.fans.indices { snapshot.fans[i].actualRPM = 0; snapshot.fans[i].targetRPM = snapshot.fans[i].maximumRPM }
+        if case .apply = machine.step(snapshot, now: Double(time)) { #expect(machine.percent <= 20) }
+    }
+    #expect(machine.percent <= 4.1)
+    var lower = low; lower.floor = 1
+    _ = try machine.select(lower)
+    _ = machine.step(fixture(at: 7), now: 7)
+    #expect(machine.percent <= 1)
 }
 
-@Test func quietSchoolDoesNotReacquireFansForOneSecondModerateBurstAtIdle() throws {
+@Test func quietSchoolDoesNotReacquireFansForOneSecondBurstAtIdle() throws {
     var machine = ControlMachine(); _ = try machine.select(BuiltInProfiles.school)
     for time in 0...4 {
         let effect = machine.step(fixture(at: Double(time), cpu: 40), now: Double(time))
@@ -76,11 +84,11 @@ import Testing
     #expect(machine.automaticAtIdle)
     for time in 5...12 {
         let effect = machine.step(fixture(at: Double(time), cpu: time == 5 ? 70 : 40), now: Double(time))
-        if case .apply = effect { Issue.record("A brief moderate burst acquired manual control") }
+        if case .apply = effect { Issue.record("A brief burst acquired manual control") }
     }
     #expect(machine.automaticAtIdle)
-    #expect(machine.step(fixture(at: 13, cpu: 85), now: 13) != .none)
-    #expect(machine.percent == 100 && !machine.automaticAtIdle)
+    for time in 13...25 { _ = machine.step(fixture(at: Double(time), cpu: 85), now: Double(time)) }
+    #expect(!machine.automaticAtIdle && machine.percent <= 52)
 }
 
 @Test func responseDefaultsDecodeAndRoundTripWithoutChangingCurvesOrAutomation() throws {
@@ -105,21 +113,21 @@ import Testing
     try legacyTarget.validate(); #expect(legacyTarget.chipSources == [.cpu, .gpu] && !legacyTarget.curves[0].enabled)
 }
 
-@Test func cpuGPUSelectionChangesCurveAndTargetButNeverRemovesFullGuard() throws {
+@Test func cpuGPUSelectionChangesDemandButRetainsFullSensorRequirements() throws {
     var profile = Profile(name: "Choice", curves: [FanCurve(.chip, [(30,0),(90,60)])])
     let snapshot = fixture(cpu: 40, gpu: 70)
     profile.chipSources = [.cpu]
     let cpu = try ProfileEngine().evaluate(profile, snapshot: snapshot, now: 10)
-    #expect(cpu.byCurve[.chip] == 10 && cpu.safetyPercent == 27.5)
+    #expect(cpu.byCurve[.chip] == 10 && cpu.safetyPercent == 0)
     profile.chipSources = [.gpu]
     #expect(try ProfileEngine().evaluate(profile, snapshot: snapshot, now: 10).byCurve[.chip] == 40)
     profile.chipSources = [.cpu, .gpu]
     #expect(try ProfileEngine().evaluate(profile, snapshot: snapshot, now: 10).byCurve[.chip] == 40)
     profile.chipSources = [.cpu]; profile.targetTemperature = .init(input: .chip, celsius: 60)
     #expect(try ProfileEngine().evaluate(profile, snapshot: snapshot, now: 10).targetPercent == 0)
-    #expect(try ProfileEngine().evaluate(profile, snapshot: fixture(cpu: 40, gpu: 85), now: 10).percent == 100)
+    #expect(try ProfileEngine().evaluate(profile, snapshot: fixture(cpu: 40, gpu: 85), now: 10).percent == 10)
     profile.chipSources = []; profile.curves[0].enabled = false; profile.targetTemperature = nil
-    #expect(try ProfileEngine().evaluate(profile, snapshot: snapshot, now: 10).safetyPercent == 27.5)
+    #expect(try ProfileEngine().evaluate(profile, snapshot: snapshot, now: 10).safetyPercent == 0)
     profile.targetTemperature = .init(input: .chip)
     #expect(throws: (any Error).self) { try profile.validate() }
 }
@@ -138,65 +146,42 @@ import Testing
     #expect(throws: (any Error).self) { try ProfileEngine().evaluate(profile, snapshot: snapshot, now: 10, chipPolicy: .conservativeEnvelope) }
 }
 
-@Test func helperEnforcesSmoothedFloorAndEscalatesWithoutGUI() throws {
-    let spy = FanSpy(); var chip = 40.0
-    let caps = HardwareCapabilities(model: "Test", stage: .qualifiedControl,
-        sensors: SensorRole.allCases.map { SensorEvidence(role: $0, keys: ["Test"], state: .verified, source: "Fixture", limitation: "Synthetic") },
-        topology: .verified, automaticRestoration: .verified, manualTransaction: .verified)
-    let coordinator = HelperCoordinator(io: spy, capabilities: caps, read: {
-        var snapshot = spy.snapshot()
-        for index in snapshot.sensors.indices where SensorRole.safety.contains(snapshot.sensors[index].role) { snapshot.sensors[index].celsius = chip }
-        return snapshot
+@Test func helperWatchdogValidatesFullInputsWithoutIncreasingLowTargets() throws {
+    let spy = FanSpy(); var pressure = ThermalPressure.nominal
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(), read: {
+        var snapshot = spy.snapshot(); snapshot.thermalPressure = pressure; return snapshot
     }, clock: { spy.now })
     #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
     let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: owner)
-    func command() throws {
-        let snapshot = try #require(coordinator.status().snapshot)
-        try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
-                                           targets: snapshot.fans.map { FanTarget($0.id, $0.minimumRPM) }), owner: owner)
-    }
-    try command(); chip = 70; spy.now = 11; try command()
-    #expect(coordinator.status().chipGuard?.enforcedPercent == 0)
-    spy.now = 12; try command()
-    #expect(coordinator.status().snapshot!.fans.allSatisfy { $0.targetRPM! > $0.minimumRPM })
-    spy.now = 14; try command()
-    #expect(coordinator.status().chipGuard?.enforcedPercent == 27.5)
-    chip = 85; spy.now = 15; coordinator.watchdog()
-    #expect(coordinator.status().snapshot!.fans.allSatisfy { $0.targetRPM == $0.maximumRPM })
-    spy.now = 24; coordinator.watchdog()
+    let snapshot = try #require(coordinator.status().snapshot)
+    try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+        targets: snapshot.fans.map { FanTarget($0.id, $0.minimumRPM) }), owner: owner)
+    spy.hot = true; spy.now += 1; coordinator.watchdog()
+    #expect(spy.fans.allSatisfy { $0.targetRPM == $0.minimumRPM && $0.mode == .manual })
+    pressure = .serious; spy.now += 1; coordinator.watchdog()
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic })
     #expect(coordinator.lastRestoration?.verified == true)
 }
 
-@Test func adapterRechecksUseTheSameAuthoritativeElapsedTimeGuard() throws {
-    let spy = FanSpy()
-    let caps = HardwareCapabilities(model: "Test", stage: .qualifiedControl, sensors: [], topology: .verified,
-                                    automaticRestoration: .verified, manualTransaction: .verified)
-    let coordinator = HelperCoordinator(io: spy, capabilities: caps, read: { spy.snapshot() }, clock: { spy.now })
-    #expect(coordinator.startup()); _ = coordinator.status()
-    let evaluate = try #require(spy.guardEvaluator)
-    #expect(try evaluate(fixture(at: 11, cpu: 70), 11) == 0)
-    for _ in 0..<20 { #expect(try evaluate(fixture(at: 11, cpu: 70), 11) == 0) }
-    #expect(abs(try evaluate(fixture(at: 12, cpu: 70), 12) - 27.5 / 3) < 0.0001)
-    #expect(try evaluate(fixture(at: 14, cpu: 70), 14) == 27.5)
-    #expect(try evaluate(fixture(at: 15, cpu: 85), 15) == 100)
-    #expect(throws: (any Error).self) { try evaluate(fixture(at: 16), 20) }
-    coordinator.powerTransition()
-    #expect(coordinator.lastRestoration?.verified == true)
-}
-
-@Test func controlFailuresAndStaleGuardTelemetryStillRestoreImmediately() throws {
+@Test func controlSensorFailureAndPressureRestoreWithoutEscalation() throws {
     var machine = ControlMachine(); _ = try machine.select(BuiltInProfiles.school)
-    for time in 0...5 {
-        let effect = machine.step(fixture(at: Double(time), cpu: 60), now: Double(time))
-        if case .apply(_, let generation, _, _) = effect { machine.applied(generation: generation) }
-    }
-    let invalid = ChipGuardReading(rawPercent: 20, enforcedPercent: .nan, sampledAt: 6, immediate: false)
-    guard case .restore = machine.step(fixture(at: 6, cpu: 60), now: 6, helperGuard: invalid) else { Issue.record("Invalid telemetry must restore"); return }
+    var snapshot = fixture(at: 6, cpu: 60); snapshot.sensors.removeAll { $0.role == .gpuPeak }
+    guard case .restore = machine.step(snapshot, now: 6) else { Issue.record("Missing input must restore"); return }
     #expect(machine.selected.kind == .system)
     machine.restored(generation: machine.generation, verified: true)
-    #expect(machine.state == .system)
     _ = try machine.select(BuiltInProfiles.school)
     guard case .restore = machine.step(fixture(at: 7, pressure: .serious), now: 7) else { Issue.record("Thermal pressure must restore"); return }
+}
+
+@Test func bootstrapRetryScheduleIsFixedBoundedAndRejectsPermanentFailures() {
+    var retry = HelperBootstrapRetry()
+    let admitted = retry.beginAttempt(); #expect(admitted); #expect(retry.nextOffset(transient: true) == 1)
+    #expect(retry.nextOffset(transient: false) == nil)
+    let second = retry.beginAttempt(); #expect(second); #expect(retry.nextOffset(transient: true) == 3)
+    let third = retry.beginAttempt(); #expect(third); #expect(retry.nextOffset(transient: true) == nil)
+    let fourth = retry.beginAttempt(); #expect(!fourth)
+    let status = HelperStatus(automaticVerified: false, observationOnly: true, fault: "Fan helper could not start")
+    #expect(!status.manualQualified && !status.automaticVerified)
 }
 
 @Test func quietAndFastGovernorsHaveExactDifferentUpwardRates() throws {
@@ -226,4 +211,26 @@ import Testing
     var tampered = BuiltInProfiles.system; tampered.chipSources = [.cpu]
     let decoded = try JSONDecoder().decode(Profile.self, from: JSONEncoder().encode(tampered))
     #expect(throws: (any Error).self) { try decoded.validate() }
+}
+
+@Test func helperPreservesCappedTargetsAtHighValidTemperaturesAndRejectsSeverePressure() throws {
+    for pressure in [ThermalPressure.nominal, .fair] {
+        var safety = HelperSafety(); safety.restorationFinished(true)
+        let owner = UUID(), initial = fixture(pressure: pressure)
+        let lease = try safety.begin(owner: owner, generation: 1, required: SensorRole.safety, snapshot: initial, now: 10)
+        for temperature in [75.0,85,105] {
+            let snapshot = fixture(cpu: temperature, gpu: temperature, pressure: pressure)
+            let requests = try snapshot.fans.map { FanTarget($0.id, try $0.rpm(percent: 50)) }
+            let result = try safety.validateAndRenew(owner: owner, leaseID: lease.id, generation: 1,
+                targets: requests, snapshot: snapshot, now: 10)
+            #expect(result == requests)
+        }
+        for severe in [ThermalPressure.serious, .critical, .unknown] {
+            let snapshot = fixture(pressure: severe)
+            #expect(throws: ControlError.thermalPressure) {
+                try safety.validateAndRenew(owner: owner, leaseID: lease.id, generation: 1,
+                    targets: snapshot.fans.map { FanTarget($0.id,$0.minimumRPM) }, snapshot: snapshot, now: 10)
+            }
+        }
+    }
 }

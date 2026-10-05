@@ -1,3 +1,5 @@
+> Build 20 update: [curve-first control and observable helper bootstrap](FAN_RESPONSE_024.md). Earlier guard-escalation evidence is historical. M2 Pro physical acceptance remains pending; reference tests do not prove a friend’s installed service is healthy.
+
 > 0.2.0 update: [compatibility release results](COMPATIBILITY_RELEASE_VERIFICATION.md). Existing Mac17,9 physical evidence remains; other M1–M5 notebook recipes are reference-supported with runtime checks and synthetic transport coverage. New live M5 profile/quit/disconnect/heartbeat/controller-kill regressions pass. Legacy Ftst physical recovery is not asserted, and the current root-helper kill retest/physical sleep-wake remain pending.
 
 # Hardware qualification gates

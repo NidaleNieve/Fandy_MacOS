@@ -78,7 +78,7 @@ public struct FanInterface: Sendable {
     public func restoreMode(id: Int, metadata: DiscoveredSensor, transport: any SMCStructTransport) throws {
         try validateMode(metadata, id: id)
         if locallyTested { try SMCAutomaticModeWriter.restore(fanID: id, metadata: metadata, transport: transport) }
-        else if metadata.value != 3 {
+        else if metadata.value == 1 {
             try SMCRecoveryWriter.write(key: metadata.key, type: metadata.type, attributes: metadata.attributes, bytes: [0], transport: transport)
         }
         // Firmware's protected System state is already non-manual. Global Ftst release

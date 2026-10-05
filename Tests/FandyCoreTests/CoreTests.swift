@@ -62,9 +62,9 @@ func fixture(at now: Double = 10, cpu: Double = 48, gpu: Double = 44, trackpad: 
     snapshot=fixture();snapshot.sensors[snapshot.sensors.firstIndex{$0.role == .charger}!].celsius=90
     #expect(try abs(ProfileEngine().evaluate(BuiltInProfiles.coolChassis,snapshot:snapshot,now:10).percent - 25.0 / 3.0) < 0.001)
 }
-@Test func disabledChipCurveCannotSuppressSafety() throws {
+@Test func disabledChipCurveRetainsSensorAndPressureValidation() throws {
     var profile=BuiltInProfiles.coolChassis;profile.curves[0].enabled=false
-    #expect(try ProfileEngine().evaluate(profile,snapshot:fixture(gpu:85),now:10).percent==100)
+    #expect(try ProfileEngine().evaluate(profile,snapshot:fixture(gpu:85),now:10).percent < 10)
     #expect(throws:(any Error).self) { try ProfileEngine().evaluate(profile,snapshot:fixture(pressure:.serious),now:10) }
 }
 @Test func minimumFloorAndSchoolIdle() throws {
@@ -157,7 +157,7 @@ func fixture(at now: Double = 10, cpu: Double = 48, gpu: Double = 44, trackpad: 
     #expect(throws:(any Error).self) { try safety.validateAndRenew(owner:UUID(),leaseID:lease.id,generation:1,targets:[],snapshot:fixture(at:11),now:11) }
     let targets=fixture().fans.map{FanTarget($0.id,$0.minimumRPM)}
     let actual=try safety.validateAndRenew(owner:owner,leaseID:lease.id,generation:1,targets:targets,snapshot:fixture(at:11,gpu:85),now:11)
-    #expect(actual.map(\.rpm)==fixture().fans.map(\.maximumRPM));#expect(safety.lease?.renewedAt==11)
+    #expect(actual == targets);#expect(safety.lease?.renewedAt==11)
     let disconnected = safety.disconnect(owner:owner); #expect(disconnected);#expect(safety.restoring);#expect(!safety.systemVerified)
     safety.restorationFinished(true);#expect(safety.systemVerified);#expect(safety.lease==nil)
 }

@@ -35,6 +35,10 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
         let filename = String(String.UnicodeScalarView(name.unicodeScalars.map { forbidden.contains($0) ? UnicodeScalar(45)! : $0 })).trimmingCharacters(in: .whitespacesAndNewlines)
         return (filename.isEmpty ? "Profile" : filename) + ".json"
     }
+    public var maximumConfiguredDemand: Double {
+        if kind == .maximum { return 100 }
+        return max(floor, curves.filter(\.enabled).flatMap(\.points).map(\.percent).max() ?? 0, targetTemperature == nil ? 0 : 100)
+    }
     public var protected: Bool { id == "system" || id == "max" }
     public var requiredSensors: Set<SensorRole> { requiredSensors(chipPolicy: .cpuGPU) }
     public func requiredSensors(chipPolicy: ChipControlPolicy) -> Set<SensorRole> {
@@ -63,7 +67,6 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
 }
 public enum BuiltInProfiles {
     public static let chip = FanCurve(.chip, [(45,0),(55,10),(65,30),(75,55),(80,80),(85,100)])
-    public static let guardCurve = FanCurve(.chip, [(55,0),(65,15),(75,40),(80,70),(85,100)])
     public static let trackpad = FanCurve(.trackpad, [(27,20),(29,25),(31,40),(34,60),(38,85),(42,100)])
     public static let actuator = FanCurve(.actuator, [(25,20),(27,25),(29,40),(32,60),(36,85),(40,100)])
     public static let airflow = FanCurve(.airflow, [(33,20),(36,25),(40,40),(44,55),(50,75),(60,100)])
@@ -137,6 +140,11 @@ public struct Demand: Sendable, Equatable {
     public var byCurve: [CurveInput: Double]
     public var targetPercent: Double? = nil
     public var profilePercent: Double = 0
+    public var winningInput: String {
+        if let targetPercent, targetPercent == profilePercent { return "Temperature target" }
+        if let input = byCurve.keys.sorted(by: { $0.rawValue < $1.rawValue }).first(where: { byCurve[$0] == profilePercent }) { return input.label + " curve" }
+        return "Minimum airflow"
+    }
 }
 public struct ProfileEngine: Sendable {
     public init() {}
@@ -145,12 +153,10 @@ public struct ProfileEngine: Sendable {
         if profile.kind == .system { return Demand(percent: 0, safetyPercent: 0, byCurve: [:]) }
         try snapshot.validate(now: now, required: profile.requiredSensors(chipPolicy: chipPolicy))
         if profile.kind == .maximum { return Demand(percent: 100, safetyPercent: 0, byCurve: [:]) }
-        let guardCurve = BuiltInProfiles.guardCurve
-        let safety = try guardCurve.evaluate(guardCurve.temperature(in: snapshot, now: now, chipPolicy: chipPolicy))
         var byCurve: [CurveInput: Double] = [:]
         for curve in profile.curves where curve.enabled { byCurve[curve.input] = try curve.evaluate(profile.temperature(for: curve.input, snapshot: snapshot, now: now, policy: chipPolicy)) }
         let target = try profile.targetTemperature.map { try $0.evaluate(profile.temperature(for: $0.input, snapshot: snapshot, now: now, policy: chipPolicy)) }
         let ordinary = max(profile.floor, byCurve.values.max() ?? 0, target ?? 0)
-        return Demand(percent: max(ordinary, safety), safetyPercent: safety, byCurve: byCurve, targetPercent: target, profilePercent: ordinary)
+        return Demand(percent: ordinary, safetyPercent: 0, byCurve: byCurve, targetPercent: target, profilePercent: ordinary)
     }
 }

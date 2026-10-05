@@ -36,22 +36,6 @@ public struct ChipGuardReading: Codable, Sendable, Equatable {
     public let immediate: Bool
 }
 
-/// Compiled moderate-burst policy. Profiles and IPC cannot select its timing.
-public struct SmoothedChipGuard: Sendable {
-    private var average = TimeWeightedDemand()
-    public init() {}
-    public mutating func reset() { average.reset() }
-    public mutating func update(snapshot: HardwareSnapshot, now: Double, policy: ChipControlPolicy, window: Double = 3) throws -> ChipGuardReading {
-        guard snapshot.thermalPressure == .nominal || snapshot.thermalPressure == .fair else { throw ControlError.thermalPressure }
-        let temperature = try policy.temperature(in: snapshot, now: now)
-        let raw = try BuiltInProfiles.guardCurve.evaluate(temperature)
-        let immediate = temperature >= 75 || snapshot.thermalPressure == .fair
-        let averaged = try average.update(raw, at: snapshot.sampledAt, window: window)
-        return ChipGuardReading(rawPercent: raw, enforcedPercent: immediate ? raw : averaged,
-                                sampledAt: snapshot.sampledAt, immediate: immediate)
-    }
-}
-
 public enum ChipSource: String, Codable, CaseIterable, Sendable { case cpu, gpu }
 public extension Profile {
     mutating func setChipSource(_ source: ChipSource, selected: Bool) {

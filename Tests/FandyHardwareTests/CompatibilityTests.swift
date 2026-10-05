@@ -140,14 +140,14 @@ func referenceFamiliesSelectTheirOwnCompleteGroups(_ item: (String, String)) thr
     let wrongMode = CompatibilitySMC(); wrongMode.put("F0Md", 9, "ui8 ")
     #expect(throws: (any Error).self) { try wrongMode.interface() }
 }
-@Test func referenceDirectTransactionEstablishesAllModesBeforeTargets() throws {
+@Test func referenceDirectTransactionTargetsEachFanBeforeNextAdmission() throws {
     let fixture = CompatibilitySMC(); try fixture.apply()
-    #expect(fixture.writes.map(\.0) == ["F0Md","F1Md","F0Tg","F1Tg"])
-    #expect(fixture.writes.map(\.1) == [1,1,2500,2600])
+    #expect(fixture.writes.map(\.0) == ["F0Md","F0Tg","F1Md","F1Tg"])
+    #expect(fixture.writes.map(\.1) == [1,2500,1,2600])
 }
 @Test func protectedM4HandoverIsBoundedAndUsesOnlyReviewedKeys() throws {
     let fixture = CompatibilitySMC(); fixture.blockDirect = true; try fixture.apply()
-    #expect(fixture.writes.map(\.0) == ["Ftst","F0Md","F1Md","F0Tg","F1Tg"])
+    #expect(fixture.writes.map(\.0) == ["Ftst","F0Md","F0Tg","F1Md","F1Tg"])
     #expect(fixture.values["Ftst"]?.value == 1)
     #expect(fixture.now < 17)
 }
@@ -177,7 +177,7 @@ func referenceFamiliesSelectTheirOwnCompleteGroups(_ item: (String, String)) thr
     #expect(fixture.writes.isEmpty)
     let failure = CompatibilitySMC(); failure.failKey = "F1Tg"
     #expect(throws: (any Error).self) { try failure.apply() }
-    #expect(failure.writes.last?.0 == "F0Tg")
+    #expect(failure.writes.last?.0 == "F1Md")
 }
 @Test func referenceRestorationDoesNotWriteTargetsAndClearsGlobalFlag() throws {
     let fixture = CompatibilitySMC(); fixture.put("Ftst", 1, "ui8 "); fixture.put("F0Md", 1, "ui8 "); fixture.put("F1Md", 1, "ui8 ")
@@ -233,12 +233,14 @@ private final class ReferenceRestorationIO: FanHardwareIO, @unchecked Sendable {
     func fanIDsForRestoration() throws -> [Int] { descriptor.fanIDs }
     func readMode(fanID: Int) throws -> FanMode { FanMode(rawValue: Int(try fixture.read(descriptor.modeKeys[fanID]!).value!))! }
     func acceptsAutomatic(_ mode: FanMode) -> Bool { mode.isAutomatic }
+    func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool { !mode.isAutomatic }
     func setAutomatic(fanID: Int) throws {
         attempts.append(fanID)
         try descriptor.restoreMode(id: fanID, metadata: fixture.read(descriptor.modeKeys[fanID]!), transport: fixture)
     }
     func finishAutomaticRestoration() throws {
-        try descriptor.writeForceTest(false, metadata: fixture.read("Ftst"), transport: fixture)
+        let flag = try fixture.read("Ftst"); try FanInterface.validateFlag(flag)
+        if flag.value != 0 { try descriptor.writeForceTest(false, metadata: flag, transport: fixture) }
         guard try fixture.read("Ftst").value == 0 else { throw ControlError.restorationUnverified }
     }
     func applyValidatedTargets(_ targets: [FanTarget]) throws { throw ControlError.hardwareUnqualified }
@@ -347,7 +349,95 @@ func scopedCancellationDuringProtectedHandoverRespectsTransactionOwner(cancelOwn
         #expect(fixture.writes.allSatisfy { !$0.0.hasSuffix("Tg") })
     } else {
         try fixture.apply(check: check)
-        #expect(fixture.writes.suffix(2).map(\.0) == ["F0Tg", "F1Tg"])
+        #expect(fixture.writes.suffix(2).map(\.0) == ["F1Md", "F1Tg"])
     }
     #expect(observedHandover)
+}
+
+@Test func directAdmissionTargetsEachFanBeforeNextModeAndPreflightsAllMetadata() throws {
+    let fixture = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    fixture.put("F0Tg", 6000, "flt ", attributes: 212); fixture.put("F1Tg", 6500, "flt ", attributes: 212)
+    var events: [FanTransition] = []
+    try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: fixture,
+        read: fixture.read, fans: fixture.fans, clock: { fixture.now }, check: {}, event: { events.append($0) })
+    #expect(fixture.writes.map(\.0) == ["F0md","F0Tg","F1md","F1Tg"])
+    #expect(events.map(\.stage) == [.modeWritten,.targetWritten,.modeWritten,.targetWritten,.acknowledged,.acknowledged])
+    #expect(events[0].previousTarget == 6000 && events[2].previousTarget == 6500)
+    let corrupt = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    corrupt.values["F1Tg"]!.attributes = 0
+    #expect(throws: (any Error).self) {
+        try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: corrupt,
+            read: corrupt.read, fans: corrupt.fans, clock: { 10 }, check: {})
+    }
+    #expect(corrupt.writes.isEmpty)
+}
+
+@Test func referenceAlreadyAutomaticDoesNotWriteProtectedModesOrClaimManualRelease() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+    let descriptor = try fixture.interface()
+    for id in descriptor.fanIDs { try descriptor.restoreMode(id: id, metadata: fixture.read(descriptor.modeKeys[id]!), transport: fixture) }
+    #expect(fixture.writes.isEmpty)
+}
+
+@Test func alreadyAutomaticReferenceRestorationVerifiesWithoutProtectedWrite() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+    let io = try ReferenceRestorationIO(fixture)
+    let report = try FanRestoration.report(using: io)
+    #expect(report.verified && report.fans.allSatisfy { $0.alreadyAutomatic == true && !$0.releasedManual && $0.commandSucceeded == false })
+    #expect(io.attempts.isEmpty && !fixture.writes.contains { $0.0.hasSuffix("Md") })
+    fixture.failKey = "Ftst"
+    #expect(try FanRestoration.report(using: io).verified) // A cleared flag needs no write.
+    fixture.put("Ftst", 1, "ui8 ")
+    #expect(!(try FanRestoration.report(using: io)).verified)
+}
+@Test func referenceMixedOwnershipUpdatesEveryTargetAndTargetRejectionDoesNotUnlock() throws {
+    let fixture = CompatibilitySMC(); fixture.put("F0Md", 1, "ui8 ")
+    try fixture.apply()
+    #expect(fixture.values["F0Tg"]?.value == 2500 && fixture.values["F1Tg"]?.value == 2600)
+    let rejected = CompatibilitySMC(); rejected.failKey = "F0Tg"
+    #expect(throws: (any Error).self) { try rejected.apply() }
+    #expect(!rejected.writes.contains { $0.0 == "Ftst" })
+}
+@Test func referenceNarrowAdmissionHonorsCancellationBeforeTarget() throws {
+    let fixture = CompatibilitySMC(), descriptor = try fixture.interface()
+    #expect(throws: ControlError.staleSession) {
+        try ReferenceFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], interface: descriptor, transport: fixture,
+            clock: { fixture.now }, read: fixture.read, fans: fixture.fans, check: {},
+            cancelled: { if fixture.values["F0Md"]?.value == 1 { throw ControlError.staleSession } }, pause: {})
+    }
+    #expect(fixture.writes.map(\.0) == ["F0Md"])
+    #expect(try FanRestoration.report(using: ReferenceRestorationIO(fixture)).verified)
+    #expect(try fixture.fans().allSatisfy { $0.mode.isAutomatic })
+}
+private final class DirectRestorationIO: FanHardwareIO, @unchecked Sendable {
+    let fixture: CompatibilitySMC
+    init(_ fixture: CompatibilitySMC) { self.fixture = fixture }
+    func enumerateFans() throws -> [Fan] { try fixture.fans() }
+    func readMode(fanID: Int) throws -> FanMode { try fixture.fans().first { $0.id == fanID }!.mode }
+    func setAutomatic(fanID: Int) throws {
+        try SMCAutomaticModeWriter.restore(fanID: fanID, metadata: fixture.read("F\(fanID)md"), transport: fixture)
+    }
+    func applyValidatedTargets(_ targets: [FanTarget]) throws {
+        try DirectFanTransaction.apply(targets, transport: fixture, read: fixture.read, fans: fixture.fans, clock: { self.fixture.now }, check: {})
+    }
+}
+@Test func directPartialTargetFailureRestoresEveryAdmittedFan() throws {
+    let fixture = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    fixture.failKey = "F1Tg"
+    #expect(throws: (any Error).self) { try FanRestoration.apply([FanTarget(0,2500),FanTarget(1,2600)], using: DirectRestorationIO(fixture)) }
+    #expect(fixture.writes.suffix(2).map(\.0) == ["F0md", "F1md"])
+    #expect(try fixture.fans().allSatisfy { $0.mode == .automatic })
+}
+
+@Test func directAdmissionDefersFullEnumerationUntilEveryFanIsTargeted() throws {
+    let fixture = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    var readsDuringMixedModes = 0
+    try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: fixture,
+        read: fixture.read, fans: {
+            let fans = try fixture.fans()
+            if Set(fans.map(\.mode)).count > 1 { readsDuringMixedModes += 1 }
+            return fans
+        }, clock: { fixture.now }, check: {})
+    #expect(readsDuringMixedModes == 0)
+    #expect(fixture.writes.map(\.0) == ["F0md","F0Tg","F1md","F1Tg"])
 }

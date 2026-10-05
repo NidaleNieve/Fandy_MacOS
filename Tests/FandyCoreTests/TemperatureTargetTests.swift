@@ -20,7 +20,7 @@ import Testing
     #expect(throws: (any Error).self) { try TemperatureTarget().evaluate(.nan) }
     #expect(throws: (any Error).self) { try TemperatureTarget().evaluate(.infinity) }
 }
-@Test func targetDemandCannotSuppressCurvesFloorOrChipGuard() throws {
+@Test func targetDemandCannotSuppressEnabledCurvesOrFloor() throws {
     var profile = Profile(name: "Goal", curves: [], targetTemperature: TemperatureTarget(input: .trackpad, celsius: 29))
     let demand = try ProfileEngine().evaluate(profile, snapshot: fixture(trackpad: 29), now: 10)
     #expect(demand.percent == 50 && demand.targetPercent == 50)
@@ -29,7 +29,7 @@ import Testing
     profile.curves = [FanCurve(.airflow, [(20,90),(60,100)])]
     #expect(try ProfileEngine().evaluate(profile, snapshot: fixture(trackpad: 29), now: 10).percent > 90)
     profile.curves = []; profile.floor = 0; profile.targetTemperature?.celsius = 125
-    #expect(try ProfileEngine().evaluate(profile, snapshot: fixture(gpu: 85), now: 10).percent == 100)
+    #expect(try ProfileEngine().evaluate(profile, snapshot: fixture(gpu: 85), now: 10).percent == 0)
 }
 @Test func targetRequiresCompleteQualifiedInputEvenWithoutCurves() throws {
     let profile = Profile(name: "Airflow goal", curves: [], targetTemperature: TemperatureTarget(input: .airflow, celsius: 36))

@@ -130,7 +130,7 @@ public enum ControlError: Error, Equatable, Sendable, LocalizedError {
         case .invalidNumber: "Invalid numerical value."
         case .invalidFan: "Fan readings or the requested speed are invalid."
         case .invalidSnapshot: "Hardware readings are unavailable or out of date."
-        case .thermalPressure: "Custom control stopped: thermal pressure is elevated or unavailable."
+        case .thermalPressure: "macOS control — elevated thermal pressure"
         case .helperUnavailable: "The fan helper is unavailable."
         case .unauthorized: "The app could not authenticate with the fan helper."
         case .malformedMessage: "The fan helper rejected an invalid request."

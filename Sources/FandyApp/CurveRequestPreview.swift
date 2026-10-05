@@ -1,7 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Per-input requested airflow before other sensors, chip guard and smoothing.
+/// Per-input requested airflow before other sensors, minimum airflow and smoothing.
 /// Uses production interpolation/target math without changing editable nodes.
 struct CurveRequestPreview {
     var floor: Double = 0

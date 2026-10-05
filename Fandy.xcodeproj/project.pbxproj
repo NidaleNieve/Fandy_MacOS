@@ -298,6 +298,12 @@
 			"path" = "Sources/FandyCore/HardwareCapabilities.swift";
 			"sourceTree" = "<group>";
 		};
+		"B667C9E9D379A0D402773C64" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/HelperBootstrap.swift";
+			"sourceTree" = "<group>";
+		};
 		"190A0C3A4F860B1556438087" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -404,6 +410,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyHardware/DeviceRegistry.swift";
+			"sourceTree" = "<group>";
+		};
+		"5A4D59464BF2DBEAD7E64836" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/DirectFanTransaction.swift";
 			"sourceTree" = "<group>";
 		};
 		"8253352BB713CD2F539FD9A3" = {
@@ -593,6 +605,7 @@
 				5F3F4CF63DA77EBEC5901461,
 				5139C70DAC1DF582846ECB07,
 				E38AB440B2BCDAE2D4200AFB,
+				B667C9E9D379A0D402773C64,
 				190A0C3A4F860B1556438087,
 				D5171724E8DC95710602ADE6,
 				BFAB6D8C689DF42DBD689F6F,
@@ -611,6 +624,7 @@
 				B38C101597C7761960C8B0BA,
 				7D4FCEE70A0EA2D08A3E0A93,
 				7B1C300C779D9459C034B004,
+				5A4D59464BF2DBEAD7E64836,
 				8253352BB713CD2F539FD9A3,
 				8E20A7F12E2E8568005EC514,
 				4FDBCF91491CF8F6194073A8,

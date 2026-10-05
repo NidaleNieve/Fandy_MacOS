@@ -7,10 +7,12 @@ import FandyHardware
     static func run(_ action: HelperDiagnosticAction) async -> Int32 {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyProfiles-\(UUID().uuidString)")
         let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false)
+        defer { model.stop(); try? FileManager.default.removeItem(at: root) }
         do {
             guard model.capabilities.stage == .qualifiedControl else { throw ControlError.hardwareUnqualified }
             let reader = try SMCReader()
             for _ in 0..<5 { await model.tick() }
+            if action == .schoolResponse { try await transitions(model, reader: reader) }
             var custom = BuiltInProfiles.systemPlus.duplicated()
             custom.id = "diagnostic-custom"; custom.name = "Diagnostic Custom"; custom.floor = 5; custom.automaticAtIdle = false
             model.profiles.append(custom)
@@ -37,7 +39,7 @@ import FandyHardware
                     observedActuation = observedActuation || fans.allSatisfy { $0.actualRPM >= $0.minimumRPM * 0.9 }
                     emit(["event": "profileSample", "profile": id, "percent": model.machine.percent,
                           "automaticAtIdle": model.machine.automaticAtIdle, "snapshot": try encoded(snapshot), "independentFans": try encoded(fans),
-                          "control": try encoded(ControlDiagnostic(machine: model.machine, snapshot: snapshot))])
+                          "transitions": try encoded(model.helperTransitions), "control": try encoded(ControlDiagnostic(machine: model.machine, snapshot: snapshot))])
                     try await Task.sleep(for: .seconds(1))
                 } while ProcessInfo.processInfo.systemUptime - started < ([HelperDiagnosticAction.profilesCalibration, .schoolResponse].contains(action) ? 300 : 12)
                 guard model.machine.automaticAtIdle || profile.kind == .system || observedActuation else { throw ControlError.invalidFan }
@@ -102,6 +104,53 @@ import FandyHardware
             return 1
         }
     }
+    /// Three fixed modest entries; independent 20-Hz reads can expose a visible
+    /// overshoot, but cannot rule out physical events shorter than 50 milliseconds.
+    private static func transitions(_ model: AppModel, reader: SMCReader) async throws {
+        guard let index = model.profiles.firstIndex(where: { $0.id == "school" }) else { throw ControlError.invalidSnapshot }
+        let original = model.profiles[index]
+        defer { model.profiles[index] = original }
+        var trial = original; trial.floor = 5; trial.automaticAtIdle = false
+        model.profiles[index] = trial // Diagnostic store only; user configuration is untouched.
+        for cycle in 1...3 {
+            model.select("system"); try await awaitSystem(model, reader: reader)
+            let baseline = try reader.fans()
+            let started = ProcessInfo.processInfo.systemUptime
+            let observer = Task.detached { () throws -> [TimedFans] in
+                let independent = try SMCReader(); var samples: [TimedFans] = []
+                while ProcessInfo.processInfo.systemUptime - started < 8 {
+                    try Task.checkCancellation()
+                    samples.append(TimedFans(at: ProcessInfo.processInfo.systemUptime, fans: try independent.fans()))
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+                return samples
+            }
+            defer { observer.cancel() }
+            model.select("school")
+            while ProcessInfo.processInfo.systemUptime - started < 8 {
+                await model.tick()
+                guard model.machine.selected.id == "school", model.machine.fault == nil else { throw ControlError.invalidProfile(model.hardwareError ?? model.machine.fault ?? "School transition lost ownership.") }
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            let samples = try await observer.value
+            guard model.isSelected("school"), !model.machine.automaticAtIdle, !samples.isEmpty else { throw ControlError.helperUnavailable }
+            let records = model.helperTransitions.filter { $0.at >= started }
+            guard records.filter({ $0.stage == .acknowledged }).count == baseline.count else { throw ControlError.restorationUnverified }
+            for record in records where record.stage == .acknowledged {
+                guard let old = baseline.first(where: { $0.id == record.fanID }) else { throw ControlError.invalidFan }
+                // Compare against each fresh target, allowing intended later governor rises.
+                guard samples.filter({ $0.at >= record.at }).allSatisfy({ sample in
+                    guard let fan = sample.fans.first(where: { $0.id == record.fanID }), let target = fan.targetRPM else { return false }
+                    return fan.actualRPM <= max(old.actualRPM, target) + 300
+                }) else {
+                    throw ControlError.invalidProfile("A transition overshoot was observed; returning control to macOS.")
+                }
+            }
+            emit(["event": "schoolTransition", "cycle": cycle, "baseline": try encoded(baseline), "transitions": try encoded(records), "independentSamples": try encoded(samples)])
+            model.select("system"); try await awaitSystem(model, reader: reader)
+        }
+    }
+    private struct TimedFans: Codable, Sendable { let at: Double; let fans: [Fan] }
     private static func awaitSystem(_ model: AppModel, reader: SMCReader) async throws {
         // Keep observation traffic within the production request budget. Rapid UI
         // selection is intentional; a zero-delay status flood is a different test.

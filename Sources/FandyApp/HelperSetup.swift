@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import ServiceManagement
 import FandyCore
+import UniformTypeIdentifiers
 
 /// Presentation only: never grants helper or hardware authority. A transient
 /// approval status during replacement must not flash an unnecessary window.
@@ -15,18 +16,21 @@ struct HelperApprovalPromptGate {
 }
 
 extension AppModel {
-    var needsHelperSetup: Bool { !simulation && capabilities.canRestore && !helperSetupInitializing && helperSetupStatus != .enabled }
+    var needsHelperSetup: Bool { !simulation && capabilities.canRestore && !helperSetupInitializing && helperSetupStatus == .requiresApproval }
+    var needsHelperAttention: Bool {
+        !simulation && capabilities.canRestore && !helperSetupInitializing &&
+        (needsHelperSetup || helperSetupStatus != .enabled || helperHealth == .unavailable || (helperHealth == .fault && helperConnectionFailureCode != nil) || helperBootstrap?.stage == .failed)
+    }
     /// Not registered yet is initialization, not evidence that permission was denied.
     var shouldPresentHelperApproval: Bool { needsHelperSetup && helperSetupStatus == .requiresApproval }
     var helperSetupMessage: String {
-        helperSetupError ?? (helperSetupStatus == .requiresApproval
+        helperSetupError ?? (shouldPresentHelperApproval
             ? "Allow Fandy under Background App Activity in System Settings to enable fan control."
-            : "Enable Fandy’s background helper to use fan profiles.")
+            : "Fan helper could not start")
     }
     func refreshHelperSetup() {
         let status = helperRegistrationStatus()
         if status != helperSetupStatus { helperSetupStatus = status }
-        if status == .enabled { helperSetupError = nil }
     }
     func prepareHelperSetup() {
         refreshHelperSetup()
@@ -44,6 +48,18 @@ extension AppModel {
         guard shouldPresentHelperApproval else { return }
         openSettings()
     }
+    func exportDiagnostics() {
+        let panel = ExportSavePanel.make(filename: "Fandy Diagnostics.json")
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do { try self.sanitizedDiagnostics().write(to: url, options: .atomic) }
+            catch { self.draftError = "Diagnostics could not be exported." }
+        }
+    }
+    func retryFanHelper() {
+        guard !isQuitting, !helperSetupInitializing, !simulation else { return }
+        Task { await retryApprovedHelper() }
+    }
     static func approvalDot() -> NSImage? {
         let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: "Fan helper approval needed")?
             .withSymbolConfiguration(.init(pointSize: 8, weight: .regular))?
@@ -60,7 +76,12 @@ struct HelperApprovalNotice: View {
             Circle().fill(.red).frame(width: 7, height: 7).padding(.top, 4).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 Text(model.helperSetupMessage).font(.caption).fixedSize(horizontal: false, vertical: true)
-                if showButton { Button("Open System Settings…") { model.openHelperSetup() }.controlSize(.small) }
+                if showButton {
+                    if model.shouldPresentHelperApproval { Button("Open System Settings…") { model.openHelperSetup() }.controlSize(.small) }
+                    else {
+                        HStack { Button("Retry") { model.retryFanHelper() }; Button("Export Diagnostics…") { model.exportDiagnostics() } }.controlSize(.small)
+                    }
+                }
             }
         }.accessibilityIdentifier("helper.approval-needed")
     }

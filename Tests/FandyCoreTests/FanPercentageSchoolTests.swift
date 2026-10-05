@@ -36,7 +36,7 @@ import Testing
     }
 }
 
-@Test func quietSchoolMatchesRequestedCurveAndRetainsChipSafety() throws {
+@Test func quietSchoolMatchesRequestedCurveAndRetainsChipValidity() throws {
     let school = BuiltInProfiles.school
     #expect(school.defaultRevision == 3 && school.floor == 0 && school.automaticAtIdle)
     #expect(school.curves[0].points.map { [$0.temperature, $0.percent] } == [[45,0],[57.8,9],[70.3,15],[77.2,33],[82.6,47],[86.9,52]])
@@ -44,8 +44,8 @@ import Testing
     #expect(school.curves[2].points.map { [$0.temperature, $0.percent] } == [[25,0],[27,2.5],[29,10],[32,20],[36,32.5],[40,40]])
     #expect(school.curves[3].points.map { [$0.temperature, $0.percent] } == [[33,0],[36,2.5],[40,10],[44,17.5],[50,27.5],[60,40]])
     #expect(try ProfileEngine().evaluate(school, snapshot: fixture(cpu: 40, gpu: 40), now: 10).percent == 0)
-    #expect(try ProfileEngine().evaluate(school, snapshot: fixture(gpu: 85), now: 10).percent == 100)
-    #expect(try ProfileEngine().evaluate(school, snapshot: fixture(cpu: 80), now: 10).percent == 70)
+    #expect(try ProfileEngine().evaluate(school, snapshot: fixture(gpu: 85), now: 10).percent == school.curves[0].evaluate(85))
+    #expect(try ProfileEngine().evaluate(school, snapshot: fixture(cpu: 80), now: 10).percent == school.curves[0].evaluate(80))
 }
 
 @Test func schoolFactoryMigrationPreservesCustomizationsAndAutomation() throws {

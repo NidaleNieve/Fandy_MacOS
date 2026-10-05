@@ -6,6 +6,13 @@ import FandyCore
 import FandyHardware
 
 enum ProfileEditorPresentation {
+    static let responseHelp = "Lower values smooth brief temperature changes and increase fan speed more gradually."
+    static let idleHelp = "Returns fan control to macOS when this profile requests no cooling; resumes when demand returns."
+    static let idleTimingHelp = "Releases after 15 seconds of zero demand; resumes after at least 5% demand persists for three seconds. A positive minimum airflow prevents release. macOS may run or stop the fans independently."
+    static func responseValue(_ profile: Profile) -> String { "\(Int((profile.fanResponse * 100).rounded()))%" }
+    static func responseSummary(_ profile: Profile) -> String {
+        String(format: "%.1f s smoothing · up to %.0f percentage points/s", profile.responseWindow, profile.upwardRate)
+    }
     static func showsAirflowNote(input: CurveInput, simulation: Bool, topName: String) -> Bool {
         input == .airflow && !simulation && topName == "Top proximity"
     }
@@ -20,7 +27,7 @@ struct ProfileEditor: View {
         } detail: {
             ProfileWorkspace(model: model)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-        if model.needsHelperSetup { Divider(); HelperApprovalNotice(model: model).padding(10).frame(maxWidth: .infinity, alignment: .leading) }
+        if model.needsHelperAttention { Divider(); HelperApprovalNotice(model: model).padding(10).frame(maxWidth: .infinity, alignment: .leading) }
         }
         .sheet(item: $model.scheduleReview) { _ in ScheduleConflictSheet(model: model) }
         .sheet(item: $model.renameRequest) { request in ProfileRenameSheet(model: model, request: request) }
@@ -191,8 +198,11 @@ private struct ProfileDetail: View {
             }
             Text("0% uses each fan’s minimum RPM. Apple auto at idle can release control instead.").font(.caption).foregroundStyle(.secondary)
             Toggle("Use Apple auto at idle", isOn: Binding(get: { profile.automaticAtIdle }, set: { var next = profile; next.automaticAtIdle = $0; model.update(next) }))
+            Text(ProfileEditorPresentation.idleHelp).font(.caption).foregroundStyle(.secondary)
+                .help(ProfileEditorPresentation.idleTimingHelp)
             HStack {
                 Text("Fan response")
+                Text(ProfileEditorPresentation.responseValue(profile)).monospacedDigit().frame(width: 36, alignment: .trailing)
                 Text("Quiet").font(.caption).foregroundStyle(.secondary)
                 Slider(value: Binding(get: { profile.fanResponse }, set: { var next = profile; next.fanResponse = $0; model.update(next) }), in: 0...1,
                        onEditingChanged: { editing in if editing { model.beginEditGroup() } else { model.endEditGroup() } })
@@ -202,6 +212,8 @@ private struct ProfileDetail: View {
                     var next = profile; next.fanResponse = profile.id == "school" ? 0 : 1; model.update(next)
                 }.controlSize(.small)
             }
+            Text(ProfileEditorPresentation.responseHelp).font(.caption).foregroundStyle(.secondary)
+            Text(ProfileEditorPresentation.responseSummary(profile)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
             Divider()
             TemperatureTargetEditor(model: model, profile: profile)
         }
@@ -313,7 +325,7 @@ struct SettingsView: View {
             }
             Section("Fan Helper") {
                 Text(model.helperRegistrationText)
-                if model.needsHelperSetup { HelperApprovalNotice(model: model) }
+                if model.needsHelperAttention { HelperApprovalNotice(model: model) }
                 Text(model.capabilities.stage == .qualifiedControl ? "Eligible profiles control real fans. System restores Apple automatic control." : model.capabilities.canRestore ? "System and Max are available. Temperature profiles await their required inputs and activation test." : "Custom profiles await hardware verification.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Hardware verification") {
                     LabeledContent("Compatibility", value: model.capabilities.compatibilityEvidence == .locallyTested ? "Locally tested" : model.capabilities.compatibilityEvidence == .referenceSupported ? "Reference supported" : "Monitoring only")
@@ -325,7 +337,7 @@ struct SettingsView: View {
                 Text("Startup and wake begin in System. Only update checks use the network; no telemetry.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Maintenance") {
-                Button("Export Diagnostics…") { exportDiagnostics() }
+                Button("Export Diagnostics…") { model.exportDiagnostics() }
                 Button("Reset to Defaults…", role: .destructive) { confirmingReset = true }
                     .disabled(model.savingCollection)
                 if let error = model.draftError { Text(error).font(.caption).foregroundStyle(.orange) }
@@ -342,15 +354,6 @@ struct SettingsView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { refreshRegistration() } }
     }
     private func refreshRegistration() { model.refreshHelperSetup(); loginStatus = SMAppService.mainApp.status; helperStatus = HelperManager.service.status }
-    private func exportDiagnostics() {
-        let panel = ExportSavePanel.make(filename: "Fandy Diagnostics.json")
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            Task {
-                do { let data = try model.sanitizedDiagnostics(); try await Task.detached { try data.write(to: url, options: .atomic) }.value }
-                catch { model.draftError = "Diagnostics could not be exported." }
-            }
-        }
-    }
+
 
 }

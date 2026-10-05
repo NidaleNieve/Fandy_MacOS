@@ -23,6 +23,11 @@ import ServiceManagement
     var defaultResumeBlocked = false
     var helperSetupStatus: SMAppService.Status = .notRegistered
     private(set) var helperSetupInitializing = false
+    var helperTransitions: [FanTransition] = []
+    var helperInterface: HelperFanInterface?
+    var helperRestoration: RestorationReport?
+    var helperBootstrap: HelperBootstrapStatus?
+    var helperConnectionFailureCode: String?
     var helperSetupError: String?
     let helperRegistrationStatus: @MainActor () -> SMAppService.Status
     var scheduledPeriodID: UUID?
@@ -78,7 +83,6 @@ import ServiceManagement
     private var historyRevision: UInt64 = 0
     var canUndo: Bool { _ = historyRevision; return editorHistory.canUndo }
     var canRedo: Bool { _ = historyRevision; return editorHistory.canRedo }
-    private var latestHelperGuard: ChipGuardReading?
     private let diagnostics: RotatingDiagnostics?
     private let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "controller")
     private var sleepObserver: NSObjectProtocol?
@@ -147,6 +151,17 @@ import ServiceManagement
     func sanitizedDiagnostics() throws -> Data {
         // Allowlist-only export: no arbitrary messages, names, paths or signing identity.
         let object: [String: Any] = [
+            "build": FandyBuild.identifier,
+            "macOS": ProcessInfo.processInfo.operatingSystemVersionString,
+            "registration": String(describing: helperSetupStatus),
+            "bootstrapStage": helperBootstrap?.stage.rawValue ?? "unreachable",
+            "bootstrapFailure": helperBootstrap?.failureCode ?? helperConnectionFailureCode ?? "none",
+            "bootstrapAttempt": helperBootstrap?.attempt ?? 0,
+            "modeKeys": helperInterface?.modeKeys ?? [],
+            "targetTypes": helperInterface?.targetTypes ?? [],
+            "forceTest": helperInterface?.forceTest ?? false,
+            "restorationVerified": helperRestoration?.verified ?? false,
+            "fanRestoration": helperRestoration?.fans.map { ["fanID": $0.fanID, "initialMode": $0.initialMode?.rawValue ?? -1, "observedMode": $0.observedMode?.rawValue ?? -1, "alreadyAutomatic": $0.alreadyAutomatic == true, "verified": $0.verified] as [String: Any] } ?? [],
             "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",
             "model": HardwareSnapshotReader.machineModel(),
             "controllerState": machine.state.rawValue, "helperHealth": helperHealth.rawValue,
@@ -174,6 +189,9 @@ import ServiceManagement
         return eligibility(profile).allowed
     }
     var statusText: String {
+        if machine.state == .system, machine.fault == ControlError.thermalPressure.localizedDescription {
+            return simulation ? "Simulation · " + ControlError.thermalPressure.localizedDescription : ControlError.thermalPressure.localizedDescription
+        }
         if !simulation {
             if let hardwareError { return hardwareError }
             if capabilities.canRestore && (machine.selected.kind != .system || machine.state != .system) { return controlStatus }
@@ -222,7 +240,7 @@ import ServiceManagement
                 if !self.simulation, let native = self.client as? FanXPCClient,
                    Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier {
                     do { try await HelperManager.migrateLegacyService(client: native) }
-                    catch { self.helperSetupError = "Fan helper migration failed. Reopen Fandy to retry."; return }
+                    catch { self.helperSetupError = "Fan helper migration failed."; self.helperConnectionFailureCode = "migration_failed" }
                     guard !Task.isCancelled, !self.quitting else { return }
                     self.prepareHelperSetup()
                 }
@@ -273,7 +291,7 @@ import ServiceManagement
         applicationCatalogRefreshedAt = clock()
     }
     func tick() async {
-        guard !busy, !quitting, !preparingUpdate else { return }
+        guard !busy, !quitting, !preparingUpdate, !refreshingHelper else { return }
         refreshHelperSetup(); refreshApplicationAvailability(); expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
         var restorationReport: RestorationReport?
         var monitoringReading: HardwareSnapshot?
@@ -295,7 +313,7 @@ import ServiceManagement
                     guard token == lifecycleToken, !quitting, !preparingUpdate else { return }
                     if client is FanXPCClient, Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
                        status.helperBuild != FandyBuild.identifier {
-                        guard !helperRefreshAttempted else { throw ControlError.invalidProfile("Fan helper update needs approval. Reopen Fandy after approving Background App Activity.") }
+                        guard !helperRefreshAttempted else { throw ControlError.invalidProfile("Fan helper update could not complete. Retry the helper or export diagnostics.") }
                         helperRefreshAttempted = true; refreshingHelper = true; helperHealth = .unavailable
                         defer { refreshingHelper = false }
                         try await client.restoreAutomatic()
@@ -309,7 +327,14 @@ import ServiceManagement
                         return
                     }
                     guard token == lifecycleToken, !quitting else { return }
-                    latestHelperGuard = status.chipGuard
+                    helperTransitions = status.transitions ?? []
+                    helperInterface = status.fanInterface; helperRestoration = status.restoration
+                    helperBootstrap = status.bootstrap
+                    helperConnectionFailureCode = nil
+                    if status.bootstrap?.stage == .failed { throw ControlError.helperUnavailable }
+                    if status.bootstrap?.stage == .initializing || status.bootstrap?.stage == .restoring {
+                        helperHealth = .unavailable; hardwareError = "Starting fan helper…"; return
+                    }
                     restorationReport = status.restoration
                     monitoringReading = status.snapshot
                     monitoringReading?.fans = []
@@ -319,6 +344,7 @@ import ServiceManagement
                     if capabilities.canRestore && status.restoration?.verified == false {
                         throw ControlError.restorationUnverified
                     }
+                    if status.fault == ControlError.thermalPressure.localizedDescription { throw ControlError.thermalPressure }
                     guard let received = status.snapshot else { throw ControlError.helperUnavailable }
                     reading = received
                     observedBlocker = status.recoveryBlocker
@@ -354,7 +380,9 @@ import ServiceManagement
             sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: nil)
             if simulation { await execute(machine.fail(error)) }
             else {
-                hardwareError = error.localizedDescription; snapshot = monitoringReading; helperHealth = .fault
+                if let control = error as? ControlError { helperConnectionFailureCode = control == .unauthorized ? "authentication" : control == .helperUnavailable ? "connection_or_backend" : nil }
+                hardwareError = helperBootstrap?.stage == .failed ? "Fan helper could not start" : error.localizedDescription
+                snapshot = monitoringReading; helperHealth = .fault
                 if capabilities.canRestore && helperAvailable() {
                     await execute(machine.observationFailed(error, restoration: restorationReport))
                 }
@@ -387,9 +415,38 @@ import ServiceManagement
             throw ControlError.helperUnavailable // Next tick must independently acknowledge restoration.
         }
     }
+    func retryApprovedHelper() async {
+        guard !quitting, !refreshingHelper, !preparingUpdate, let native = client as? FanXPCClient else { return }
+        refreshHelperSetup()
+        if shouldPresentHelperApproval { openHelperSetup(); return }
+        refreshingHelper = true; helperSetupInitializing = true
+        defer { refreshingHelper = false; helperSetupInitializing = false; refreshHelperSetup() }
+        lifecycleToken = UUID(); automationFailed()
+        do {
+            if HelperManager.installed {
+                do { try await native.restoreAutomatic() }
+                catch ControlError.helperUnavailable { /* Unreachable service: replacement must restore on startup. */ }
+                catch {
+                    // A backend that never initialized cannot own a Fandy lease. A failed
+                    // restoration, however, must not be hidden by unregistering it.
+                    guard helperBootstrap?.stage == .failed, helperBootstrap?.failureCode != "restoration_unverified" else { throw error }
+                }
+                try await HelperManager.unregisterService()
+            }
+            native.disconnectForRecoveryTest()
+            try HelperManager.install()
+            helperReconnectAttempted = true; helperRefreshAttempted = true
+            helperBootstrap = nil; helperSetupError = nil; helperHealth = .unavailable
+            hardwareError = "Starting fan helper…"
+            _ = try machine.select(BuiltInProfiles.system)
+        } catch {
+            helperSetupError = error.localizedDescription
+            helperConnectionFailureCode = "retry_failed"
+        }
+    }
     private func stepController(_ reading: HardwareSnapshot, now: Double) async {
         let wasCustom = machine.selected.kind != .system
-        let effect = machine.step(reading, now: now, helperGuard: simulation ? nil : latestHelperGuard)
+        let effect = machine.step(reading, now: now)
         if wasCustom && machine.selected.kind == .system && machine.fault != nil { automationFailed() }
         await execute(effect)
     }

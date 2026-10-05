@@ -9,17 +9,20 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     private let commandLog = Logger(subsystem: "is.dsr.fandy", category: "fan-transaction")
     private let reader: SMCReader
     private let connection: io_connect_t
-    let cancellation = HardwareOperationFence()
+    let cancellation: HardwareOperationFence
+    let device: ResolvedDevice
     // Written only on the serial hardware queue; captured at authenticated ingress.
     var admittedOperation: HardwareOperationFence.Token?
     private let interface: FanInterface?
     private var ownsForceTest = false
     private var transactionToken: HardwareOperationFence.Token?
+    private(set) var transitions: [FanTransition] = []
     private var controlRequirements: Set<SensorRole> = []
-    private var guardEvaluator: (@Sendable (HardwareSnapshot, Double) throws -> Double)?
-    init() throws {
+    init(cancellation: HardwareOperationFence = HardwareOperationFence()) throws {
+        self.cancellation = cancellation
         let observationReader = try SMCReader(); reader = observationReader
-        interface = try? FanInterface.discover(identity: .current, read: { try observationReader.read($0) })
+        device = DeviceRegistry.resolve(identity: .current, read: { try observationReader.read($0) })
+        interface = device.fanInterface
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         guard service != 0 else { throw HardwareError.invalidMetadata }; defer { IOObjectRelease(service) }
         var port: io_connect_t = 0
@@ -49,6 +52,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         guard mode.type == "ui8 ", mode.size == 1, mode.bytes.count == 1 else { throw HardwareError.invalidMetadata }
         try interface.restoreMode(id: fanID, metadata: mode, transport: self)
     }
+    func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool { interface?.locallyTested == true || !mode.isAutomatic }
     func acceptsAutomatic(_ mode: FanMode) -> Bool { interface?.locallyTested == true ? mode == .automatic : mode.isAutomatic }
     func finishAutomaticRestoration() throws {
         guard let interface else { throw ControlError.hardwareUnqualified }
@@ -62,7 +66,6 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         ownsForceTest = false
     }
     func setControlRequirements(_ required: Set<SensorRole>) { controlRequirements = required }
-    func setGuardEvaluator(_ evaluate: @escaping @Sendable (HardwareSnapshot, Double) throws -> Double) { guardEvaluator = evaluate }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] {
         if interface?.locallyTested == true { return try SMCProfileWriter.normalizedTargets(targets, fans: enumerateFans()) }
         let fans = try enumerateFans()
@@ -76,7 +79,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     }
     private func applyReferenceTargets(_ targets: [FanTarget], interface: FanInterface) throws {
         let token = admittedOperation ?? cancellation.token()
-        let sampler = try HardwareSnapshotReader()
+        let sampler = try HardwareSnapshotReader(device: device)
         try ReferenceFanTransaction.apply(targets, interface: interface, transport: self,
             clock: { ProcessInfo.processInfo.systemUptime }, read: { [reader] in try reader.read($0) },
             fans: { [self] in try enumerateFans() }, requiresForceTestOwnership: ownsForceTest, check: { [self] in
@@ -84,21 +87,15 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
                 try RecoveryOwnershipProbe.requireNoKnownController()
                 let snapshot = try sampler.snapshot(), now = ProcessInfo.processInfo.systemUptime
                 try snapshot.validate(now: now, required: controlRequirements)
-                if !controlRequirements.isEmpty {
-                    guard let guardEvaluator else { throw ControlError.helperUnavailable }
-                    let guardPercent = try guardEvaluator(snapshot, now)
-                    guard targets.allSatisfy({ target in snapshot.fans.contains {
-                        $0.id == target.fanID && target.rpm >= ((try? $0.rpm(percent: guardPercent)) ?? .infinity)
-                    } }) else { throw ControlError.thermalPressure }
-                }
-            }, pause: { Thread.sleep(forTimeInterval: 0.05) })
+
+            }, cancelled: { [self] in try cancellation.require(token) }, pause: { Thread.sleep(forTimeInterval: 0.05) })
         if interface.forceTestAvailable {
             let flag = try reader.read("Ftst"); try FanInterface.validateFlag(flag)
             ownsForceTest = flag.value == 1
         }
     }
     func applyValidatedTargets(_ targets: [FanTarget]) throws {
-        guard DeviceRegistry.current.capabilities.canControl, let interface else { throw ControlError.hardwareUnqualified }
+        guard device.capabilities.canControl, let interface else { throw ControlError.hardwareUnqualified }
         if !interface.locallyTested { try applyReferenceTargets(targets, interface: interface); return }
         transactionToken = admittedOperation ?? cancellation.token()
         defer { transactionToken = nil }
@@ -107,55 +104,20 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         guard targets.count == baseline.count, Set(targets.map(\.fanID)) == Set(baseline.map(\.id)),
               targets.allSatisfy({ target in baseline.contains {
                   $0.id == target.fanID && target.rpm.isFinite && target.rpm >= $0.minimumRPM && target.rpm <= $0.maximumRPM &&
-                  ([.curveQualification, .qualifiedControl].contains(DeviceRegistry.current.capabilities.stage) || target.rpm == $0.maximumRPM)
+                  ([.curveQualification, .qualifiedControl].contains(device.capabilities.stage) || target.rpm == $0.maximumRPM)
               } }) else { throw ControlError.invalidFan }
-        let deadline = ProcessInfo.processInfo.systemUptime + 2
-        for target in targets {
-            try requireProfileDeadline(deadline)
-            guard let fan = try enumerateFans().first(where: { $0.id == target.fanID }),
-                  let original = baseline.first(where: { $0.id == target.fanID }),
-                  fan.minimumRPM == original.minimumRPM, fan.maximumRPM == original.maximumRPM else { throw ControlError.invalidFan }
-            if fan.mode == .automatic {
-                commandLog.notice("Automatic admission fan \(fan.id): actual \(fan.actualRPM), previous target \(fan.targetRPM ?? -1), requested \(target.rpm)")
-                try SMCProfileWriter.startAutomatic(fan: fan, mode: reader.read(qualifiedModeKey(fan.id)),
-                    previous: profileTargetMetadata(fan), transport: self)
-                guard let fresh = try enumerateFans().first(where: { $0.id == target.fanID }), fresh.mode == .manual else { throw ControlError.restorationUnverified }
-            }
-        }
-        // Establish and verify both modes before either target write. This keeps the
-        // mode transition phase separate from the target phase of the reviewed batch.
-        for target in targets {
-            try requireProfileDeadline(deadline)
-            guard let fan = try enumerateFans().first(where: { $0.id == target.fanID }),
-                  let original = baseline.first(where: { $0.id == target.fanID }),
-                  fan.minimumRPM == original.minimumRPM, fan.maximumRPM == original.maximumRPM else { throw ControlError.invalidFan }
-            guard fan.mode == .manual else { throw ControlError.invalidFan }
-            try requireProfileDeadline(deadline)
-            // Each admitted controller update refreshes the actual SMC target command.
-            // A matching register value alone is not evidence of continuing actuation.
-            try SMCProfileWriter.target(target, fan: fan, metadata: profileTargetMetadata(fan), transport: self)
-            try awaitProfileTarget(target, baseline: fan, deadline: deadline, mode: .manual)
-        }
+        try DirectFanTransaction.apply(targets, transport: self, read: reader.read,
+            fans: { [self] in try enumerateFans() }, clock: { ProcessInfo.processInfo.systemUptime },
+            check: { [self] in try requireProfileDeadline(ProcessInfo.processInfo.systemUptime + 2) },
+            event: { [self] record in
+                transitions.append(record); transitions = Array(transitions.suffix(16))
+                commandLog.notice("Fan transition \(record.fanID): \(record.stage.rawValue, privacy: .public) at \(record.at), previous target \(record.previousTarget ?? -1), requested \(record.requestedTarget), actual \(record.actualRPM)")
+            })
     }
-    private func profileTargetMetadata(_ fan: Fan) throws -> DiscoveredSensor {
-        let metadata = try reader.read("F\(fan.id)Tg")
-        if metadata.type != "flt " || metadata.size != 4 || metadata.attributes != 212 || metadata.value != fan.targetRPM {
-            commandLog.error("Target metadata changed for fan \(fan.id): type \(metadata.type, privacy: .public), size \(metadata.size), attributes \(metadata.attributes), sampled target \(fan.targetRPM ?? -1), metadata target \(metadata.value ?? -1)")
-        }
-        return metadata
-    }
-    private func awaitProfileTarget(_ target: FanTarget, baseline: Fan, deadline: Double, mode: FanMode) throws {
-        try RecoveryTargetReadback.awaitTarget(target, baseline: baseline, deadline: deadline,
-            clock: { ProcessInfo.processInfo.systemUptime }, read: { [self] in
-                try requireProfileDeadline(deadline)
-                guard let fan = try enumerateFans().first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
-                return fan
-            }, pause: { Thread.sleep(forTimeInterval: 0.01) }, mode: mode)
-        try requireProfileDeadline(deadline)
-    }
+
     private func requireProfileDeadline(_ deadline: Double) throws {
         if let transactionToken { try cancellation.require(transactionToken) }
-        guard DeviceRegistry.current.capabilities.canControl,
+        guard device.capabilities.canControl,
               ProcessInfo.processInfo.systemUptime < deadline else { throw ControlError.staleSession }
         try RecoveryOwnershipProbe.requireNoKnownController()
     }

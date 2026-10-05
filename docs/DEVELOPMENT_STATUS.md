@@ -1,3 +1,5 @@
+> Latest local delivery: [0.2.4 build 20](FAN_RESPONSE_024.md). This document retains historical measurements below; current curve-first behavior supersedes prior hidden guard escalation.
+
 # Current checkpoint — 2026-10-05: actual 0.2.1 release
 
 The app's bundle version, Settings version row, release title, `v0.2.1` source tag and `Fandy-0.2.1-arm64.dmg` now agree. Internal build is 11. The MIT license is included in the app resources alongside third-party notices; local signing configuration and identities are preserved.

@@ -27,7 +27,7 @@ enum StatusPresentation {
             return "\(input.label): \(Int(demand.rounded()))%"
         }
         let target = preview.targetPercent.map { ["Target: \(Int($0.rounded()))%"] } ?? []
-        return (curves + target + ["Floor: \(Int(floor.rounded()))%", "Chip guard: \(Int(preview.safetyPercent.rounded()))%"] ).joined(separator: " · ")
+        return (curves + target + ["Floor: \(Int(floor.rounded()))%"] ).joined(separator: " · ")
     }
 
 }

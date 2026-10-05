@@ -34,7 +34,7 @@ private func envelopeCapabilities(stage: HardwareStage = .qualifiedControl) -> H
     let snapshot = envelopeSnapshot()
     let demand = try ProfileEngine().evaluate(BuiltInProfiles.systemPlus, snapshot: snapshot, now: 10, chipPolicy: .conservativeEnvelope)
     #expect(demand.percent == 80)
-    #expect(demand.safetyPercent == 70)
+    #expect(demand.safetyPercent == 0)
     #expect(throws: (any Error).self) { try ProfileEngine().evaluate(BuiltInProfiles.systemPlus, snapshot: snapshot, now: 10) }
     #expect(ProfileEligibility.evaluate(BuiltInProfiles.gaming, capabilities: envelopeCapabilities(), helper: .controlReady,
                                         snapshot: snapshot, now: 10).allowed)
@@ -47,10 +47,10 @@ private func envelopeCapabilities(stage: HardwareStage = .qualifiedControl) -> H
     }
     #expect(throws: (any Error).self) { try ProfileEngine().evaluate(BuiltInProfiles.gaming, snapshot: envelopeSnapshot(), now: 14, chipPolicy: .conservativeEnvelope) }
 }
-@Test func envelopeGuardWinsEvenWhenChipCurveDisabled() throws {
+@Test func disabledChipCurveStillRequiresEnvelopeWithoutHiddenDemand() throws {
     var profile = BuiltInProfiles.gaming; profile.curves[0].enabled = false
     let demand = try ProfileEngine().evaluate(profile, snapshot: envelopeSnapshot(85), now: 10, chipPolicy: .conservativeEnvelope)
-    #expect(demand.percent == 100); #expect(demand.safetyPercent == 100)
+    #expect(demand.percent == profile.floor); #expect(demand.safetyPercent == 0)
     #expect(profile.requiredSensors(chipPolicy: .conservativeEnvelope) == [.socPeak])
     #expect(BuiltInProfiles.maximum.requiredSensors(chipPolicy: .conservativeEnvelope).isEmpty)
 }
@@ -66,13 +66,13 @@ private func envelopeCapabilities(stage: HardwareStage = .qualifiedControl) -> H
     guard case .restore = machine.step(lost, now: 10) else { Issue.record("Missing envelope must restore"); return }
     #expect(machine.selected.kind == .system)
 }
-@Test func helperEnforcesEnvelopeEscalationIndependently() throws {
+@Test func helperPreservesValidatedTargetsWithCompleteEnvelope() throws {
     var safety = HelperSafety(chipPolicy: .conservativeEnvelope); safety.restorationFinished(true)
     let snapshot = envelopeSnapshot(85), owner = UUID()
     let lease = try safety.begin(owner: owner, generation: 1, required: [.socPeak], snapshot: snapshot, now: 10)
     let low = snapshot.fans.map { FanTarget($0.id, $0.minimumRPM) }
     let safe = try safety.validateAndRenew(owner: owner, leaseID: lease.id, generation: 1, targets: low, snapshot: snapshot, now: 10)
-    #expect(safe == snapshot.fans.map { FanTarget($0.id, $0.maximumRPM) })
+    #expect(safe == low)
 }
 @Test func olderCapabilitiesDecodeToOriginalChipPolicy() throws {
     let encoded = try JSONEncoder().encode(envelopeCapabilities())
@@ -82,7 +82,7 @@ private func envelopeCapabilities(stage: HardwareStage = .qualifiedControl) -> H
     #expect(restored.chipPolicy == .cpuGPU)
     #expect(!restored.permits(BuiltInProfiles.gaming))
 }
-@Test func helperEnvelopeLossAndWatchdogEscalationUseTheSamePolicy() throws {
+@Test func helperEnvelopeLossRestoresAndWatchdogNeverEscalates() throws {
     let spy = FanSpy(); var temperature = 40.0; var lost = false
     let coordinator = HelperCoordinator(io: spy, capabilities: envelopeCapabilities(), read: {
         var snapshot = spy.snapshot()
@@ -97,7 +97,7 @@ private func envelopeCapabilities(stage: HardwareStage = .qualifiedControl) -> H
     try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
                                        targets: snapshot.fans.map { FanTarget($0.id, $0.minimumRPM) }), owner: owner)
     temperature = 85; spy.now += 1; coordinator.watchdog()
-    #expect(coordinator.status().snapshot!.fans.allSatisfy { $0.targetRPM == $0.maximumRPM })
+    #expect(coordinator.status().snapshot!.fans.allSatisfy { $0.targetRPM == $0.minimumRPM })
     lost = true; spy.now += 1; coordinator.watchdog()
     #expect(spy.snapshot().fans.allSatisfy { $0.mode == .automatic })
     #expect(coordinator.lastRestoration?.verified == true)
