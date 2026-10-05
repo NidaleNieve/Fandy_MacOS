@@ -6,7 +6,9 @@ The connection-scoped cancellation fence, helper watchdog ownership tagging, can
 
 The Developer ID-signed, notarized and stapled DMG is in ignored `build/Distribution-Architecture-0.2.0-build10`. App/image tickets, Gatekeeper, final mounted payload/privacy and image integrity pass. SHA-256: `2ccebe9d9c3d3adabf22271e9a6dec3d74703a5622d272e438d21e3df127d198`. Checksum and verification report remain local.
 
-No installed app/helper was replaced, no user configuration changed and no physical fan test was run in this review. The public GitHub DMG remains build 8 until deliberately published. Preserve the running controller and private profiles when installing a future update. Existing other-Mac, physical sleep/wake and subjective calibration follow-ups remain; do not describe the new cancellation path as physically requalified from software tests alone.
+Build 10 is now the public latest release at tag `v0.2.0-build10`, pointing to `0bc2285`; both anonymous DMG download paths match the verified local checksum. Only the DMG is attached. The original source is MIT-licensed, GitHub recognizes MIT, and the repository description and README include the requested Codex tagline. See [publication verification](GITHUB_RELEASE.md).
+
+No installed app/helper was replaced, no user configuration changed and no physical fan test was run in this review or publication. Preserve the running controller and private profiles when installing the update. Existing other-Mac, physical sleep/wake and subjective calibration follow-ups remain; do not describe the new cancellation path as physically requalified from software tests alone.
 
 ---
 
