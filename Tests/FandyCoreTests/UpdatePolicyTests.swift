@@ -2,6 +2,18 @@ import Foundation
 import Testing
 @testable import FandyCore
 
+@Test func updateFrequencyOffersOnlyIntervalsAndLegacyNeverUsesToggle() throws {
+    #expect(UpdateFrequency.allCases == [.daily, .weekly, .monthly])
+    for automatic in [true, false] {
+        let data = Data("{\"automaticUpdates\":\(automatic),\"updateFrequency\":\"never\"}".utf8)
+        let legacy = try JSONDecoder().decode(AppPreferences.self, from: data)
+        #expect(!legacy.automaticUpdates && legacy.updateFrequency == .weekly)
+        #expect(!UpdatePolicy(legacy).checksEnabled)
+        var enabled = legacy; enabled.automaticUpdates = true
+        #expect(UpdatePolicy(enabled).checksEnabled)
+    }
+}
+
 @Test func updatePreferencesDecodeOldFilesAndRoundTrip() throws {
     let old = try JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8))
     #expect(old.automaticUpdates && old.updateFrequency == .weekly)
