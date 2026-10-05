@@ -19,7 +19,7 @@
 
 Fandy is a native menu-bar fan controller and temperature monitor. View chip and chassis temperatures alongside fan speeds, switch cooling profiles, and schedule cooling around your day.
 
-Vibecoded with Codex, polished for everyday use.
+Vibecoded with Codex, but very polish.
 
 ## Get started
 
