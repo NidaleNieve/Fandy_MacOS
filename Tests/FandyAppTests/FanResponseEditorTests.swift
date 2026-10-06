@@ -30,7 +30,7 @@ import Testing
 @Test func fanResponseShowsNumbersTimingAndIdleExplanation() {
     #expect(ProfileEditorPresentation.responseValue(BuiltInProfiles.school) == "0%")
     #expect(ProfileEditorPresentation.responseValue(BuiltInProfiles.gaming) == "100%")
-    #expect(ProfileEditorPresentation.responseSummary(BuiltInProfiles.school) == "3.0 s smoothing · up to 2 percentage points/s")
+    #expect(ProfileEditorPresentation.responseSummary(BuiltInProfiles.school) == "15.0 s smoothing · up to 2 percentage points/s")
     #expect(ProfileEditorPresentation.responseSummary(BuiltInProfiles.gaming) == "0.0 s smoothing · up to 10 percentage points/s")
     #expect(ProfileEditorPresentation.idleHelp.contains("macOS"))
     #expect(ProfileEditorPresentation.idleTimingHelp.contains("15 seconds") && ProfileEditorPresentation.idleTimingHelp.contains("minimum airflow"))

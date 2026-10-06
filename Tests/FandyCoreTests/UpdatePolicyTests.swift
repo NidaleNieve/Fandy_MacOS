@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import FandyCore
 
-@Test func release030UsesANewBuildAcrossAppAndHelper() {
-    #expect(FandyBuild.version == "0.3.0")
-    #expect(FandyBuild.identifier == "23")
+@Test func release031UsesANewBuildAcrossAppAndHelper() {
+    #expect(FandyBuild.version == "0.3.1")
+    #expect(FandyBuild.identifier == "24")
 }
 
 @Test func updateFrequencyOffersOnlyIntervalsAndLegacyNeverUsesToggle() throws {
@@ -12,7 +12,7 @@ import Testing
     for automatic in [true, false] {
         let data = Data("{\"automaticUpdates\":\(automatic),\"updateFrequency\":\"never\"}".utf8)
         let legacy = try JSONDecoder().decode(AppPreferences.self, from: data)
-        #expect(!legacy.automaticUpdates && legacy.updateFrequency == .weekly)
+        #expect(!legacy.automaticUpdates && legacy.updateFrequency == .daily)
         #expect(!UpdatePolicy(legacy).checksEnabled)
         var enabled = legacy; enabled.automaticUpdates = true
         #expect(UpdatePolicy(enabled).checksEnabled)
@@ -21,7 +21,7 @@ import Testing
 
 @Test func updatePreferencesDecodeOldFilesAndRoundTrip() throws {
     let old = try JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8))
-    #expect(old.automaticUpdates && old.updateFrequency == .weekly)
+    #expect(old.automaticUpdates && old.updateFrequency == .daily)
     var changed = old; changed.automaticUpdates = false; changed.updateFrequency = .monthly
     let restored = try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(changed))
     #expect(restored == changed)

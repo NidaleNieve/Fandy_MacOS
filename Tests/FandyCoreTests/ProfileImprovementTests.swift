@@ -86,7 +86,7 @@ import Testing
         for _ in 0..<30 { group.addTask { try log.record(profile: "fixture", snapshot: snapshot) } }
         try await group.waitForAll()
     }
-    let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+    let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "jsonl" }
     #expect(files.count <= 4)
     for file in files {
         let data = try Data(contentsOf: file)

@@ -117,3 +117,19 @@ import Testing
     #expect(model.machine.selected.id == "system" && model.manualIntent == nil)
     await model.prepareForTermination()
 }
+
+@MainActor @Test func wakePreservesAnApplicationGroupOnlyWhileAnObservedMemberRemains() async throws {
+    let f = try ApplicationGroupFixture(); defer { f.close() }
+    let model = f.model()
+    model.select("cool-chassis"); for _ in 0..<7 { await model.tick() }
+    model.setActivationDefault(try f.rule(), profileID: "gaming")
+    f.catalog = [f.crossover, f.java]; model.refreshApplicationAvailability(force: true)
+    model.select("gaming"); for _ in 0..<7 { await model.tick() }
+    await model.systemWillSleep(); f.stopJava(); f.catalog = [f.crossover]
+    await model.systemDidWake()
+    #expect(model.machine.selected.id == "gaming" && model.manualIntent != nil)
+    await model.systemWillSleep(); f.crossoverProcess.terminate(); f.crossoverProcess.waitUntilExit(); f.catalog = []
+    await model.systemDidWake()
+    #expect(model.machine.selected.id == "cool-chassis" && model.manualIntent == nil)
+    await model.prepareForTermination()
+}
