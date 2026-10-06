@@ -358,6 +358,12 @@
 			"path" = "Sources/FandyCore/Persistence.swift";
 			"sourceTree" = "<group>";
 		};
+		"7316948CCB8ABFA29F72CCE1" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/PowerLifecycle.swift";
+			"sourceTree" = "<group>";
+		};
 		"6A4855631F163370C30D97C9" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -386,6 +392,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyCore/ShadowProfileEngine.swift";
+			"sourceTree" = "<group>";
+		};
+		"F1288284276E77C2D026BB82" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/SurgeRecording.swift";
 			"sourceTree" = "<group>";
 		};
 		"FE7D214DC9CDDA36563C9C4F" = {
@@ -615,11 +627,13 @@
 				6004F86E59C8744938F1A36A,
 				B097A9D6879D03AD75F9CCA0,
 				B477D544D3F52A227229E6B8,
+				7316948CCB8ABFA29F72CCE1,
 				6A4855631F163370C30D97C9,
 				956DB01B711EA0BA10B42D77,
 				1A1154160BA13DE6385FA574,
 				A2E50DBBCC5E83BE37243CB7,
 				74A6605E5BC8A76E53AD7E30,
+				F1288284276E77C2D026BB82,
 				FE7D214DC9CDDA36563C9C4F,
 				B38C101597C7761960C8B0BA,
 				7D4FCEE70A0EA2D08A3E0A93,

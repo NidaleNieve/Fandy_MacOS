@@ -61,7 +61,7 @@ public struct AppPreferences: Codable, Sendable, Equatable {
     public var showFanSpeedNumbers: Bool = true
     public var shortcuts: [String: ShortcutBinding] = [:]
     public var automaticUpdates = true
-    public var updateFrequency: UpdateFrequency = .weekly
+    public var updateFrequency: UpdateFrequency = .daily
     public init() {}
     private enum CodingKeys: String, CodingKey { case defaultProfileID, launchAtLogin, use24HourTime, showHelperProcesses, menuSensors, shortcuts, showFanSpeedBar, showFanSpeedNumbers, automaticUpdates, updateFrequency }
     public init(from decoder: any Decoder) throws {
@@ -75,8 +75,8 @@ public struct AppPreferences: Codable, Sendable, Equatable {
         menuSensors = try c.decodeIfPresent([String].self, forKey: .menuSensors) ?? []
         shortcuts = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcuts) ?? [:]
         automaticUpdates = try c.decodeIfPresent(Bool.self, forKey: .automaticUpdates) ?? true
-        updateFrequency = try c.decodeIfPresent(UpdateFrequency.self, forKey: .updateFrequency) ?? .weekly
-        if updateFrequency == .never { automaticUpdates = false; updateFrequency = .weekly }
+        updateFrequency = try c.decodeIfPresent(UpdateFrequency.self, forKey: .updateFrequency) ?? .daily
+        if updateFrequency == .never { automaticUpdates = false; updateFrequency = .daily }
     }
 }
 public struct AutomationConfiguration: Codable, Sendable, Equatable {

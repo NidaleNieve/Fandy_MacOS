@@ -33,22 +33,24 @@ import FandyHardware
                 try await Task.sleep(for: .seconds(1))
             }
             guard model.isSelected("cool-chassis"), try reader.fans().allSatisfy({ $0.mode == .manual && $0.actualRPM >= $0.minimumRPM * 0.9 }) else { throw ControlError.invalidFan }
-            model.start()
+            model.observePower()
             emit(["event": "sleepReady", "profile": "cool-chassis", "modes": try reader.fans().map { $0.mode.rawValue }])
             let deadline = ContinuousClock.now.advanced(by: .seconds(90))
             while !observation.woke && ContinuousClock.now < deadline {
-                try await Task.sleep(for: .milliseconds(250))
+                if model.powerLifecycle == .awake { await model.tick() }
+                try await Task.sleep(for: .seconds(1))
             }
             guard observation.slept, observation.woke else { throw ControlError.invalidProfile("No complete native sleep/wake was observed within 90 seconds.") }
             for _ in 0..<10 {
                 await model.tick()
-                if model.isSelected("system"), model.machine.state == .system { break }
+                if model.isSelected("cool-chassis"), model.powerLifecycle == .awake { break }
                 try await Task.sleep(for: .milliseconds(500))
             }
-            guard model.machine.selected.id == "system", model.machine.state == .system,
-                  try reader.fans().allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
-            emit(["event": "sleepWakePassed", "state": model.machine.state.rawValue, "modes": try reader.fans().map { $0.mode.rawValue }])
-            await model.prepareForTermination(); return 0
+            guard model.isSelected("cool-chassis"), model.powerLifecycle == .awake else { throw ControlError.restorationUnverified }
+            emit(["event": "sleepWakeResumed", "state": model.machine.state.rawValue, "modes": try reader.fans().map { $0.mode.rawValue }])
+            await model.prepareForTermination()
+            guard try reader.fans().allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
+            emit(["event": "sleepWakePassed", "finalModes": try reader.fans().map { $0.mode.rawValue }]); return 0
         } catch {
             await model.prepareForTermination()
             emit(["event": "sleepWakeFailed", "error": error.localizedDescription]); return 1

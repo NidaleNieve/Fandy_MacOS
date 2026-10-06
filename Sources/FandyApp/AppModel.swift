@@ -89,6 +89,12 @@ import ServiceManagement
     private let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "controller")
     private var sleepObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
+    private(set) var powerLifecycle: PowerLifecycle = .awake
+    private var sleepResumeProfileID: String?
+    private var sleepWasScheduled = false
+    private var sleepHadManualIntent = false
+    private var sleepResumeBlocked = false
+    private var sleepPollingWasRunning = false
     private let powerCenter: NotificationCenter
     private var freshness = SensorFreshnessMonitor()
     private var quitting = false
@@ -183,7 +189,7 @@ import ServiceManagement
         ProfileEligibility.evaluate(profile, capabilities: capabilities, helper: helperHealth, snapshot: snapshot, now: clock())
     }
     func canActivate(_ profile: Profile) -> Bool {
-        if preparingUpdate || refreshingHelper { return false }
+        if preparingUpdate || refreshingHelper || (powerLifecycle != .awake && profile.kind != .system) { return false }
         if profile.kind != .system && (helperSetupInitializing || needsHelperSetup) { return false }
         if simulation || profile.kind == .system { return true }
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
@@ -226,14 +232,14 @@ import ServiceManagement
     func observePower() {
         guard !quitting else { return }
         if sleepObserver == nil {
-            sleepObserver = powerCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
+            sleepObserver = powerCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in await self?.systemWillSleep() } }
         }
         if wakeObserver == nil {
-            wakeObserver = powerCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.powerTransition() } }
+            wakeObserver = powerCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in await self?.systemDidWake() } }
         }
     }
     func start() {
-        guard loop == nil, !quitting else { return }
+        guard loop == nil, !quitting, powerLifecycle == .awake else { return }
         observePower(); configureLogin()
         helperSetupInitializing = !simulation
         loop = Task { [weak self] in
@@ -251,10 +257,13 @@ import ServiceManagement
                     if let effect = try? self.machine.select(BuiltInProfiles.system) { await self.execute(effect) }
                 }
             }
-            while !Task.isCancelled {
-                guard self != nil else { break }; await self?.tick()
-                do { try await Task.sleep(for: .seconds(1)) } catch { break }
-            }
+            await self?.pollUntilCancelled()
+        }
+    }
+    private func pollUntilCancelled() async {
+        while !Task.isCancelled && !quitting {
+            await tick()
+            do { try await Task.sleep(for: .seconds(1)) } catch { break }
         }
     }
     func select(_ id: String, manual: Bool = true) {
@@ -298,15 +307,15 @@ import ServiceManagement
         applicationCatalogRefreshedAt = clock()
     }
     func tick() async {
-        guard !busy, !quitting, !preparingUpdate, !refreshingHelper else { return }
-        refreshHelperSetup(); refreshApplicationAvailability(); expireActivation(); expireScheduledOccurrence(); let token = lifecycleToken; busy = true; defer { busy = false }
+        guard !busy, !quitting, !preparingUpdate, !refreshingHelper, powerLifecycle == .awake || powerLifecycle == .resuming else { return }
+        refreshHelperSetup(); refreshApplicationAvailability(); if powerLifecycle == .awake { expireActivation(); expireScheduledOccurrence() }; let token = lifecycleToken; busy = true; defer { busy = false }
         var restorationReport: RestorationReport?
         var monitoringReading: HardwareSnapshot?
         do {
             if simulation {
                 await mock.setScenario(scenario)
                 let reading = try await mock.snapshot()
-                guard token == lifecycleToken, !quitting else { return }; expireActivation(); expireScheduledOccurrence()
+                guard token == lifecycleToken, !quitting else { return }; if powerLifecycle == .awake { expireActivation(); expireScheduledOccurrence() }
                 guard token == lifecycleToken else { return }; snapshot = reading
                 if let snapshot {
                     if machine.selected.kind != .system { try freshness.check(snapshot, required: machine.selected.requiredSensors(chipPolicy: machine.chipPolicy), now: snapshot.sampledAt) }
@@ -363,7 +372,7 @@ import ServiceManagement
                     guard token == lifecycleToken, !quitting else { return }
                     helperHealth = .unavailable
                 }
-                expireActivation(); expireScheduledOccurrence()
+                if powerLifecycle == .awake { expireActivation(); expireScheduledOccurrence() }
                 guard token == lifecycleToken else { return }
                 if !reading.fans.isEmpty || machine.selected.kind != .system { try reading.validateFans(now: clock()) }
                 snapshot = reading
@@ -377,10 +386,9 @@ import ServiceManagement
                 hardwareError = observedBlocker ?? (reading.fans.isEmpty ? "Fan interface unavailable; temperature monitoring remains available." : nil)
             }
             tickCount += 1
-            evaluateApplicationLaunches()
-            evaluateSchedule()
+            if powerLifecycle == .awake { evaluateApplicationLaunches(); evaluateSchedule() }
             sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: snapshot)
-            if let snapshot, machine.selected.kind != .system || tickCount % 5 == 0 { diagnostics?.enqueue(profile:machine.selected.name,snapshot:snapshot,control:ControlDiagnostic(machine: machine, snapshot: snapshot)) }
+            if let snapshot, machine.selected.kind != .system || tickCount % 5 == 0 { diagnostics?.enqueue(profile:machine.selected.name,snapshot:snapshot,control:ControlDiagnostic(machine: machine, snapshot: snapshot), profileID: machine.selected.id) }
         } catch {
             guard token == lifecycleToken, !quitting else { return }
             automationFailed()
@@ -458,7 +466,7 @@ import ServiceManagement
         await execute(effect)
     }
     private func execute(_ effect: ControlEffect) async {
-        if preparingUpdate || refreshingHelper { return }
+        if case .apply = effect, preparingUpdate || refreshingHelper || powerLifecycle != .awake { return }
         if case .apply = effect { expireActivation(); expireScheduledOccurrence() }
         let token = lifecycleToken
         switch effect {
@@ -684,6 +692,69 @@ import ServiceManagement
             await tick()
         }
     }
+    func systemWillSleep() async {
+        guard powerLifecycle == .awake || powerLifecycle == .resuming else { return }
+        if powerLifecycle == .awake { sleepResumeProfileID = machine.selected.id; sleepWasScheduled = scheduledPeriodID != nil; sleepHadManualIntent = manualIntent != nil; sleepResumeBlocked = machine.fault != nil || (defaultResumeBlocked && machine.selected.kind == .system) }
+        powerLifecycle = .suspending; powerTransitionCount &+= 1
+        sleepPollingWasRunning = sleepPollingWasRunning || loop != nil
+        loop?.cancel(); loop = nil
+        lifecycleToken = UUID(); let token = lifecycleToken
+        observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
+        defaultResumeBlocked = true
+        let automaticWasObserved = snapshot?.appleOwnershipObserved == true
+        snapshot = nil; hardware = injectedProvider; freshness = SensorFreshnessMonitor()
+        updates?.synchronize()
+        if let effect = try? machine.select(BuiltInProfiles.system) {
+            if !simulation && !capabilities.canRestore { machine.restored(generation: machine.generation, verified: automaticWasObserved) }
+            else { await execute(effect) }
+        }
+        guard token == lifecycleToken else { return }
+        powerLifecycle = .suspended
+    }
+    func systemDidWake() async {
+        guard powerLifecycle == .suspended || powerLifecycle == .suspending else { return }
+        powerLifecycle = .resuming; lifecycleToken = UUID(); let token = lifecycleToken
+        snapshot = nil; hardware = injectedProvider; freshness = SensorFreshnessMonitor()
+        observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
+        if let effect = try? machine.select(BuiltInProfiles.system) { await execute(effect) }
+        guard token == lifecycleToken else { return }
+        // A revoked pre-sleep read may still be unwinding. Wait only within a
+        // fixed bound; stale replies cannot supply wake readiness or prolong it.
+        let readinessDeadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while busy && ContinuousClock.now < readinessDeadline {
+            try? await Task.sleep(for: .milliseconds(10))
+            guard token == lifecycleToken, !quitting else { return }
+        }
+        // Fresh status is acquired before resolving any saved cooling intent.
+        await tick()
+        guard token == lifecycleToken else { return }
+        refreshApplicationAvailability(force: true)
+        if case .deadline(let date) = manualIntent?.limit { activationDeadline = clockNow() + max(0, date.timeIntervalSince(wallClock())) }
+        expireActivation()
+        let occurrence = ScheduleEngine.active(in: automation, at: wallClock())
+        let activeSchedule = occurrence?.id == blockedScheduleID ? nil : occurrence
+        let fallback = sleepWasScheduled || (sleepHadManualIntent && manualIntent == nil) ? automation.preferences.defaultProfileID : (sleepResumeProfileID ?? "system")
+        let desired = sleepResumeBlocked ? "system" : (manualIntent?.profileID ?? activeSchedule?.profileID ?? fallback)
+        let profile = profiles.first { $0.id == desired } ?? BuiltInProfiles.system
+        let now = simulation ? snapshot?.sampledAt ?? clock() : clock()
+        let readingsValid = snapshot.map { (try? $0.validate(now: now, required: profile.kind == .system ? [] : profile.requiredSensors(chipPolicy: machine.chipPolicy))) != nil } ?? false
+        let ready = machine.state == .system && readingsValid && (simulation || (ownership == .appleObserved && (profile.kind == .system || helperHealth == .controlReady)))
+        powerLifecycle = .awake
+        if ready {
+            defaultResumeBlocked = sleepResumeBlocked
+            if manualIntent == nil { scheduledPeriodID = activeSchedule?.id }
+            select(profile.id, manual: false)
+        } else {
+            clearActivation(); defaultResumeBlocked = true
+            hardwareError = hardwareError ?? "Could not resume cooling after wake; macOS control retained."
+        }
+        sleepResumeProfileID = nil; sleepWasScheduled = false; sleepHadManualIntent = false; sleepResumeBlocked = false
+        updates?.synchronize()
+        if sleepPollingWasRunning && !quitting && loop == nil { loop = Task { [weak self] in await self?.pollUntilCancelled() } }
+        sleepPollingWasRunning = false
+    }
+    // Retained for deterministic reset diagnostics. Native notifications use the
+    // explicit async sleep/wake lifecycle above.
     func powerTransition() {
         observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
         defaultResumeBlocked = true
@@ -725,6 +796,7 @@ import ServiceManagement
     }
     /// Sparkle may replace the embedded service only after acknowledged handback.
     func prepareForUpdate() async throws {
+        guard powerLifecycle == .awake else { throw ControlError.helperUnavailable }
         if updatePrepared { return }
         preparingUpdate = true; lifecycleToken = UUID(); stop()
         defaultResumeBlocked = true; clearActivation()
