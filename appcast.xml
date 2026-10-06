@@ -1,43 +1,49 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<!-- sparkle-sign-warning:
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
--->
-<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
-    <channel>
-        <title>Fandy updates</title>
-        <link>https://github.com/NidaleNieve/Fandy_MacOS/releases</link>
-        <description>Fandy application updates</description>
-        <language>en</language>
-        <item>
-            <title>0.3.0</title>
-            <pubDate>Mon, 05 Oct 2026 23:40:56 +0000</pubDate>
-            <sparkle:version>23</sparkle:version>
-            <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.3.0/Fandy-0.3.0-arm64.dmg" length="3214647" type="application/octet-stream" sparkle:edSignature="l2gPqol4IBER3LIP4lmiZbwGP8YvsePmFqciIn13FR8/B6rnlI8ZGjUgADDzvZYdsH+RFU86n2SP+CtcMNxoBw=="/>
-        </item>
-        <item>
-            <title>0.2.3</title>
-            <description>Improved helper permission setup and menu-bar approval indicator.</description>
-            <pubDate>Mon, 05 Oct 2026 12:52:35 GMT</pubDate>
-            <sparkle:version>18</sparkle:version>
-            <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.3/Fandy-0.2.3-arm64.dmg?build=18" length="3212625" type="application/octet-stream" sparkle:edSignature="4JboOH6jb1iW/fvyCtTR636Dc6XCgPZ0D0KeQkpGadKfnJLCK/vSe1RMyZ+qV+BMhy2kfDcvIaUjVGSpoD9cBg=="/>
-        </item>
-        <item>
-            <title>0.2.2</title>
-            <description>Automatic update checks and update preferences in Settings.</description>
-            <pubDate>Mon, 05 Oct 2026 08:49:22 GMT</pubDate>
-            <sparkle:version>12</sparkle:version>
-            <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.2/Fandy-0.2.2-arm64.dmg" length="3190534" type="application/octet-stream" sparkle:edSignature="huRAa8yUWQPNSnDf2CSbO0/uumBL7feaRnF+d5uWqxdY3dpPTIkb8c2CHfnhm+IvHY1QKTCkvGCSfBGRju5CAQ=="/>
-        </item>
-    </channel>
-</rss>
-<!-- sparkle-signatures:
-edSignature: nGH2Ea9O1pKCxwDiWDWima2QRI4xHGRZhqJ6v3BkteFarx5BwE18Oomdj3DRGgGd0t45Q4epWNn5+x5XXlxYBA==
-length: 2741
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Fandy updates</title>
+    <link>https://github.com/NidaleNieve/Fandy_MacOS/releases</link>
+    <description>Fandy application updates</description>
+    <language>en</language>
+    <item>
+      <title>0.3.1</title>
+      <description>Steadier fan response, system-sleep suspension and daily update checks.</description>
+      <pubDate>Tue, 06 Oct 2026 14:20:38 GMT</pubDate>
+      <sparkle:version>24</sparkle:version>
+      <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.3.1/Fandy-0.3.1-arm64.dmg" length="3272495" type="application/octet-stream" sparkle:edSignature="Po+zFCyaJfbxhJUtUi/UXDFBl8jOBZUeK4NyahUvAGMZFrCr+ewe9YaMXooCZQmzECaTt5pc6xeTM7nsOy7HCg=="></enclosure>
+    </item>
+    <item>
+      <title>0.3.0</title>
+      <pubDate>Mon, 05 Oct 2026 23:40:56 +0000</pubDate>
+      <sparkle:version>23</sparkle:version>
+      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.3.0/Fandy-0.3.0-arm64.dmg" length="3214647" type="application/octet-stream" sparkle:edSignature="l2gPqol4IBER3LIP4lmiZbwGP8YvsePmFqciIn13FR8/B6rnlI8ZGjUgADDzvZYdsH+RFU86n2SP+CtcMNxoBw=="></enclosure>
+    </item>
+    <item>
+      <title>0.2.3</title>
+      <description>Improved helper permission setup and menu-bar approval indicator.</description>
+      <pubDate>Mon, 05 Oct 2026 12:52:35 GMT</pubDate>
+      <sparkle:version>18</sparkle:version>
+      <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.3/Fandy-0.2.3-arm64.dmg?build=18" length="3212625" type="application/octet-stream" sparkle:edSignature="4JboOH6jb1iW/fvyCtTR636Dc6XCgPZ0D0KeQkpGadKfnJLCK/vSe1RMyZ+qV+BMhy2kfDcvIaUjVGSpoD9cBg=="></enclosure>
+    </item>
+    <item>
+      <title>0.2.2</title>
+      <description>Automatic update checks and update preferences in Settings.</description>
+      <pubDate>Mon, 05 Oct 2026 08:49:22 GMT</pubDate>
+      <sparkle:version>12</sparkle:version>
+      <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.2.2/Fandy-0.2.2-arm64.dmg" length="3190534" type="application/octet-stream" sparkle:edSignature="huRAa8yUWQPNSnDf2CSbO0/uumBL7feaRnF+d5uWqxdY3dpPTIkb8c2CHfnhm+IvHY1QKTCkvGCSfBGRju5CAQ=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: RQYN11sv+VZKbxs225vi78SH2HXmgNMF/UaMcEsgl4l6XPthg/K9DW7gGVRDwKoVwnHKgjtU5sDpM+4zhqbaDw==
+length: 3282
 -->
