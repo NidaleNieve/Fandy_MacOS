@@ -2,8 +2,8 @@ import Foundation
 
 /// Shared with the signed helper. Release verification checks this against Info.plist.
 public enum FandyBuild {
-    public static let version = "0.3.0"
-    public static let identifier = "23"
+    public static let version = "0.3.1"
+    public static let identifier = "24"
 }
 
 public enum UpdateFrequency: String, Codable, Sendable, CaseIterable, Identifiable {
@@ -26,12 +26,12 @@ public struct UpdatePolicy: Equatable, Sendable {
     public static let reminderInterval: TimeInterval = 1_209_600
     public let automatic: Bool
     public let frequency: UpdateFrequency
-    public init(_ preferences: AppPreferences) {
-        automatic = preferences.automaticUpdates
+    public init(_ preferences: AppPreferences, suspended: Bool = false) {
+        automatic = preferences.automaticUpdates && !suspended
         frequency = preferences.updateFrequency
     }
     public var checksEnabled: Bool { automatic && frequency != .never }
-    public var interval: TimeInterval { frequency.interval ?? UpdateFrequency.weekly.interval! }
+    public var interval: TimeInterval { frequency.interval ?? UpdateFrequency.daily.interval! }
     public func checkIsDue(lastCheck: Date?, now: Date) -> Bool {
         checksEnabled && (lastCheck.map { now.timeIntervalSince($0) >= interval } ?? true)
     }

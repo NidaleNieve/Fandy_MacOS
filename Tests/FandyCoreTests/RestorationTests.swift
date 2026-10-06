@@ -91,7 +91,7 @@ func leasedCoordinator(_ spy:FanSpy) throws -> (HelperCoordinator,ControlLease,U
     defer { try? FileManager.default.removeItem(at:directory) }
     let logger=try RotatingDiagnostics(directory:directory,limit:2000),spy=FanSpy()
     for _ in 0..<8 { try logger.record(profile:"System",snapshot:spy.snapshot()) }
-    #expect(try FileManager.default.contentsOfDirectory(atPath:directory.path).count <= 4)
+    #expect(try FileManager.default.contentsOfDirectory(atPath:directory.path).filter { $0.hasSuffix(".jsonl") }.count <= 4)
     let text=try String(contentsOf:directory.appendingPathComponent("diagnostics.jsonl"),encoding:.utf8)
     #expect(text.contains("sensors"));#expect(!text.contains("serialNumber"))
 }

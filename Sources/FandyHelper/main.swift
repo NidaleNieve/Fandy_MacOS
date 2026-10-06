@@ -19,6 +19,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     private var retry = HelperBootstrapRetry()
     private var startedAt: Double = 0
     private var powerAvailable = true
+    private var powerSuspended = false
     var timer: DispatchSourceTimer?
     var power: PowerNotifications?
     override init() { super.init(); listener.delegate = self }
@@ -33,11 +34,21 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         source.setEventHandler { [weak self] in self?.watchdog() }
         source.resume(); timer = source
         do {
-            power = try PowerNotifications(queue: DispatchQueue(label: "is.dsr.fandy.helper.power")) { [self] in
+            power = try PowerNotifications(queue: DispatchQueue(label: "is.dsr.fandy.helper.power")) { [self] transition in
                 cancellation.cancel()
                 queue.sync { [self] in
-                    _ = recovery?.release(reason: "sleep/wake")
-                    releaseCoordinator?.powerTransition()
+                    switch transition {
+                    case .willSleep:
+                        guard !powerSuspended else { return }
+                        powerSuspended = true
+                        _ = recovery?.release(reason: "System sleep")
+                        releaseCoordinator?.systemWillSleep()
+                        timer?.schedule(deadline: .distantFuture)
+                    case .didWake:
+                        guard powerSuspended else { return }
+                        releaseCoordinator?.systemDidWake(); powerSuspended = false
+                        timer?.schedule(deadline: .now(), repeating: .milliseconds(100))
+                    }
                 }
             }
         } catch { powerAvailable = false }
@@ -46,6 +57,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         RunLoop.current.run()
     }
     private func bootstrapAttempt() {
+        guard !powerSuspended else { return }
         guard retry.beginAttempt() else { return }
         bootstrap = .init(attempt: retry.attempts)
         do {
@@ -110,17 +122,17 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         return status
     }
     func requireCoordinator() throws -> HelperCoordinator {
-        guard let coordinator, bootstrap.stage == .ready else { throw ControlError.helperUnavailable }; return coordinator
+        guard !powerSuspended, let coordinator, bootstrap.stage == .ready else { throw ControlError.helperUnavailable }; return coordinator
     }
     func requireRecovery() throws -> RecoveryTrialCoordinator {
-        guard let recovery, bootstrap.stage == .ready else { throw ControlError.helperUnavailable }; return recovery
+        guard !powerSuspended, let recovery, bootstrap.stage == .ready else { throw ControlError.helperUnavailable }; return recovery
     }
     func restore() -> Bool {
         if let recovery { return recovery.release(reason: "System requested") }
         return releaseCoordinator?.restore() ?? false
     }
     private func watchdog() {
-        guard let coordinator, let recovery, let hardware else { return }
+        guard !powerSuspended, let coordinator, let recovery, let hardware else { return }
         let owner = coordinator.leaseOwner ?? recovery.activeOwner
         do {
             hardware.admittedOperation = try owner.map { try cancellation.token(owner: $0) } ?? cancellation.token()

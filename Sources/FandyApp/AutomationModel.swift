@@ -152,7 +152,7 @@ extension AppModel {
                 automation.preferences.defaultProfileID = profiles.contains { $0.id == previousDefaultProfileID } ? previousDefaultProfileID : "system"
                 saveDefaultPreference()
             }
-            clearActivation(); select("system", manual: false)
+            clearActivation(); if machine.selected.kind != .system { select("system", manual: false) }
         }
     }
     func expireScheduledOccurrence() {
@@ -164,6 +164,7 @@ extension AppModel {
     /// at startup/wake are a baseline, never permission to restore manual control.
     /// Manual selections (including System) consume and suppress launch events.
     func evaluateApplicationLaunches() {
+        guard powerLifecycle == .awake else { return }
         let launched = pendingApplicationLaunches; pendingApplicationLaunches.removeAll()
         guard !launched.isEmpty, manualIntent == nil, !isQuitting, !savingCollection,
               machine.state != .fault, machine.state != .restoringSystem,
@@ -179,6 +180,7 @@ extension AppModel {
         if machine.selected.id == profile.id { applyActivationDefault(profile, remember: false) }
     }
     func evaluateSchedule() {
+        guard powerLifecycle == .awake else { return }
         guard manualIntent == nil, !isQuitting, !savingCollection else { return }
         let active = ScheduleEngine.active(in: automation, at: wallClock())
         if blockedScheduleID != active?.id { blockedScheduleID = nil }

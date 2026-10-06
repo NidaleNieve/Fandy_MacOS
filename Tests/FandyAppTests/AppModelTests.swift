@@ -472,3 +472,27 @@ private actor EnvelopeClient: PrivilegedFanClient {
     #expect(model.hardwareError?.contains("temperature monitoring remains available") == true)
     #expect(await client.counts().0 == 0)
 }
+
+@MainActor @Test func sleepRevokesAPendingWriteAndItsLateFailureCannotResumeControl() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let client = DeferredControlClient()
+    let capabilities = HardwareCapabilities(model: "Test", stage: .qualifiedControl,
+        sensors: HardwareCapabilities.requiredRoles.map { SensorEvidence(role: $0, keys: ["TEST"], state: .verified, source: "Injected test", limitation: "") },
+        topology: .verified, automaticRestoration: .verified, manualTransaction: .verified)
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false, client: client,
+        capabilities: capabilities, helperAvailable: { true }, clock: { 10 })
+    await model.tick(); model.select("cool-chassis"); for _ in 0..<4 { await model.tick() }
+    let write = Task { await model.tick() }
+    while !(await client.waiting()) { await Task.yield() }
+    await model.systemWillSleep()
+    #expect(model.powerLifecycle == .suspended && model.machine.state == .system)
+    #expect(await client.restoreCount() > 0)
+    let generation = model.machine.generation
+    await client.releaseFailure(); await write.value
+    #expect(model.powerLifecycle == .suspended && model.machine.state == .system)
+    #expect(model.machine.generation == generation && model.machine.fault == nil && model.snapshot == nil)
+    model.select("gaming"); await model.tick()
+    #expect(model.machine.selected.id == "system" && model.machine.generation == generation)
+    await model.prepareForTermination()
+}

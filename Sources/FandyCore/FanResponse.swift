@@ -8,7 +8,7 @@ public struct TimeWeightedDemand: Sendable {
     public init() {}
     public mutating func reset() { samples = [] }
     public mutating func update(_ value: Double, at now: Double, window: Double) throws -> Double {
-        guard value.isFinite, (0...100).contains(value), now.isFinite, window.isFinite, (0...3).contains(window) else { throw ControlError.invalidNumber }
+        guard value.isFinite, (0...100).contains(value), now.isFinite, window.isFinite, (0...15).contains(window) else { throw ControlError.invalidNumber }
         if let last = samples.last {
             guard now >= last.time else { reset(); throw ControlError.invalidNumber }
             if now - last.time > 3 { reset() }
@@ -45,7 +45,7 @@ public extension Profile {
         if let index { curves[index].enabled = !chipSources.isEmpty }
         else if selected { curves.append(FanCurve(.chip, [(45,0),(85,100)])) }
     }
-    var responseWindow: Double { 3 * (1 - fanResponse) }
+    var responseWindow: Double { 15 * (1 - fanResponse) }
     var upwardRate: Double { 2 + 8 * fanResponse }
     func chipRoles(policy: ChipControlPolicy) -> Set<SensorRole> {
         if policy == .conservativeEnvelope && chipSources.count == 2 { return policy.required }

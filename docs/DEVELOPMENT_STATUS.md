@@ -1,4 +1,8 @@
-# Current checkpoint — 0.3.0 build 23
+# Current checkpoint — 0.3.1 build 24
+
+Longer response averaging, bounded local surge capture, explicit system-sleep suspension and verified intent resumption, and Daily update defaults are implemented. 480 Swift / 58 tool tests, full/focused sanitizer checks and signed Release compilation pass; the local DMG is notarized, stapled and Gatekeeper verified. See [verification and remaining acceptance](STEADIER_SLEEP_031.md). Live testing is deferred while the user is in class; Fandy stays closed. Public release/updater publication waits for user testing.
+
+# Previous checkpoint — 0.3.0 build 23
 
 System+ and Cool Chassis factory response is 20%. Saved credentials are reused automatically; main has a verified active pull-request/checks ruleset. 464 Swift tests, 58 tool tests and signed Release compilation pass. The local DMG is notarized, stapled and Gatekeeper verified. See [verification and release state](RELEASE_030.md). Public release and updater publication remain held for user testing.
 

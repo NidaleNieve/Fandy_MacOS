@@ -1,6 +1,6 @@
 # Safety
 
-Current policy: **0.2.4 build 20**. Older measurement reports describe the software tested at their recorded date; the independent temperature-to-fan guard in builds 18/19 is superseded.
+Current policy: **0.3.1 build 24**. Older measurement reports describe the software tested at their recorded date; the independent temperature-to-fan guard in builds 18/19 is superseded.
 
 ## System and custom ownership
 
@@ -18,9 +18,11 @@ Serious, critical or unknown thermal pressure returns ownership directly to macO
 
 ## Response and idle
 
-Fan response is 0–100%: Quiet uses three seconds of time-weighted demand averaging and an upward limit of two percentage points/s; Fast uses no averaging and ten points/s. Existing downward hysteresis and rate limiting remain. Max is immediate and uses each fan's reported maximum. Startup and automatic-to-custom entry seed the governor from fresh actual speed, not a stale target. Inherited output is bounded by the next profile's maximum possible configured demand.
+Fan response is 0–100%: Quiet uses fifteen seconds of time-weighted demand averaging and an upward limit of two percentage points/s; Fast uses no averaging and ten points/s. A 20% response uses a twelve-second averaging window. Existing downward hysteresis and rate limiting remain. Max is immediate and uses each fan's reported maximum. Startup and automatic-to-custom entry seed the governor from fresh actual speed, not a stale target. Inherited output is bounded by the next profile's maximum possible configured demand.
 
 Apple auto at idle releases after 15 seconds of zero demand and resumes after demand of at least 5% persists for three seconds. A positive airflow floor prevents that idle release. macOS may run or stop fans while it owns them. Saved curves, automation and idle defaults are not reset by this release.
+
+Surge records preserve up to 30 seconds before and 60 seconds after a ten-percentage-point commanded or observed rise within ten seconds. Records remain local, are limited to 32 events / 8 MiB / seven days, and do not upload automatically. Stronger smoothing cannot guarantee suppression of sustained thermal demand or fan changes while macOS owns the hardware.
 
 ## Transactions
 
@@ -30,7 +32,7 @@ Fan inertia and firmware can cause actual RPM to differ temporarily from a targe
 
 ## Process and lifecycle failures
 
-The signed root helper authenticates the genuine application and validates closed XPC messages. A connection-owned lease has a ten-second heartbeat timeout. Disconnect and normal quit release immediately; the 100-ms helper timer checks expiry independently of paced full sensor acquisition. System, quit and sleep revoke in-flight work before release. Wake starts in System with fresh eligibility checks. Profile RPM and leases are never persisted across restart; a remembered profile may be admitted only after successful System-first initialization.
+The signed root helper authenticates the genuine application and validates closed XPC messages. A connection-owned lease has a ten-second heartbeat timeout. Disconnect and normal quit release immediately; the 100-ms helper timer checks expiry independently of paced full sensor acquisition. System, quit and sleep revoke in-flight work before release. Actual system sleep suspends monitoring, automation evaluation and periodic updates after restoration. The helper independently rejects new leases while suspended. Wake starts in System; a still-valid override, current schedule or previous ordinary profile can resume only after verified automatic ownership, fresh complete readings and helper readiness. Timers keep their original deadlines; ended application conditions are discarded. Display sleep alone does not suspend Fandy, and Fandy does not prevent or force system sleep. Profile RPM and leases are never persisted across restart; a remembered profile may be admitted only after successful System-first initialization.
 
 The authenticated listener starts before hardware bootstrap. Startup restoration precedes temperature-reader construction and control admission. A failed backend remains connected for structured status and rejects leases. Transient SMC initialization failures have at most three attempts at initial/one/three seconds. Unknown metadata and authentication failures are not automatically retried. Already-automatic reference fans avoid unnecessary protected mode writes, but global release and final ownership verification still run. This is idempotence evidence, not proof of release from manual ownership.
 

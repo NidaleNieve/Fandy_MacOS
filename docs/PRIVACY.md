@@ -8,7 +8,7 @@ Fandy operates locally. It has no account system, analytics, advertising, tracki
 
 - Saved profiles, temperature curves, schedules, pauses, activation conditions, shortcuts and preferences.
 - Current fan speeds and temperature readings used for display and control.
-- Local rotating diagnostic logs about fan-control operations and failures.
+- Local rotating diagnostic logs about fan-control operations and failures, including bounded temperature/RPM records around detected fan-speed surges.
 - Application identities and process start times used for rules such as ending a profile when a game closes. Fandy does not read application contents, browser history or keystrokes.
 
 Configuration and logs are stored in your user Library’s Application Support/Fandy directory. macOS separately stores service approvals, login registration and window preferences. Runtime fan leases, target RPM and active process watches are not restored from saved files after a restart.
@@ -23,7 +23,7 @@ Fandy does not request Accessibility, Screen Recording, Input Monitoring, Full D
 
 You control exports. Configuration/profile exports can contain profile names, schedules, application rules and preferences. Sharing those files shares their contents. Diagnostic exports use a restricted summary that omits custom names, paths and raw readings.
 
-GitHub downloads, issue reports and links opened in a browser are handled by GitHub or the destination website under their own policies. Anything you post in a public GitHub issue is public. Update checks contact GitHub for the release feed and update archives. GitHub receives ordinary network request information, including your IP address and updater/app version. Sparkle system profiling is disabled. No temperature readings, configurations, schedules or diagnostic logs are sent. Updates can be disabled in Settings by turning off Automatic updates and choosing Never.
+GitHub downloads, issue reports and links opened in a browser are handled by GitHub or the destination website under their own policies. Anything you post in a public GitHub issue is public. Update checks contact GitHub for the release feed and update archives. GitHub receives ordinary network request information, including your IP address and updater/app version. Sparkle system profiling is disabled. No temperature readings, configurations, schedules or diagnostic logs are sent. Updates can be disabled in Settings by turning off Automatic updates.
 
 ## Removing data
 

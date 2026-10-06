@@ -21,6 +21,7 @@ public final class HelperCoordinator: @unchecked Sendable {
     private var lastWatchdogObservationAt: Double?
     /// Expiry/release decisions run every 100ms; full SMC acquisition is bounded to 2Hz.
     private let watchdogObservationInterval = 0.5
+    public private(set) var powerSuspended = false
     private var fault: String?
     private var restoration: RestorationReport?
     private var startupRestoration: RestorationReport?
@@ -53,7 +54,17 @@ public final class HelperCoordinator: @unchecked Sendable {
         catch { safety.restorationFinished(false); fault = error.localizedDescription; event("Automatic restoration unverified: \(error.localizedDescription)"); return false }
     }
     public func powerTransition() { healthy = 0; samples = []; freshness = SensorFreshnessMonitor(); _ = restore() }
+    public func systemWillSleep() {
+        guard !powerSuspended else { return }
+        powerSuspended = true; powerTransition()
+    }
+    public func systemDidWake() {
+        guard powerSuspended else { return }
+        healthy = 0; samples = []; freshness = SensorFreshnessMonitor()
+        powerSuspended = false // Wake releases the barrier, never creates a lease.
+    }
     private func acquire() throws -> HardwareSnapshot {
+        guard !powerSuspended else { throw ControlError.helperUnavailable }
         do {
         let snapshot = try read()
         try recordHealthy(snapshot)
@@ -73,6 +84,7 @@ public final class HelperCoordinator: @unchecked Sendable {
         healthy = min(5, healthy + 1)
     }
     public func status() -> HelperStatus {
+        if powerSuspended { return HelperStatus(automaticVerified: restoration?.verified == true, fault: fault, capabilities: capabilities, restoration: restoration) }
         if !writesPermitted { return observationStatus() }
         // Status never renews a lease. It also detects a conflicting controller changing ownership.
         var observedSnapshot: HardwareSnapshot?
@@ -120,6 +132,7 @@ public final class HelperCoordinator: @unchecked Sendable {
         }
     }
     public func begin(_ request: LeaseRequest, owner: UUID) throws -> ControlLease {
+        guard !powerSuspended else { throw ControlError.helperUnavailable }
         guard qualified, capabilities.permits(required: request.required) else { throw ControlError.hardwareUnqualified }
         try requireExclusive()
         guard request.version == Wire.version, request.required.count <= SensorRole.allCases.count else { throw ControlError.malformedMessage }
@@ -196,6 +209,7 @@ public final class HelperCoordinator: @unchecked Sendable {
     public func disconnected(owner: UUID) { if safety.disconnect(owner: owner) { event("Controller disconnected"); _ = restore() } }
     public func reject(owner: UUID) { if safety.lease?.owner == owner { _ = restore() } }
     public func watchdog() {
+        guard !powerSuspended else { return }
         guard writesPermitted else { return }
         if safety.expired(at: clock()) { event("Heartbeat expired"); _ = restore(); return }
         if safety.restoring { _ = restore(); return }

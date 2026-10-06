@@ -33,7 +33,7 @@ import FandyCore
     }
     func synchronize() {
         guard let model else { return }
-        let policy = UpdatePolicy(model.automation.preferences)
+        let policy = UpdatePolicy(model.automation.preferences, suspended: model.powerLifecycle != .awake)
         if appliedPolicy != policy {
             updater.updateCheckInterval = policy.interval
             updater.automaticallyDownloadsUpdates = policy.automatic
@@ -41,7 +41,7 @@ import FandyCore
             updater.sendsSystemProfile = false
             appliedPolicy = policy
         }
-        canCheck = (updater.canCheckForUpdates || installationPending) && !model.preparingUpdate && !installingNow
+        canCheck = (updater.canCheckForUpdates || installationPending) && !model.preparingUpdate && !installingNow && model.powerLifecycle == .awake
         if policy.automatic, let reminderAt, Date() >= reminderAt, canCheck {
             self.reminderAt = Date().addingTimeInterval(UpdatePolicy.reminderInterval)
             presentPendingUpdate()

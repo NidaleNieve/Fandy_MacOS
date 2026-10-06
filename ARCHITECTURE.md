@@ -30,15 +30,15 @@ On Mac17,9 CPU/GPU selection uses fixed operational regional maxima; both togeth
 
 Built-in defaults remain in `BuiltInProfiles` and user edits are preserved. Comfort defaults use the measured comfortable and warmer observations as calibration inputs, with separate surface/airflow scales. This release does not retune existing curves or schedules.
 
-Response uses a 3-to-0-second time-weighted window and a 2-to-10 percentage-point/s upward limit. Downward changes retain a five-second hold, 2% deadband, five-second smoothing constant and two-point/s limit. Serious/critical/unknown pressure hands back directly. Apple auto at idle releases after 15 seconds of zero demand and resumes after at least 5% for three seconds. Fresh actual fan speed seeds each admission; inherited output is clamped to the next profile's possible ceiling.
+Response uses a 15-to-0-second time-weighted window and a 2-to-10 percentage-point/s upward limit. Downward changes retain a five-second hold, 2% deadband, five-second smoothing constant and two-point/s limit. Serious/critical/unknown pressure hands back directly. Apple auto at idle releases after 15 seconds of zero demand and resumes after at least 5% for three seconds. Fresh actual fan speed seeds each admission; inherited output is clamped to the next profile's possible ceiling.
 
 ## State and communication
 
-Controller states are system, initializingCustom, customActive, restoringSystem and fault. Five distinct healthy acquisitions are required before initial curve activation; Max requires one fresh valid fan acquisition. A generation rejects late acknowledgements after rapid profile switching. Restoration is reported complete only after confirmation. Sleep/wake, sensor invalidity and helper errors reset selection to System; restoration failure remains fault and is retried.
+Controller states are system, initializingCustom, customActive, restoringSystem and fault. Five distinct healthy acquisitions are required before initial curve activation; Max requires one fresh valid fan acquisition. A generation rejects late acknowledgements after rapid profile switching. Restoration is reported complete only after confirmation. Sleep restores System and suspends control work; wake verifies ownership and fresh readings before resolving valid intent. Sensor invalidity and helper errors reset selection to System; restoration failure remains fault and is retried.
 
 XPC uses bounded versioned JSON inside Data (16 KiB maximum), fixed value types and connection-owned UUID leases. The helper independently samples and validates required sensors, fan IDs, bounds, message generation, snapshot freshness and thermal pressure. It applies its immutable guard even if the GUI sends lower targets. Successful validated target transactions serve as the heartbeat; status requests cannot renew a lease. Every command is serialized with a100ms watchdog; lease lifetime is ten seconds. A stale lease ID never survives restart. Same-connection generation ordering is enforced; a newly authenticated connection can establish a new generation after release.
 
-Application diagnostics rotate at 1 MiB with three archives. The root helper uses unified logging only; no client-supplied file path exists. Startup, wake and faults do not restore saved profiles. See SAFETY for the difference between software tests and physical qualification.
+Application diagnostics rotate at 1 MiB with three archives. The root helper uses unified logging only; no client-supplied file path exists. Startup verifies System before admitting an ordinary saved profile. Wake verifies System before admitting still-valid runtime intent; faults block automatic resumption. See SAFETY for the difference between software tests and physical qualification.
 
 HelperRequestGate checks size, connection state, rate and outstanding-work limits before serial-queue dispatch. Ordinary traffic is capped at four queued/in-flight requests globally and two per connection. Restoration and rejection notifications each have a separate bounded allowance; disconnect invalidates tickets before queued work can execute. RestorationFlight shares overlapping app lifecycle releases through one RPC, propagates failures to every waiter and retries with a fresh RPC after completion. These controls cannot recover a dead or blocked helper by themselves.
 
@@ -80,7 +80,7 @@ Max needs one fresh fan acquisition; curves retain five. Post-I/O acquisition va
 
 The helper computes a fresh independent chip guard from the complete fixed 105-key envelope. Each required member must be typed, plausible and freshly acquired; no estimate/partial group substitutes on failure. Top proximity remains a mandatory airflow-group input with its uncertainty disclosed. Profile and helper escalation targets round upward to whole RPM within each fan's verified integral limits, and acknowledgement tracking uses normalized values. Invalid normalization restores both fans. Curves themselves retain continuous interpolation.
 
-The reviewed transaction establishes both manual modes before writing validated targets. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
+The reviewed transaction admits each fan with its manual-mode command, bounded acknowledgement and validated target before admitting the next fan. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
 
 Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKILL and normal quit passed. Live profile activation, rapid switching and handback passed. Earlier helper-restart evidence remains applicable because startup restoration is unchanged. A dead or blocked helper cannot run its watchdog; active physical sleep/wake still needs an observed test.
 
@@ -126,7 +126,7 @@ DeviceIdentity verifies arm64, notebook roster and chip family/variant separatel
 
 ## Everyday defaults and temporary automation
 
-AppPreferences.defaultProfileID records an ordinary selection independently of the controller's current profile. ScheduleEngine picks an eligible active occurrence, otherwise AppModel resumes the default after verified System and fresh eligibility. Explicit Until Changed pins a runtime override until toggled off; timed and process overrides also take precedence. Scheduled selections never modify the default, and cancelled occurrences retain their identifier until their range ends. Sleep/fault recovery still blocks automatic default resumption. Startup, unlike wake after an uncertain transition, may resume validated saved intent after initialization. Portable decoding defaults older archives to System.
+AppPreferences.defaultProfileID records an ordinary selection independently of the controller's current profile. ScheduleEngine picks an eligible active occurrence, otherwise AppModel resumes the default after verified System and fresh eligibility. Explicit Until Changed pins a runtime override until toggled off; timed and process overrides also take precedence. Scheduled selections never modify the default, and cancelled occurrences retain their identifier until their range ends. Faults and uncertain wake recovery block automatic default resumption. Successful sleep/wake preserves deadlines and reevaluates current schedules before resuming the previous ordinary profile. Portable decoding defaults older archives to System.
 
 HelperSetup caches native SMAppService status separately from helper health and hardware capability. Native registration occurs only in the genuine app; menu/editor/settings recover missing approval via Login Items. A dedicated native window explains Background App Activity approval and closes automatically when granted. Imported preferences cannot manufacture permission or eligibility.
 
@@ -145,3 +145,32 @@ The profile engine computes the maximum of explicit enabled inputs only. The res
 `DirectFanTransaction` shares the production mode/readback/target order with an injected transport. Full batch preflight precedes all writes; each fan receives its target before the next mode is admitted. Reference transactions preserve their bounded global handover, cancellation and final release while shortening untargeted manual time. A partial transaction restores every fan.
 
 `HelperService` publishes its authenticated listener before hardware bootstrap. It owns separate unavailable and ready states: failures remain queryable through the existing status method, while leases require a ready coordinator after verified startup restoration. Fixed transient retries run at one and three seconds. Native approval, XPC reachability and hardware eligibility are independent in the GUI; an approved failed backend exposes Retry/Export Diagnostics, never an approval guide solely because it failed to start.
+
+## System-sleep suspension (0.3.1)
+
+GUI lifecycle is `awake → suspending → suspended → resuming → awake`.
+Native system-sleep notifications invalidate the generation, revoke pending work,
+restore System and stop polling. Display-sleep notifications are deliberately
+ignored. UpdatePolicy disables periodic checks without changing saved preferences.
+The helper receives independent IOKit notifications, cancels in-flight operations,
+restores every fan before acknowledging the sleep event and suspends its timer;
+status/restoration remain available, but lease admission is blocked. Wake never
+resurrects a helper lease by itself.
+
+GUI wake starts with restoration and waits at most three seconds for a revoked
+read to unwind. A fresh acquisition and verified ownership precede manual-intent,
+current-schedule and previous-profile precedence. Five healthy acquisitions still
+precede a curve command. Closed watched applications and elapsed timer deadlines
+expire; time spent sleeping never extends an activation. Prior faults cannot be
+cleared merely by sleeping. If another app keeps the Mac awake with its display
+off, Fandy continues the selected profile under this system-sleep-only policy.
+
+Active samples feed a serialized local surge recorder. Sample-held integration
+uses monotonic acquisition time; event wall timestamps are for inspection only.
+A commanded or observed ten-point rise within ten seconds starts one nonrenewable
+60-second capture with up to 30 seconds of preceding context. Data includes
+logical inputs, per-curve demand, governed demand, requested targets, observed
+modes/targets/RPM and transition reason. Observed telemetry precedes the tick's
+command, so it is not a claim of simultaneous command acknowledgement. Storage
+is bounded to 32 events, 8 MiB and seven days; writes have backpressure and run
+off the main actor. Imported preferences cannot change these limits.
