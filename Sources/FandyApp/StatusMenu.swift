@@ -13,6 +13,7 @@ import FandyCore
     private var actions: [UUID: () -> Void] = [:]
     private var profileRows: [String: NSMenuItem] = [:]
     private var timingRow: NSMenuItem?
+    private var customSpeedRow: NSMenuItem?
     private(set) var isOpen = false
     init(model: AppModel, install: Bool = true) {
         self.model = model; item = install ? NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength) : nil; super.init()
@@ -36,6 +37,8 @@ import FandyCore
     private func refreshSelection() {
         for (id, row) in profileRows { row.state = model.menuSelectionID == id ? .on : .off; row.view?.needsDisplay = true }
         timingRow?.isEnabled = model.canSetActivationLimit
+        customSpeedRow?.state = model.isCustomFanSpeedActive ? .on : .off
+        customSpeedRow?.isEnabled = model.canActivateCustomFanSpeed
     }
     func updateTitle() {
         refreshSelection()
@@ -48,7 +51,7 @@ import FandyCore
     func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
     func menuDidClose(_ menu: NSMenu) { isOpen = false }
     func rebuild(_ menu: NSMenu) {
-        actions.removeAll(); profileRows.removeAll(); menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
+        actions.removeAll(); profileRows.removeAll(); customSpeedRow = nil; menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
         for profile in model.profiles {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
             if profile.kind != .system && model.needsHelperAttention { row.image = AppModel.approvalDot() }
@@ -57,6 +60,16 @@ import FandyCore
             row.toolTip = profile.kind != .system && model.needsHelperAttention ? model.helperSetupMessage : model.activationConditionNote(profile) ?? model.eligibility(profile).reason ?? profile.name
         }
         menu.addItem(.separator())
+        if model.automation.preferences.showCustomFanSpeed {
+            let speed = submenu("Custom Fan Speed", in: menu)
+            customSpeedRow = menu.items.last
+            customSpeedRow?.state = model.isCustomFanSpeedActive ? .on : .off
+            customSpeedRow?.isEnabled = model.canActivateCustomFanSpeed
+            if model.needsHelperAttention { customSpeedRow?.image = AppModel.approvalDot() }
+            let controls = NSMenuItem()
+            controls.view = embedded(CustomFanSpeedPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.fan-speed")
+            speed.addItem(controls)
+        }
         let timing = submenu("Activate for/until", in: menu)
         timingRow = menu.items.last; timingRow?.isEnabled = model.canSetActivationLimit
         let minutes = submenu("Minutes", in: timing)

@@ -174,3 +174,7 @@ modes/targets/RPM and transition reason. Observed telemetry precedes the tick's
 command, so it is not a claim of simultaneous command acknowledgement. Storage
 is bounded to 32 events, 8 MiB and seven days; writes have backpressure and run
 off the main actor. Imported preferences cannot change these limits.
+
+## Temporary fixed-speed selection (0.3.2)
+
+The menu creates a runtime-only custom profile with no temperature curves and a fixed percentage floor. It shares the existing profile engine, full required-chip validation, response governor, authenticated lease and batch writer. It adds no XPC method or hardware operation. A manual activation deadline overrides automation until expiry; then normal schedule/default evaluation resumes. The temporary definition is never appended to the saved collection, never becomes the startup default, and is excluded from previous-selection metadata and configuration exports. Wake resumes it only while its original deadline and readiness checks remain valid.
