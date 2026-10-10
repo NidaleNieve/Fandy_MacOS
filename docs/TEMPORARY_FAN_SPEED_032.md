@@ -14,6 +14,6 @@ Tests were written before implementation. The initial run failed because the tem
 
 The final focused run passes all nine selected tests (seven app behaviors, preference interchange and version identity). The complete suites pass **488 Swift tests** (72 hardware, 241 core, 175 app) and **58 tool tests**, with one job and no parallel test execution. Tests cover invalid and nonfinite input, 0/100% endpoints, expiry, scheduling precedence, re-timing, rapid replacement, hiding, profile edits/undo, archive exclusion, startup, eligibility, sensor failure and mock sleep/wake.
 
-The nine focused tests also pass under Address Sanitizer. The signed, one-job Release compilation passed.
+The nine focused tests also pass under Address Sanitizer. The signed, one-job Release compilation passed. The local DMG is Developer ID signed, notarized and stapled; app/image Gatekeeper assessment, mounted payload, privacy and integrity checks passed.
 
 This delivery is local; GitHub release and updater publication remain unchanged. No physical fan experiment or installed-app/helper replacement was performed for this feature. UI checks use native menu construction, accessibility identifiers, model assertions and compilation.
