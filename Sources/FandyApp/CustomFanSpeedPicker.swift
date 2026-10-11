@@ -11,27 +11,21 @@ import FandyCore
     }
 }
 
-/// Native controls receive menu-window events directly. Opening this view never
-/// activates cooling; user edits apply on the existing bounded control path.
-@MainActor final class CustomFanSpeedMenuView: NSView, NSTextFieldDelegate {
+/// Slider events stay in the menu window. Duration choices live in ordinary
+/// NSMenu submenus, so no popup has to open inside another tracking menu.
+@MainActor final class CustomFanSpeedMenuView: NSView {
     let slider = MenuFanSpeedSlider()
-    let durationPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let model: AppModel
     private let percentage = NSTextField(labelWithString: "")
-    private let hours = NSTextField(string: "0")
-    private let minutes = NSTextField(string: "5")
     private let error = NSTextField(wrappingLabelWithString: "")
-    private var customFields: [NSView] = []
-    private static let presets = [5, 10, 15, 30, 60, 120, 240, 360, 720, 1440]
     override var isFlipped: Bool { true }
-
     init(model: AppModel) {
         self.model = model
-        super.init(frame: NSRect(x: 0, y: 0, width: 240, height: 98))
-        label("Fan speed", at: NSRect(x: 10, y: 10, width: 145, height: 18))
+        super.init(frame: NSRect(x: 0, y: 0, width: 240, height: 64))
+        let title = NSTextField(labelWithString: "Fan speed")
+        title.frame = NSRect(x: 10, y: 10, width: 145, height: 18); addSubview(title)
         percentage.frame = NSRect(x: 170, y: 10, width: 60, height: 18)
-        percentage.alignment = .right
-        percentage.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        percentage.alignment = .right; percentage.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
         addSubview(percentage)
         slider.frame = NSRect(x: 10, y: 34, width: 220, height: 22)
         slider.minValue = 0; slider.maxValue = 100; slider.numberOfTickMarks = 0
@@ -40,93 +34,71 @@ import FandyCore
         slider.doubleValue = model.isCustomFanSpeedActive ? model.machine.selected.floor :
             (model.snapshot?.fans.compactMap { try? $0.percent(rpm: $0.actualRPM) }.max() ?? 30)
         percentage.stringValue = "\(Int(slider.doubleValue.rounded()))%"
-        slider.isEnabled = model.canActivateCustomFanSpeed
-        addSubview(slider)
-        label("For", at: NSRect(x: 10, y: 68, width: 30, height: 18))
-        durationPopup.frame = NSRect(x: 45, y: 63, width: 185, height: 26)
-        durationPopup.controlSize = .small
-        durationPopup.menu?.autoenablesItems = false
-        for value in Self.presets {
-            durationPopup.addItem(withTitle: value < 60 ? "\(value) minutes" : "\(value / 60) \(value == 60 ? "hour" : "hours")")
-            durationPopup.lastItem?.tag = value
-        }
-        durationPopup.addItem(withTitle: "Other…"); durationPopup.lastItem?.tag = 0
-        durationPopup.selectItem(withTag: 5)
-        // Reopening preserves the current deadline; this is a readout, not a reset.
-        if model.isCustomFanSpeedActive, let deadline = model.activationDeadline {
-            let remaining = max(1, Int(ceil((deadline - model.clockNow()) / 60)))
-            if !Self.presets.contains(remaining) {
-                durationPopup.insertItem(withTitle: "\(remaining) minutes remaining", at: 0)
-                durationPopup.item(at: 0)?.tag = remaining
-            }
-            durationPopup.selectItem(withTag: remaining)
-        }
-        durationPopup.target = self; durationPopup.action = #selector(durationChanged)
-        durationPopup.setAccessibilityLabel("Temporary fan speed duration")
-        addSubview(durationPopup)
-        hours.frame = NSRect(x: 35, y: 99, width: 50, height: 24)
-        minutes.frame = NSRect(x: 128, y: 99, width: 50, height: 24)
+        slider.isEnabled = model.canActivateCustomFanSpeed; addSubview(slider)
+        error.textColor = .systemRed; error.font = .systemFont(ofSize: 11)
+        error.frame = NSRect(x: 10, y: 64, width: 220, height: 32); error.isHidden = true; addSubview(error)
+    }
+    required init?(coder: NSCoder) { nil }
+    @objc private func speedChanged() {
+        let value = slider.doubleValue.rounded()
+        percentage.stringValue = "\(Int(value))%"
+        let accepted = model.updateCustomFanSpeed(percent: value)
+        error.stringValue = accepted ? "" : model.draftError ?? "Fan control is unavailable."
+        error.isHidden = accepted
+        let size = NSSize(width: 240, height: accepted ? 64 : 102)
+        if frame.size != size { setFrameSize(size); enclosingMenuItem?.menu?.update() }
+    }
+}
+
+/// Custom hours/minutes remember only completed, valid durations. Merely opening
+/// this submenu does not retime or activate the current selection.
+@MainActor final class CustomFanSpeedDurationView: NSView, NSTextFieldDelegate {
+    private let model: AppModel
+    private let hours = NSTextField()
+    private let minutes = NSTextField()
+    private let error = NSTextField(wrappingLabelWithString: "")
+    override var isFlipped: Bool { true }
+    init(model: AppModel) {
+        self.model = model
+        super.init(frame: NSRect(x: 0, y: 0, width: 240, height: 52))
+        let chosen = model.automation.preferences.customFanSpeedDurationMinutes
+        hours.stringValue = "\(chosen / 60)"; minutes.stringValue = "\(chosen % 60)"
+        hours.frame = NSRect(x: 25, y: 13, width: 50, height: 24)
+        minutes.frame = NSRect(x: 120, y: 13, width: 50, height: 24)
         for field in [hours, minutes] {
             field.alignment = .center; field.delegate = self; field.bezelStyle = .roundedBezel
             field.font = .systemFont(ofSize: 13); addSubview(field)
         }
         hours.setAccessibilityLabel("Hours"); minutes.setAccessibilityLabel("Minutes")
-        customFields = [hours, minutes,
-            label("h", at: NSRect(x: 90, y: 102, width: 24, height: 18)),
-            label("min", at: NSRect(x: 183, y: 102, width: 30, height: 18))]
+        for (title, x) in [("h", 80.0), ("min", 175.0)] {
+            let label = NSTextField(labelWithString: title)
+            label.frame = NSRect(x: x, y: 16, width: 35, height: 18); addSubview(label)
+        }
         error.textColor = .systemRed; error.font = .systemFont(ofSize: 11)
-        addSubview(error)
-        updateLayout()
+        error.frame = NSRect(x: 10, y: 52, width: 220, height: 32); error.isHidden = true; addSubview(error)
     }
     required init?(coder: NSCoder) { nil }
-    @discardableResult private func label(_ title: String, at frame: NSRect) -> NSTextField {
-        let view = NSTextField(labelWithString: title); view.frame = frame; addSubview(view); return view
+    static func durationLabel(_ value: Int) -> String {
+        let h = value / 60, m = value % 60
+        let hour = "\(h) \(h == 1 ? "hour" : "hours")"
+        let minute = "\(m) \(m == 1 ? "minute" : "minutes")"
+        if h == 0 { return minute }
+        if m == 0 { return hour }
+        return hour + " " + minute
     }
-    @objc private func speedChanged() {
-        let value = slider.doubleValue.rounded()
-        percentage.stringValue = "\(Int(value))%"
-        let seconds = selectedSeconds()
-        guard model.isCustomFanSpeedActive || seconds != nil else { showError("Enter a positive duration up to 31 days."); return }
-        if model.updateCustomFanSpeed(percent: value, initialSeconds: seconds ?? 300) {
-            showError(seconds == nil ? "Enter a positive duration up to 31 days." : nil)
-        }
-        else { showError(model.draftError) }
-    }
-    @objc private func durationChanged() {
-        updateLayout()
-        // Opening the custom fields is not a completed duration selection.
-        if durationPopup.selectedItem?.tag == 0 { showError(nil); return }
-        applyDuration()
-    }
-    func controlTextDidChange(_ notification: Notification) { applyDuration() }
-    private func applyDuration() {
-        guard let seconds = selectedSeconds() else { showError("Enter a positive duration up to 31 days."); return }
-        if model.isCustomFanSpeedActive { model.activateFor(seconds: seconds) }
-        showError(nil)
-    }
-    private func selectedSeconds() -> Double? {
-        if let tag = durationPopup.selectedItem?.tag, tag > 0 { return Double(tag) * 60 }
+    func controlTextDidChange(_ notification: Notification) {
         func integer(_ field: NSTextField) -> Int? {
             let value = field.stringValue
             guard !value.isEmpty, value.utf8.allSatisfy({ (48...57).contains($0) }) else { return nil }
             return Int(value)
         }
-        guard let h = integer(hours), let m = integer(minutes), (0...744).contains(h), (0...59).contains(m) else { return nil }
-        let seconds = Double(h) * 3600 + Double(m) * 60
-        return seconds > 0 && seconds <= 31 * 86400 ? seconds : nil
-    }
-    private func showError(_ message: String?) {
-        error.stringValue = message ?? ""; updateLayout()
-    }
-    private func updateLayout() {
-        let custom = durationPopup.selectedItem?.tag == 0
-        customFields.forEach { $0.isHidden = !custom }
-        let base: CGFloat = custom ? 133 : 98
-        error.isHidden = error.stringValue.isEmpty
-        error.frame = NSRect(x: 10, y: base, width: 220, height: 32)
-        let size = NSSize(width: 240, height: base + (error.isHidden ? 0 : 38))
-        guard frame.size != size else { return }
-        setFrameSize(size)
-        enclosingMenuItem?.menu?.update()
+        let accepted: Bool
+        if let h = integer(hours), let m = integer(minutes), (0...744).contains(h), (0...59).contains(m) {
+            accepted = model.setCustomFanSpeedDuration(minutes: h * 60 + m)
+        } else { accepted = false }
+        error.stringValue = accepted ? "" : "Enter a positive duration up to 31 days."
+        error.isHidden = accepted
+        let size = NSSize(width: 240, height: accepted ? 52 : 90)
+        if frame.size != size { setFrameSize(size); enclosingMenuItem?.menu?.update() }
     }
 }

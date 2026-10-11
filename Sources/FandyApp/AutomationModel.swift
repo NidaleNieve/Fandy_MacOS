@@ -100,6 +100,7 @@ extension AppModel {
         guard seconds.isFinite, seconds > 0, seconds <= 31 * 86400 else { draftError = "Duration must be positive and no longer than 31 days."; return }
         guard claimCurrentActivation(.deadline(wallClock().addingTimeInterval(seconds))) else { return }
         activationDeadline = clockNow() + seconds
+        if isCustomFanSpeedActive { setPreferences { $0.customFanSpeedDurationMinutes = Int(ceil(seconds / 60)) } }
     }
     func activateUntil(_ date: Date) { activateFor(seconds: date.timeIntervalSince(wallClock())) }
     func activateWhile(_ process: RunningProcess) {

@@ -70,6 +70,21 @@ import FandyCore
             controls.view = CustomFanSpeedMenuView(model: model)
             controls.view?.setAccessibilityIdentifier("activation.fan-speed")
             speed.addItem(controls)
+            let chosen = model.automation.preferences.customFanSpeedDurationMinutes
+            let duration = submenu("For " + CustomFanSpeedDurationView.durationLabel(chosen), in: speed)
+            let presets = Array(Set([5, 10, 15, 30, 60, 120, 240, 360, 720, 1440, chosen])).sorted()
+            for value in presets {
+                let row = add(CustomFanSpeedDurationView.durationLabel(value), to: duration) { [weak model] in
+                    model?.setCustomFanSpeedDuration(minutes: value)
+                }
+                row.tag = value; row.state = chosen == value ? .on : .off
+            }
+            duration.addItem(.separator())
+            let other = submenu("Other…", in: duration)
+            let custom = NSMenuItem()
+            custom.view = CustomFanSpeedDurationView(model: model)
+            custom.view?.setAccessibilityIdentifier("activation.fan-speed-duration")
+            other.addItem(custom)
         }
         if model.automation.preferences.showActivationTiming {
             let timing = submenu("Activate for/until", in: menu)

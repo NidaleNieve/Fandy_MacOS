@@ -302,6 +302,7 @@ import ServiceManagement
             temporaryFanSpeedProfile = profile
             manualIntent = ActivationIntent(profileID: profile.id, limit: .deadline(wallClock().addingTimeInterval(seconds)))
             activationDeadline = clockNow() + seconds
+            setPreferences { $0.customFanSpeedDurationMinutes = Int(ceil(seconds / 60)) }
             draftError = nil
             logger.notice("Temporary fan speed activated")
             Task { await execute(effect) }
@@ -310,15 +311,26 @@ import ServiceManagement
     }
     /// Slider changes keep the original expiry; only an explicit duration edit
     /// renews it. The ordinary controller still governs and validates every target.
-    @discardableResult func updateCustomFanSpeed(percent: Double, initialSeconds: Double = 300) -> Bool {
+    @discardableResult func updateCustomFanSpeed(percent: Double, initialSeconds: Double? = nil) -> Bool {
         guard percent.isFinite, (0...100).contains(percent) else { draftError = "Enter a speed from 0–100%."; return false }
-        guard isCustomFanSpeedActive else { return activateCustomFanSpeed(percent: percent, seconds: initialSeconds) }
+        guard isCustomFanSpeedActive else { return activateCustomFanSpeed(percent: percent, seconds: initialSeconds ?? Double(automation.preferences.customFanSpeedDurationMinutes) * 60) }
         guard canActivateCustomFanSpeed else { draftError = "Fan control is unavailable. Check helper status and required readings."; return false }
         do {
             try machine.updateFixedSpeed(percent)
             temporaryFanSpeedProfile = machine.selected; draftError = nil
             return true
         } catch { draftError = error.localizedDescription; return false }
+    }
+    /// Remember the completed choice without activating cooling. A running
+    /// temporary selection is retimed through the same ordinary activation path.
+    @discardableResult func setCustomFanSpeedDuration(minutes: Int) -> Bool {
+        guard (1...44_640).contains(minutes) else { draftError = "Enter a positive duration up to 31 days."; return false }
+        guard !savingCollection, !isQuitting, !preparingUpdate else { return false }
+        if isCustomFanSpeedActive {
+            guard canSetActivationLimit, canActivate(machine.selected) else { draftError = "Fan control is unavailable."; return false }
+            activateFor(seconds: Double(minutes) * 60)
+        } else { setPreferences { $0.customFanSpeedDurationMinutes = minutes } }
+        return draftError == nil && automation.preferences.customFanSpeedDurationMinutes == minutes
     }
     func select(_ id: String, manual: Bool = true) {
         guard let profile = activationProfile(id) else { return }
