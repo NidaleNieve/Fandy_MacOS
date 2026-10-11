@@ -98,7 +98,7 @@ enum ImportValidation {
     }
     static func profiles(_ value: Any?) throws {
         for (index, entry) in try array(value, limit: 128, path: "profiles").enumerated() {
-            _ = try fields(entry, allowed: ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle", "targetTemperature", "chipSources", "fanResponse"], path: "profiles[\(index)]")
+            _ = try fields(entry, allowed: ["id", "name", "kind", "bundled", "defaultRevision", "curves", "floor", "automaticAtIdle", "targetTemperature", "chipSources", "fanResponse", "showInMenuBar"], path: "profiles[\(index)]")
             if let target = entry["targetTemperature"], !(target is NSNull) { _ = try fields(target, allowed: ["input", "celsius"], path: "targetTemperature") }
             for curve in try array(entry["curves"], limit: 4, path: "curves") {
                 _ = try fields(curve, allowed: ["input", "points", "enabled"], path: "curves")
@@ -135,7 +135,7 @@ enum ImportValidation {
         if let value = object["periods"] { try periods(value) }
         if let value = object["pauses"] { try pauses(value) }
         // Accept the retired clock field in old exports, but decoding drops it.
-        if let value = object["preferences"] { _ = try fields(value, allowed: ["defaultProfileID", "launchAtLogin", "use24HourTime", "showClock", "showHelperProcesses", "menuSensors", "shortcuts", "showFanSpeedBar", "showFanSpeedNumbers", "showCustomFanSpeed", "automaticUpdates", "updateFrequency"], path: "preferences")
+        if let value = object["preferences"] { _ = try fields(value, allowed: ["defaultProfileID", "launchAtLogin", "use24HourTime", "showClock", "showHelperProcesses", "menuSensors", "shortcuts", "showFanSpeedBar", "showFanSpeedNumbers", "showCustomFanSpeed", "showActivationTiming", "automaticUpdates", "updateFrequency"], path: "preferences")
             if let shortcuts = (value as? [String: Any])?["shortcuts"] as? [String: Any] {
                 for binding in shortcuts.values { _ = try fields(binding, allowed: ["keyCode", "modifiers", "key"], path: "shortcut") }
             } }

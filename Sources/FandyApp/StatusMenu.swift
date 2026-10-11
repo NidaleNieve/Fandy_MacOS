@@ -51,8 +51,8 @@ import FandyCore
     func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
     func menuDidClose(_ menu: NSMenu) { isOpen = false }
     func rebuild(_ menu: NSMenu) {
-        actions.removeAll(); profileRows.removeAll(); customSpeedRow = nil; menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
-        for profile in model.profiles {
+        actions.removeAll(); profileRows.removeAll(); customSpeedRow = nil; timingRow = nil; menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
+        for profile in model.profiles where profile.showInMenuBar {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
             if profile.kind != .system && model.needsHelperAttention { row.image = AppModel.approvalDot() }
             row.isEnabled = model.canActivate(profile)
@@ -67,32 +67,35 @@ import FandyCore
             customSpeedRow?.isEnabled = model.canActivateCustomFanSpeed
             if model.needsHelperAttention { customSpeedRow?.image = AppModel.approvalDot() }
             let controls = NSMenuItem()
-            controls.view = embedded(CustomFanSpeedPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.fan-speed")
+            controls.view = CustomFanSpeedMenuView(model: model)
+            controls.view?.setAccessibilityIdentifier("activation.fan-speed")
             speed.addItem(controls)
         }
-        let timing = submenu("Activate for/until", in: menu)
-        timingRow = menu.items.last; timingRow?.isEnabled = model.canSetActivationLimit
-        let minutes = submenu("Minutes", in: timing)
-        for value in stride(from: 5, through: 55, by: 5) {
-            add("\(value) minutes", to: minutes) { [weak model] in model?.activateFor(seconds: Double(value * 60)) }
-            if [5,15,25,35,45].contains(value) { minutes.addItem(.separator()) }
+        if model.automation.preferences.showActivationTiming {
+            let timing = submenu("Activate for/until", in: menu)
+            timingRow = menu.items.last; timingRow?.isEnabled = model.canSetActivationLimit
+            let minutes = submenu("Minutes", in: timing)
+            for value in stride(from: 5, through: 55, by: 5) {
+                add("\(value) minutes", to: minutes) { [weak model] in model?.activateFor(seconds: Double(value * 60)) }
+                if [5,15,25,35,45].contains(value) { minutes.addItem(.separator()) }
+            }
+            let hours = submenu("Hours", in: timing)
+            for value in Array(1...12) + [24] {
+                if value == 24 { hours.addItem(.separator()) }
+                add("\(value) \(value == 1 ? "hour" : "hours")", to: hours) { [weak model] in model?.activateFor(seconds: Double(value * 3600)) }
+            }
+            let time = submenu("Other Time/Until", in: timing)
+            let timeControls = NSMenuItem()
+            timeControls.view = embedded(CustomActivationPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.time")
+            time.addItem(timeControls)
+            let applications = submenu("While App Is Running", in: timing)
+            let appControls = NSMenuItem()
+            appControls.view = embedded(ProcessPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.application")
+            applications.addItem(appControls)
+            timing.addItem(.separator())
+            let forever = add("Until Changed", to: timing) { [weak model] in model?.activateForever() }
+            if case .forever = model.manualIntent?.limit, model.awaitingApplicationID == nil, model.watchedApplications.isEmpty { forever.state = .on }
         }
-        let hours = submenu("Hours", in: timing)
-        for value in Array(1...12) + [24] {
-            if value == 24 { hours.addItem(.separator()) }
-            add("\(value) \(value == 1 ? "hour" : "hours")", to: hours) { [weak model] in model?.activateFor(seconds: Double(value * 3600)) }
-        }
-        let time = submenu("Other Time/Until", in: timing)
-        let timeControls = NSMenuItem()
-        timeControls.view = embedded(CustomActivationPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.time")
-        time.addItem(timeControls)
-        let applications = submenu("While App Is Running", in: timing)
-        let appControls = NSMenuItem()
-        appControls.view = embedded(ProcessPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.application")
-        applications.addItem(appControls)
-        timing.addItem(.separator())
-        let forever = add("Until Changed", to: timing) { [weak model] in model?.activateForever() }
-        if case .forever = model.manualIntent?.limit, model.awaitingApplicationID == nil, model.watchedApplications.isEmpty { forever.state = .on }
         if (model.manualIntent.map { $0.limit != .forever } ?? false) || !model.watchedApplications.isEmpty || model.awaitingApplicationID != nil || model.scheduledPeriodID != nil {
             let explanation = NSMenuItem(); explanation.view = fitted(ActivationMenuSummary(model: model)); menu.addItem(explanation)
         }

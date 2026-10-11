@@ -308,6 +308,18 @@ import ServiceManagement
             return true
         } catch { draftError = error.localizedDescription; return false }
     }
+    /// Slider changes keep the original expiry; only an explicit duration edit
+    /// renews it. The ordinary controller still governs and validates every target.
+    @discardableResult func updateCustomFanSpeed(percent: Double, initialSeconds: Double = 300) -> Bool {
+        guard percent.isFinite, (0...100).contains(percent) else { draftError = "Enter a speed from 0–100%."; return false }
+        guard isCustomFanSpeedActive else { return activateCustomFanSpeed(percent: percent, seconds: initialSeconds) }
+        guard canActivateCustomFanSpeed else { draftError = "Fan control is unavailable. Check helper status and required readings."; return false }
+        do {
+            try machine.updateFixedSpeed(percent)
+            temporaryFanSpeedProfile = machine.selected; draftError = nil
+            return true
+        } catch { draftError = error.localizedDescription; return false }
+    }
     func select(_ id: String, manual: Bool = true) {
         guard let profile = activationProfile(id) else { return }
         if !simulation && profile.kind != .system && needsHelperSetup { return }
@@ -604,13 +616,13 @@ import ServiceManagement
         guard !savingCollection, !quitting else { return }
         do {
             try profile.validate()
-            guard let index = profiles.firstIndex(where: { $0.id == profile.id }), !profiles[index].protected else { return }
+            guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
             guard profiles[index] != profile else { return }
             failedCollection = nil; failedConfiguration = nil
             if groupedOriginal == nil { registerUndo(profiles[index]) }
             // The existing validated profile is retained if a draft is invalid.
             if machine.selected.id == profile.id {
-                var renamed = machine.selected; renamed.name = profile.name
+                var renamed = machine.selected; renamed.name = profile.name; renamed.showInMenuBar = profile.showInMenuBar
                 if renamed == profile { try machine.updateSelectedName(from: profile) }
                 else { lifecycleToken = UUID(); let effect = try machine.select(profile); Task { await execute(effect) } }
             }

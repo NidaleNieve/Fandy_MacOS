@@ -126,6 +126,9 @@ private struct ProfileDetail: View {
                     Button(model.isSelected(profile.id) ? "Active" : "Use Profile") { model.select(profile.id) }
                         .disabled(model.isSelected(profile.id) || !model.canActivate(profile))
                 }
+                Toggle("Show in menu bar", isOn: Binding(get: { profile.showInMenuBar }, set: { value in
+                    var next = profile; next.showInMenuBar = value; model.update(next)
+                })).accessibilityIdentifier("profile.menu-visibility")
                 ViewThatFits(in: .horizontal) {
                     Picker("Profile section", selection: $tab) {
                         ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
