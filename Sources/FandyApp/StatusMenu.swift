@@ -71,20 +71,20 @@ import FandyCore
             controls.view?.setAccessibilityIdentifier("activation.fan-speed")
             speed.addItem(controls)
             let chosen = model.automation.preferences.customFanSpeedDurationMinutes
-            let duration = submenu("For " + CustomFanSpeedDurationView.durationLabel(chosen), in: speed)
+            let indefinite = model.automation.preferences.customFanSpeedIndefinite
+            let duration = submenu(indefinite ? "Indefinitely" : "For " + CustomActivationPicker.durationLabel(chosen), in: speed)
+            let forever = add("Indefinitely", to: duration) { [weak model] in model?.setCustomFanSpeedLimit(seconds: nil) }
+            forever.state = indefinite ? .on : .off
             let presets = Array(Set([5, 10, 15, 30, 60, 120, 240, 360, 720, 1440, chosen])).sorted()
             for value in presets {
-                let row = add(CustomFanSpeedDurationView.durationLabel(value), to: duration) { [weak model] in
+                let row = add(CustomActivationPicker.durationLabel(value), to: duration) { [weak model] in
                     model?.setCustomFanSpeedDuration(minutes: value)
                 }
-                row.tag = value; row.state = chosen == value ? .on : .off
+                row.tag = value; row.state = !indefinite && chosen == value ? .on : .off
             }
             duration.addItem(.separator())
             let other = submenu("Other…", in: duration)
-            let custom = NSMenuItem()
-            custom.view = CustomFanSpeedDurationView(model: model)
-            custom.view?.setAccessibilityIdentifier("activation.fan-speed-duration")
-            other.addItem(custom)
+            addTimePicker(to: other, root: menu, destination: .customFanSpeed, identifier: "activation.fan-speed-duration")
         }
         if model.automation.preferences.showActivationTiming {
             let timing = submenu("Activate for/until", in: menu)
@@ -100,9 +100,7 @@ import FandyCore
                 add("\(value) \(value == 1 ? "hour" : "hours")", to: hours) { [weak model] in model?.activateFor(seconds: Double(value * 3600)) }
             }
             let time = submenu("Other Time/Until", in: timing)
-            let timeControls = NSMenuItem()
-            timeControls.view = embedded(CustomActivationPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.time")
-            time.addItem(timeControls)
+            addTimePicker(to: time, root: menu, destination: .currentProfile, identifier: "activation.time")
             let applications = submenu("While App Is Running", in: timing)
             let appControls = NSMenuItem()
             appControls.view = embedded(ProcessPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.application")
@@ -156,6 +154,11 @@ import FandyCore
         let child = NSMenu(title: title); child.autoenablesItems = false
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.submenu = child; menu.addItem(item); return child
     }
+    private func addTimePicker(to submenu: NSMenu, root: NSMenu, destination: CustomActivationPicker.Destination, identifier: String) {
+        let controls = NSMenuItem()
+        controls.view = embedded(CustomActivationPicker(model: model, destination: destination, close: { [weak root] in root?.cancelTracking() }), identifier: identifier)
+        submenu.addItem(controls)
+    }
     private func embedded<V: View>(_ view: V, identifier: String) -> NSView {
         // NSMenuItem.view receives native mouse/keyboard events. Keep its controls
         // in the submenu's own window; never activate a separate panel/popover.
@@ -186,6 +189,31 @@ struct ActivationMenuSummary: View {
 struct CustomActivationPicker: View {
     @Bindable var model: AppModel
     let close: () -> Void
+    enum Destination { case currentProfile, customFanSpeed }
+    let destination: Destination
+    let initialDurationMinutes: Int
+    init(model: AppModel, destination: Destination = .currentProfile, close: @escaping () -> Void) {
+        self.model = model; self.destination = destination; self.close = close
+        initialDurationMinutes = destination == .customFanSpeed ? model.automation.preferences.customFanSpeedDurationMinutes : 60
+        _hours = State(initialValue: String(initialDurationMinutes / 60))
+        _minutes = State(initialValue: String(initialDurationMinutes % 60))
+    }
+    static func durationLabel(_ value: Int) -> String {
+        let h = value / 60, m = value % 60
+        let hour = "\(h) \(h == 1 ? "hour" : "hours")"
+        let minute = "\(m) \(m == 1 ? "minute" : "minutes")"
+        if h == 0 { return minute }
+        if m == 0 { return hour }
+        return hour + " " + minute
+    }
+    /// Both For and Until use this validation/dispatch; only the destination
+    /// differs, keeping the clock, fields and presentation in one shared view.
+    @discardableResult func applyInterval(_ seconds: Double) -> Bool {
+        guard seconds.isFinite, seconds > 0, seconds <= 31 * 86400 else { return false }
+        if destination == .customFanSpeed { return model.setCustomFanSpeedLimit(seconds: seconds) }
+        model.activateFor(seconds: seconds)
+        return model.draftError == nil
+    }
     @State private var until = false
     @State private var hours = "1"
     @State private var minutes = "0"
@@ -243,10 +271,10 @@ struct CustomActivationPicker: View {
         if until {
             guard let h = integer(untilHours), let m = integer(untilMinutes), (0...59).contains(m), (model.automation.preferences.use24HourTime ? 0...23 : 1...12).contains(h),
                   let next = Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: clockHour, minute: m), matchingPolicy: .nextTime, repeatedTimePolicy: .first) else { error = "Enter a valid hour and minute."; return }
-            model.activateUntil(next)
+            guard applyInterval(next.timeIntervalSince(model.wallClock())) else { error = model.draftError ?? "Select an available profile."; return }
         } else {
             guard let h = integer(hours), let m = integer(minutes), (0...743).contains(h), (0...59).contains(m), h + m > 0 else { error = "Enter a positive duration."; return }
-            model.activateFor(seconds: Double(h*3600+m*60))
+            guard applyInterval(Double(h*3600+m*60)) else { error = model.draftError ?? "Select an available profile."; return }
         }
         error = nil; close()
     }

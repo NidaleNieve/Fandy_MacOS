@@ -94,13 +94,16 @@ extension AppModel {
     }
     func activateForever() {
         if case .forever = manualIntent?.limit, awaitingApplicationID == nil, watchedApplications.isEmpty { clearActivation(); evaluateSchedule() }
-        else if claimCurrentActivation(.forever), !isCustomFanSpeedActive { rememberDefault(machine.selected.id) }
+        else if claimCurrentActivation(.forever) {
+            if isCustomFanSpeedActive { setPreferences { $0.customFanSpeedIndefinite = true } }
+            else { rememberDefault(machine.selected.id) }
+        }
     }
     func activateFor(seconds: Double) {
         guard seconds.isFinite, seconds > 0, seconds <= 31 * 86400 else { draftError = "Duration must be positive and no longer than 31 days."; return }
         guard claimCurrentActivation(.deadline(wallClock().addingTimeInterval(seconds))) else { return }
         activationDeadline = clockNow() + seconds
-        if isCustomFanSpeedActive { setPreferences { $0.customFanSpeedDurationMinutes = Int(ceil(seconds / 60)) } }
+        if isCustomFanSpeedActive { setPreferences { $0.customFanSpeedDurationMinutes = Int(ceil(seconds / 60)); $0.customFanSpeedIndefinite = false } }
     }
     func activateUntil(_ date: Date) { activateFor(seconds: date.timeIntervalSince(wallClock())) }
     func activateWhile(_ process: RunningProcess) {

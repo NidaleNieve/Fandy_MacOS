@@ -1,6 +1,6 @@
-# Temporary fan speed — 0.3.2 build 28
+# Temporary fan speed — 0.3.2 build 29
 
-Choose **Custom Fan Speed** in the menu and move the 0–100% slider to activate it. Changes apply through the normal controller without a confirmation button. Opening the submenu does not activate cooling. The native **For …** submenu offers five minutes to 24 hours; **Other…** accepts hours and minutes up to 31 days. The last valid duration is remembered across menu reopening and app restarts. This stores the chosen duration, not the remaining countdown, and never restores a temporary manual selection at startup. Slider edits preserve the original timer and lease. Only a completed duration edit restarts the timer; unfinished fields preserve the active selection. Native slider tracking continues until mouse-up even outside the menu, and the slider has no tick marks. The existing **Activate for/until** controls can change the timer, select an end time or application condition, or pin the selection with **Until Changed**.
+Choose **Custom Fan Speed** in the menu and move the 0–100% slider to activate it. Changes apply through the normal controller without a confirmation button. Opening the submenu does not activate cooling. The native timing submenu offers **Indefinitely** above five minutes, followed by duration presets up to 24 hours. **Other…** references the same For/Until picker as profile timing, including its clock, validation and Continue action. It accepts durations up to 31 days or an end time. The last valid duration or Indefinitely choice is remembered across menu reopening and app restarts. This stores the chosen duration, not the remaining countdown, and never restores a temporary manual selection at startup. Slider edits preserve the original timer and lease. Only a completed duration edit restarts the timer; unfinished fields preserve the active selection. Native slider tracking continues until mouse-up even outside the menu, and the slider has no tick marks. The existing **Activate for/until** controls can change the timer, select an end time or application condition, or pin the selection with **Until Changed**.
 
 On expiry or cancellation, the applicable schedule resumes; otherwise Fandy returns to the remembered ordinary profile. Manual selection of a saved profile replaces the temporary setting. Quit releases control and discards it. A valid selection may resume after verified wake, but sleeping never extends its deadline. **Settings → Menu Bar Menu → Show custom fan speed** hides the submenu without cancelling an active timer.
 
@@ -9,6 +9,14 @@ Percentages use each fan’s independently reported range: 0% is its minimum sup
 The runtime definition cannot enter saved profiles, the startup default, exports or imported hardware authority. Editing or undoing saved profile changes does not displace it. No fan-interface changes or new XPC methods were needed.
 
 **Settings → Menu Bar Menu → Show activate for/until** controls timing-submenu visibility. Each profile also has **Show in menu bar**, including System and Max. These settings default on. Hiding a profile does not deactivate it or disable its automation/shortcuts. Visibility survives persistence, duplication, undo and configuration/profile interchange; protected cooling definitions remain immutable.
+
+## Build 29 shared timing and indefinite duration
+
+Two regressions failed against build 28: no native Indefinitely option existed, and Other used a separate control type. Additional acceptance tests failed on the missing remembered-indefinite preference before implementation. Other now constructs the existing CustomActivationPicker through the same menu factory as Other Time/Until; no second picker implementation remains.
+
+Choosing Indefinitely before moving the slider remembers the choice without starting cooling. Choosing it during temporary cooling removes the deadline without replacing the runtime profile or lease, and repeated selection is idempotent. Timed selection reverses that choice. Quit still restores macOS, and startup never restores the temporary runtime profile. An indefinite user choice does not remove helper heartbeat or sensor safeguards.
+
+The full software suites pass **507 Swift tests** (72 hardware, 247 core, 188 app) and **58 tool tests**. Coverage includes shared hosted-view identity/presentation, preset ordering, indefinite persistence, nonrenewing slider edits, invalid intervals, exact timed deadlines and unchanged profile admission. Native mouse interaction remains local user acceptance; no physical fan experiment was performed.
 
 ## Build 28 timer correction
 

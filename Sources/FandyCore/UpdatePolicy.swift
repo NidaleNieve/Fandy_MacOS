@@ -3,7 +3,7 @@ import Foundation
 /// Shared with the signed helper. Release verification checks this against Info.plist.
 public enum FandyBuild {
     public static let version = "0.3.2"
-    public static let identifier = "28"
+    public static let identifier = "29"
 }
 
 public enum UpdateFrequency: String, Codable, Sendable, CaseIterable, Identifiable {
