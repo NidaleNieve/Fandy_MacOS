@@ -106,18 +106,14 @@ import FandyCore
     let view = CustomFanSpeedMenuView(model: model)
     view.slider.doubleValue = 25; view.slider.sendAction(view.slider.action, to: view.slider.target)
     let intent = model.manualIntent
-    let durationView = CustomFanSpeedDurationView(model: model)
+    let durationView = CustomActivationPicker(model: model, destination: .customFanSpeed, close: {})
     #expect(model.manualIntent == intent)
-    let minutes = try #require(durationView.subviews.compactMap { $0 as? NSTextField }.first { $0.accessibilityLabel() == "Minutes" })
-    minutes.stringValue = ""
-    durationView.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
+    #expect(!durationView.applyInterval(.nan))
     view.slider.doubleValue = 40; view.slider.sendAction(view.slider.action, to: view.slider.target)
     #expect(model.machine.selected.floor == 40 && model.manualIntent == intent)
-    minutes.stringValue = "0"
-    durationView.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
+    #expect(!durationView.applyInterval(0))
     #expect(model.manualIntent == intent)
-    minutes.stringValue = "15"
-    durationView.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
+    #expect(durationView.applyInterval(15 * 60))
     #expect(model.manualIntent != intent && model.machine.selected.floor == 40)
     await model.prepareForTermination()
 }

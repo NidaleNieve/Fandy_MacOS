@@ -4,9 +4,12 @@ import Testing
 
 @Test func temporaryDurationDefaultsAndConfigurationRoundTrip() throws {
     #expect(AppPreferences().customFanSpeedDurationMinutes == 5)
+    #expect(!AppPreferences().customFanSpeedIndefinite)
+    #expect(try !JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8)).customFanSpeedIndefinite)
     #expect(try JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8)).customFanSpeedDurationMinutes == 5)
     var config = AutomationConfiguration()
     config.preferences.customFanSpeedDurationMinutes = 75
+    config.preferences.customFanSpeedIndefinite = true
     config.preferences.showActivationTiming = false
     let imported = try ConfigurationInterchange.decode(ConfigurationInterchange.encode(.init(profiles: BuiltInProfiles.all, automation: config)))
     #expect(imported.automation.preferences == config.preferences)

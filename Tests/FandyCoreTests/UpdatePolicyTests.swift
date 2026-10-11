@@ -4,7 +4,7 @@ import Testing
 
 @Test func release032UsesANewBuildAcrossAppAndHelper() {
     #expect(FandyBuild.version == "0.3.2")
-    #expect(FandyBuild.identifier == "28")
+    #expect(FandyBuild.identifier == "29")
 }
 
 @Test func updateFrequencyOffersOnlyIntervalsAndLegacyNeverUsesToggle() throws {
