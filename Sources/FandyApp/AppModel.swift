@@ -32,6 +32,7 @@ import ServiceManagement
     var helperBootstrap: HelperBootstrapStatus?
     var helperConnectionFailureCode: String?
     var helperSetupError: String?
+    var helperInstallationIssue: String?
     let helperRegistrationStatus: @MainActor () -> SMAppService.Status
     var scheduledPeriodID: UUID?
     var blockedScheduleID: UUID?
@@ -191,7 +192,7 @@ import ServiceManagement
     }
     func canActivate(_ profile: Profile) -> Bool {
         if preparingUpdate || refreshingHelper || (powerLifecycle != .awake && profile.kind != .system) { return false }
-        if profile.kind != .system && (helperSetupInitializing || needsHelperSetup) { return false }
+        if profile.kind != .system && (helperSetupInitializing || needsHelperSetup || (!simulation && helperInstallationIssue != nil)) { return false }
         if simulation || profile.kind == .system { return true }
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
            (try? snapshot.validate(now: clock(), required: profile.requiredSensors(chipPolicy: capabilities.chipPolicy))) != nil { return true }
@@ -249,7 +250,10 @@ import ServiceManagement
                 if !self.simulation, let native = self.client as? FanXPCClient,
                    Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier {
                     do { try await HelperManager.migrateLegacyService(client: native) }
-                    catch { self.helperSetupError = "Fan helper migration failed."; self.helperConnectionFailureCode = "migration_failed" }
+                    catch {
+                        if let installation = error as? HelperInstallationError { self.recordHelperInstallationFailure(installation) }
+                        else { self.helperSetupError = "Fan helper migration failed."; self.helperConnectionFailureCode = "migration_failed" }
+                    }
                     guard !Task.isCancelled, !self.quitting else { return }
                     self.prepareHelperSetup()
                 }
@@ -476,6 +480,7 @@ import ServiceManagement
         defer { refreshingHelper = false; helperSetupInitializing = false; refreshHelperSetup() }
         lifecycleToken = UUID(); automationFailed()
         do {
+            try HelperManager.validateCurrentInstallation()
             if HelperManager.installed {
                 do { try await native.restoreAutomatic() }
                 catch ControlError.helperUnavailable { /* Unreachable service: replacement must restore on startup. */ }
@@ -493,8 +498,8 @@ import ServiceManagement
             hardwareError = "Starting fan helper…"
             _ = try machine.select(BuiltInProfiles.system)
         } catch {
-            helperSetupError = error.localizedDescription
-            helperConnectionFailureCode = "retry_failed"
+            if let installation = error as? HelperInstallationError { recordHelperInstallationFailure(installation) }
+            else { helperSetupError = error.localizedDescription; helperConnectionFailureCode = "retry_failed" }
         }
     }
     private func stepController(_ reading: HardwareSnapshot, now: Double) async {
