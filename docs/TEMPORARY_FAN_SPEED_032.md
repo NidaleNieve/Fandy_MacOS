@@ -16,7 +16,7 @@ Tests preceded implementation. Initial compilation rejected the missing visibili
 
 The full suites pass **500 Swift tests** (72 hardware, 245 core, 183 app) and **58 tool tests**, with limited concurrency. All nine new regressions pass under Address Sanitizer. Signed arm64 Release compilation and strict app/helper signature verification pass. Mouse-tracking policy is checked through an injected cell; no visual or physical fan testing was performed. Manual confirmation of the native menu interaction remains part of local user acceptance.
 
-This is a local build, not a public release. Build 27 is development-signed and has not been notarized: the existing `FandyNotary` credential lookup was already unavailable at the preceding checkpoint. No credentials were recreated. The installed notarized build 25 and its helper were left untouched; its DMG does not contain these fixes. GitHub release and updater publication are unchanged.
+Build 27 is now Developer ID signed, notarized and stapled, including the final DMG. The existing `FandyNotary` credential was accessible on the next attempt; no credentials were recreated. Gatekeeper, strict app/helper signatures, mounted DMG contents and checksum verification pass. Local installation used verified handback, normal quit, helper unregister/register and a preserved rollback copy. The installed build 27 helper is enabled and healthy, both fans are verified automatic, and the user profile/settings file is byte-for-byte unchanged. Fandy is left closed for manual local acceptance. GitHub release and updater publication remain unchanged.
 
 ## Original build 25 verification
 
