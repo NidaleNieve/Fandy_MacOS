@@ -7,6 +7,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Fandy application updates</description>
     <language>en</language>
     <item>
+      <title>0.3.2</title>
+      <description>Temporary fan speed, remembered timers and menu visibility controls.</description>
+      <pubDate>Sun, 11 Oct 2026 22:29:49 GMT</pubDate>
+      <sparkle:version>29</sparkle:version>
+      <sparkle:shortVersionString>0.3.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.3.2/Fandy-0.3.2-arm64.dmg" length="3295514" type="application/octet-stream" sparkle:edSignature="mA4ZPQuL8SKhh1nADpCvOm+kS7XvOOotYF3sguWNh1zZDdFKtpDuwmbWFzU+Qz9sgQv3x7fuvPZsKD9l3wXcCQ=="></enclosure>
+    </item>
+    <item>
       <title>0.3.1</title>
       <description>Steadier fan response, system-sleep suspension and daily update checks.</description>
       <pubDate>Tue, 06 Oct 2026 14:20:38 GMT</pubDate>
@@ -44,6 +53,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: RQYN11sv+VZKbxs225vi78SH2HXmgNMF/UaMcEsgl4l6XPthg/K9DW7gGVRDwKoVwnHKgjtU5sDpM+4zhqbaDw==
-length: 3282
+edSignature: OoocGfydQI9Bt6IMmgDlfgjB2sEV8oah4LgmEg6VN496aHDNAcNJzt7mprprrdtBRlf1VjfTa46NJwjEriROCQ==
+length: 3960
 -->
