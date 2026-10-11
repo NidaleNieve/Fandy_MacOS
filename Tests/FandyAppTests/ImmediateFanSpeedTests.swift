@@ -37,14 +37,19 @@ import FandyCore
     defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
     let view = CustomFanSpeedMenuView(model: model)
-    view.durationPopup.selectItem(withTag: 240)
-    view.durationPopup.sendAction(view.durationPopup.action, to: view.durationPopup.target)
+    let presenter = StatusMenu(model: model, install: false), menu = NSMenu()
+    func choose(_ minutes: Int) throws {
+        presenter.rebuild(menu)
+        let speed = try #require(menu.items.first { $0.title == "Custom Fan Speed" }?.submenu)
+        let duration = try #require(speed.items.first { $0.title.hasPrefix("For ") }?.submenu)
+        duration.performActionForItem(at: try #require(duration.items.firstIndex { $0.tag == minutes }))
+    }
+    try choose(240)
     #expect(!model.isCustomFanSpeedActive)
     view.slider.doubleValue = 25; view.slider.sendAction(view.slider.action, to: view.slider.target)
     let id = model.machine.selected.id, generation = model.machine.generation
     let first = try #require(model.activationDeadline)
-    view.durationPopup.selectItem(withTag: 5)
-    view.durationPopup.sendAction(view.durationPopup.action, to: view.durationPopup.target)
+    try choose(5)
     #expect(model.activationDeadline! < first - 13_000)
     #expect(model.machine.selected.id == id && model.machine.generation == generation)
     let reopened = CustomFanSpeedMenuView(model: model)
@@ -70,6 +75,30 @@ import FandyCore
     #expect(cell.trackedUntilMouseUp)
 }
 
+@MainActor @Test func customSpeedDurationUsesAnActualNativeSubmenuAction() async throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
+    let presenter = StatusMenu(model: model, install: false), menu = NSMenu()
+    presenter.rebuild(menu)
+    let speed = try #require(menu.items.first { $0.title == "Custom Fan Speed" }?.submenu)
+    let forRow = try #require(speed.items.first { $0.title.hasPrefix("For ") })
+    #expect(forRow.view == nil)
+    let durations = try #require(forRow.submenu)
+    let index = try #require(durations.items.firstIndex { $0.tag == 240 })
+    #expect(durations.items[index].isEnabled)
+    durations.performActionForItem(at: index)
+    #expect(!model.isCustomFanSpeedActive)
+    presenter.rebuild(menu)
+    let rebuilt = try #require(menu.items.first { $0.title == "Custom Fan Speed" }?.submenu)
+    #expect(rebuilt.items.contains { $0.title == "For 4 hours" })
+    let view = try #require(rebuilt.items.first?.view as? CustomFanSpeedMenuView)
+    view.slider.doubleValue = 25; view.slider.sendAction(view.slider.action, to: view.slider.target)
+    #expect(model.isCustomFanSpeedActive)
+    #expect(try #require(model.activationDeadline) - model.clockNow() > 14_399)
+    await model.prepareForTermination()
+}
+
 @MainActor @Test func unfinishedCustomDurationKeepsTheExistingTimerAndSpeedEditable() async throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }
@@ -77,19 +106,48 @@ import FandyCore
     let view = CustomFanSpeedMenuView(model: model)
     view.slider.doubleValue = 25; view.slider.sendAction(view.slider.action, to: view.slider.target)
     let intent = model.manualIntent
-    view.durationPopup.selectItem(withTag: 0)
-    view.durationPopup.sendAction(view.durationPopup.action, to: view.durationPopup.target)
+    let durationView = CustomFanSpeedDurationView(model: model)
     #expect(model.manualIntent == intent)
-    let minutes = try #require(view.subviews.compactMap { $0 as? NSTextField }.first { $0.accessibilityLabel() == "Minutes" })
+    let minutes = try #require(durationView.subviews.compactMap { $0 as? NSTextField }.first { $0.accessibilityLabel() == "Minutes" })
     minutes.stringValue = ""
-    view.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
+    durationView.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
     view.slider.doubleValue = 40; view.slider.sendAction(view.slider.action, to: view.slider.target)
     #expect(model.machine.selected.floor == 40 && model.manualIntent == intent)
     minutes.stringValue = "0"
-    view.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
+    durationView.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
     #expect(model.manualIntent == intent)
     minutes.stringValue = "15"
-    view.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
+    durationView.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: minutes))
     #expect(model.manualIntent != intent && model.machine.selected.floor == 40)
     await model.prepareForTermination()
+}
+
+@MainActor @Test func temporaryDurationRemembersTheChoiceAcrossReopeningAndRestart() async throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let url = dir.appendingPathComponent("profiles.json")
+    let model = AppModel(storeURL: url, autoStart: false, simulation: true)
+    #expect(model.setCustomFanSpeedDuration(minutes: 75))
+    #expect(model.updateCustomFanSpeed(percent: 20))
+    let intent = model.manualIntent, deadline = model.activationDeadline
+    for _ in 0..<3 {
+        let menu = NSMenu(), presenter = StatusMenu(model: model, install: false)
+        presenter.rebuild(menu)
+        let speed = try #require(menu.items.first { $0.title == "Custom Fan Speed" }?.submenu)
+        #expect(speed.items.contains { $0.title == "For 1 hour 15 minutes" })
+        #expect(model.manualIntent == intent && model.activationDeadline == deadline)
+        let view = try #require(speed.items.first?.view as? CustomFanSpeedMenuView)
+        view.slider.doubleValue = 21; view.slider.sendAction(view.slider.action, to: view.slider.target)
+        #expect(model.manualIntent == intent)
+    }
+    for bad in [0, -1, 44_641, Int.max] { #expect(!model.setCustomFanSpeedDuration(minutes: bad)) }
+    #expect(model.automation.preferences.customFanSpeedDurationMinutes == 75 && model.manualIntent == intent)
+    await model.prepareForTermination()
+    let reopened = AppModel(storeURL: url, autoStart: false, simulation: true)
+    #expect(!reopened.isCustomFanSpeedActive && reopened.automation.preferences.customFanSpeedDurationMinutes == 75)
+    #expect(reopened.updateCustomFanSpeed(percent: 20))
+    #expect(try #require(reopened.activationDeadline) - reopened.clockNow() > 4499)
+    reopened.activateFor(seconds: 600)
+    #expect(reopened.automation.preferences.customFanSpeedDurationMinutes == 10)
+    await reopened.prepareForTermination()
 }
