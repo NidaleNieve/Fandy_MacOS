@@ -15,6 +15,7 @@ import ServiceManagement
     var profiles: [Profile]
     var automation: AutomationConfiguration
     var manualIntent: ActivationIntent?
+    var temporaryFanSpeedProfile: Profile?
     var activationDeadline: Double?
     var watchedProcessName: String?
     var awaitingApplicationID: String?
@@ -31,6 +32,7 @@ import ServiceManagement
     var helperBootstrap: HelperBootstrapStatus?
     var helperConnectionFailureCode: String?
     var helperSetupError: String?
+    var helperInstallationIssue: String?
     let helperRegistrationStatus: @MainActor () -> SMAppService.Status
     var scheduledPeriodID: UUID?
     var blockedScheduleID: UUID?
@@ -190,7 +192,7 @@ import ServiceManagement
     }
     func canActivate(_ profile: Profile) -> Bool {
         if preparingUpdate || refreshingHelper || (powerLifecycle != .awake && profile.kind != .system) { return false }
-        if profile.kind != .system && (helperSetupInitializing || needsHelperSetup) { return false }
+        if profile.kind != .system && (helperSetupInitializing || needsHelperSetup || (!simulation && helperInstallationIssue != nil)) { return false }
         if simulation || profile.kind == .system { return true }
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
            (try? snapshot.validate(now: clock(), required: profile.requiredSensors(chipPolicy: capabilities.chipPolicy))) != nil { return true }
@@ -248,7 +250,10 @@ import ServiceManagement
                 if !self.simulation, let native = self.client as? FanXPCClient,
                    Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier {
                     do { try await HelperManager.migrateLegacyService(client: native) }
-                    catch { self.helperSetupError = "Fan helper migration failed."; self.helperConnectionFailureCode = "migration_failed" }
+                    catch {
+                        if let installation = error as? HelperInstallationError { self.recordHelperInstallationFailure(installation) }
+                        else { self.helperSetupError = "Fan helper migration failed."; self.helperConnectionFailureCode = "migration_failed" }
+                    }
                     guard !Task.isCancelled, !self.quitting else { return }
                     self.prepareHelperSetup()
                 }
@@ -266,8 +271,88 @@ import ServiceManagement
             do { try await Task.sleep(for: .seconds(1)) } catch { break }
         }
     }
+    /// A runtime-only selection shares the normal engine/lease without becoming a saved profile.
+    var isCustomFanSpeedActive: Bool {
+        temporaryFanSpeedProfile?.id == machine.selected.id && machine.state != .fault
+    }
+    var canActivateCustomFanSpeed: Bool {
+        !isQuitting && !preparingUpdate && !savingCollection && !needsHelperSetup &&
+            canActivate(Profile(name: "Custom Fan Speed", curves: [], floor: 30, chipSources: [], fanResponse: 1))
+    }
+    func activationProfile(_ id: String) -> Profile? {
+        if let temporaryFanSpeedProfile, temporaryFanSpeedProfile.id == id { return temporaryFanSpeedProfile }
+        return profiles.first { $0.id == id }
+    }
+    private var persistedSelectionID: String {
+        profiles.contains { $0.id == machine.selected.id } ? machine.selected.id : automation.preferences.defaultProfileID
+    }
+    @discardableResult func activateCustomFanSpeed(percent: Double, seconds: Double?) -> Bool {
+        guard percent.isFinite, (0...100).contains(percent),
+              seconds.map({ $0.isFinite && $0 > 0 && $0 <= 31 * 86400 }) ?? true else {
+            draftError = "Enter a speed from 0–100% and a duration up to 31 days."; return false
+        }
+        guard canActivateCustomFanSpeed else {
+            draftError = "Fan control is unavailable. Check helper status and required readings."; return false
+        }
+        let profile = Profile(name: "Custom Fan Speed", curves: [], floor: percent, chipSources: [], fanResponse: 1)
+        do {
+            let effect = try machine.select(profile)
+            lifecycleToken = UUID()
+            clearActivation(); blockedScheduleID = nil
+            temporaryFanSpeedProfile = profile
+            manualIntent = ActivationIntent(profileID: profile.id, limit: seconds.map { .deadline(wallClock().addingTimeInterval($0)) } ?? .forever)
+            activationDeadline = seconds.map { clockNow() + $0 }
+            setPreferences {
+                $0.customFanSpeedIndefinite = seconds == nil
+                if let seconds { $0.customFanSpeedDurationMinutes = Int(ceil(seconds / 60)) }
+            }
+            draftError = nil
+            logger.notice("Temporary fan speed activated")
+            Task { await execute(effect) }
+            return true
+        } catch { draftError = error.localizedDescription; return false }
+    }
+    /// Slider changes keep the original expiry; only an explicit duration edit
+    /// renews it. The ordinary controller still governs and validates every target.
+    @discardableResult func updateCustomFanSpeed(percent: Double, initialSeconds: Double? = nil) -> Bool {
+        guard percent.isFinite, (0...100).contains(percent) else { draftError = "Enter a speed from 0–100%."; return false }
+        guard isCustomFanSpeedActive else {
+            let duration = initialSeconds ?? (automation.preferences.customFanSpeedIndefinite ? nil : Double(automation.preferences.customFanSpeedDurationMinutes) * 60)
+            return activateCustomFanSpeed(percent: percent, seconds: duration)
+        }
+        guard canActivateCustomFanSpeed else { draftError = "Fan control is unavailable. Check helper status and required readings."; return false }
+        do {
+            try machine.updateFixedSpeed(percent)
+            temporaryFanSpeedProfile = machine.selected; draftError = nil
+            return true
+        } catch { draftError = error.localizedDescription; return false }
+    }
+    /// Remember the completed choice without activating cooling. A running
+    /// temporary selection is retimed through the same ordinary activation path.
+    @discardableResult func setCustomFanSpeedDuration(minutes: Int) -> Bool {
+        guard (1...44_640).contains(minutes) else { draftError = "Enter a positive duration up to 31 days."; return false }
+        return setCustomFanSpeedLimit(seconds: Double(minutes) * 60)
+    }
+    /// Nil is an indefinite choice, not an unbounded helper lease. The normal
+    /// heartbeat, sensor checks and macOS handback remain independently active.
+    @discardableResult func setCustomFanSpeedLimit(seconds: Double?) -> Bool {
+        guard seconds.map({ $0.isFinite && $0 > 0 && $0 <= 31 * 86400 }) ?? true else {
+            draftError = "Enter a positive duration up to 31 days."; return false
+        }
+        guard !savingCollection, !isQuitting, !preparingUpdate else { return false }
+        if isCustomFanSpeedActive {
+            guard canSetActivationLimit, canActivate(machine.selected) else { draftError = "Fan control is unavailable."; return false }
+            if let seconds { activateFor(seconds: seconds) }
+            else if manualIntent?.limit != .forever || !watchedApplications.isEmpty || awaitingApplicationID != nil { activateForever() }
+        }
+        setPreferences {
+            $0.customFanSpeedIndefinite = seconds == nil
+            if let seconds { $0.customFanSpeedDurationMinutes = Int(ceil(seconds / 60)) }
+        }
+        return draftError == nil && automation.preferences.customFanSpeedIndefinite == (seconds == nil)
+    }
     func select(_ id: String, manual: Bool = true) {
-        guard let profile = profiles.first(where: { $0.id == id }) else { return }
+        guard let profile = activationProfile(id) else { return }
         if !simulation && profile.kind != .system && needsHelperSetup { return }
         if !canActivate(profile) { hardwareError = eligibility(profile).reason; return }
         if manual && profile == machine.selected && (machine.state == .customActive || machine.state == .initializingCustom) { applyActivationDefault(profile); return }
@@ -438,6 +523,7 @@ import ServiceManagement
         defer { refreshingHelper = false; helperSetupInitializing = false; refreshHelperSetup() }
         lifecycleToken = UUID(); automationFailed()
         do {
+            try HelperManager.validateCurrentInstallation()
             if HelperManager.installed {
                 do { try await native.restoreAutomatic() }
                 catch ControlError.helperUnavailable { /* Unreachable service: replacement must restore on startup. */ }
@@ -455,8 +541,8 @@ import ServiceManagement
             hardwareError = "Starting fan helper…"
             _ = try machine.select(BuiltInProfiles.system)
         } catch {
-            helperSetupError = error.localizedDescription
-            helperConnectionFailureCode = "retry_failed"
+            if let installation = error as? HelperInstallationError { recordHelperInstallationFailure(installation) }
+            else { helperSetupError = error.localizedDescription; helperConnectionFailureCode = "retry_failed" }
         }
     }
     private func stepController(_ reading: HardwareSnapshot, now: Double) async {
@@ -534,7 +620,7 @@ import ServiceManagement
                 if replacement != machine.selected {
                     lifecycleToken = UUID(); let effect = try machine.select(replacement); Task { await execute(effect) }
                 }
-            } else { clearActivation(); select("system") }
+            } else if !isCustomFanSpeedActive { clearActivation(); select("system") }
             draftError = nil; scheduleSave()
         } catch { draftError = error.localizedDescription }
     }
@@ -561,13 +647,13 @@ import ServiceManagement
         guard !savingCollection, !quitting else { return }
         do {
             try profile.validate()
-            guard let index = profiles.firstIndex(where: { $0.id == profile.id }), !profiles[index].protected else { return }
+            guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
             guard profiles[index] != profile else { return }
             failedCollection = nil; failedConfiguration = nil
             if groupedOriginal == nil { registerUndo(profiles[index]) }
             // The existing validated profile is retained if a draft is invalid.
             if machine.selected.id == profile.id {
-                var renamed = machine.selected; renamed.name = profile.name
+                var renamed = machine.selected; renamed.name = profile.name; renamed.showInMenuBar = profile.showInMenuBar
                 if renamed == profile { try machine.updateSelectedName(from: profile) }
                 else { lifecycleToken = UUID(); let effect = try machine.select(profile); Task { await execute(effect) } }
             }
@@ -578,7 +664,7 @@ import ServiceManagement
         guard !savingCollection, !quitting else { return }
         failedConfiguration = nil
         savingCollection = true; pendingSave?.cancel(); saveRevision &+= 1
-        let revision = saveRevision, active = machine.selected.id, admittedToken = lifecycleToken, admittedDefaultRevision = defaultSelectionRevision
+        let revision = saveRevision, active = persistedSelectionID, admittedToken = lifecycleToken, admittedDefaultRevision = defaultSelectionRevision
         collectionTask = Task {
             var resave = false
             defer { savingCollection = false; collectionTask = nil; if resave { scheduleSave() } }
@@ -599,7 +685,7 @@ import ServiceManagement
                 registerConfigurationUndo(); automation = nextAutomation
                 profiles = next; editorSelection = selection
                 unsavedChanges = false; saveError = nil; failedCollection = nil
-                if !next.contains(where: { $0.id == machine.selected.id }) && !quitting { select("system") }
+                if !isCustomFanSpeedActive && !next.contains(where: { $0.id == machine.selected.id }) && !quitting { select("system") }
             } catch { failedCollection = (next, selection); saveError = "Profile changes could not be saved." }
         }
     }
@@ -649,7 +735,7 @@ import ServiceManagement
                     resave = true
                 }
                 if restore && lifecycleToken == admittedToken { clearActivation(); blockedScheduleID = nil; select("system", manual: false) }
-                else if !next.contains(where: { $0.id == machine.selected.id }) {
+                else if !isCustomFanSpeedActive && !next.contains(where: { $0.id == machine.selected.id }) {
                     clearActivation(); select("system")
                 }
                 else if let replacement = next.first(where: { $0.id == machine.selected.id }), replacement != machine.selected {
@@ -735,7 +821,7 @@ import ServiceManagement
         let activeSchedule = occurrence?.id == blockedScheduleID ? nil : occurrence
         let fallback = sleepWasScheduled || (sleepHadManualIntent && manualIntent == nil) ? automation.preferences.defaultProfileID : (sleepResumeProfileID ?? "system")
         let desired = sleepResumeBlocked ? "system" : (manualIntent?.profileID ?? activeSchedule?.profileID ?? fallback)
-        let profile = profiles.first { $0.id == desired } ?? BuiltInProfiles.system
+        let profile = activationProfile(desired) ?? BuiltInProfiles.system
         let now = simulation ? snapshot?.sampledAt ?? clock() : clock()
         let readingsValid = snapshot.map { (try? $0.validate(now: now, required: profile.kind == .system ? [] : profile.requiredSensors(chipPolicy: machine.chipPolicy))) != nil } ?? false
         let ready = machine.state == .system && readingsValid && (simulation || (ownership == .appleObserved && (profile.kind == .system || helperHealth == .controlReady)))
@@ -847,7 +933,7 @@ import ServiceManagement
     private func saveLatest() async {
         guard !savingCollection else { return }
         saveRevision &+= 1
-        let revision = saveRevision, current = profiles, selection = machine.selected.id, config = automation
+        let revision = saveRevision, current = profiles, selection = persistedSelectionID, config = automation
         do {
             try await persistence.save(current, selection: selection, revision: revision, automation: config)
             guard revision == saveRevision, current == profiles, config == automation else { return }

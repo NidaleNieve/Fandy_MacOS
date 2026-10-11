@@ -16,10 +16,10 @@ struct HelperApprovalPromptGate {
 }
 
 extension AppModel {
-    var needsHelperSetup: Bool { !simulation && capabilities.canRestore && !helperSetupInitializing && helperSetupStatus == .requiresApproval }
+    var needsHelperSetup: Bool { !simulation && capabilities.canRestore && !helperSetupInitializing && helperInstallationIssue == nil && helperSetupStatus == .requiresApproval }
     var needsHelperAttention: Bool {
         !simulation && capabilities.canRestore && !helperSetupInitializing &&
-        (needsHelperSetup || helperSetupStatus != .enabled || helperHealth == .unavailable || (helperHealth == .fault && helperConnectionFailureCode != nil) || helperBootstrap?.stage == .failed)
+        (helperInstallationIssue != nil || needsHelperSetup || helperSetupStatus != .enabled || helperHealth == .unavailable || (helperHealth == .fault && helperConnectionFailureCode != nil) || helperBootstrap?.stage == .failed)
     }
     /// Not registered yet is initialization, not evidence that permission was denied.
     var shouldPresentHelperApproval: Bool { needsHelperSetup && helperSetupStatus == .requiresApproval }
@@ -27,6 +27,11 @@ extension AppModel {
         helperSetupError ?? (shouldPresentHelperApproval
             ? "Allow Fandy under Background App Activity in System Settings to enable fan control."
             : "Fan helper could not start")
+    }
+    func recordHelperInstallationFailure(_ error: HelperInstallationError) {
+        helperInstallationIssue = error.localizedDescription
+        helperSetupError = error.localizedDescription
+        helperConnectionFailureCode = "invalid_app_installation"
     }
     func refreshHelperSetup() {
         let status = helperRegistrationStatus()
@@ -41,7 +46,10 @@ extension AppModel {
               !CommandLine.arguments.contains("--functional-check"),
               (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
         do { try HelperManager.install(); refreshHelperSetup() }
-        catch { helperSetupError = error.localizedDescription }
+        catch {
+            if let installation = error as? HelperInstallationError { recordHelperInstallationFailure(installation) }
+            else { helperSetupError = error.localizedDescription }
+        }
     }
     func openHelperSetup(openSettings: () -> Void = { SMAppService.openSystemSettingsLoginItems() }) {
         prepareHelperSetup()

@@ -273,7 +273,7 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     /// Remove that registration before creating the distribution service; the
     /// XPC name, helper signing identity and caller authentication stay fixed.
     static func migrateLegacyService(client: FanXPCClient) async throws {
-        try requireInstalledLocation()
+        try validateCurrentInstallation()
         guard legacyService.status == .enabled || legacyService.status == .requiresApproval else { return }
         if legacyService.status == .enabled {
             do { try await client.restoreAutomatic() }
@@ -285,7 +285,7 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     static func install() throws {
         guard legacyService.status != .enabled && legacyService.status != .requiresApproval else { throw ControlError.helperUnavailable }
         guard DeviceRegistry.current.capabilities.canRestore else { throw ControlError.hardwareUnqualified }
-        try requireInstalledLocation()
+        try validateCurrentInstallation()
         switch service.status {
         case .notRegistered, .notFound: try service.register()
         case .enabled, .requiresApproval: break
@@ -295,7 +295,7 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     static func installObservation() throws {
         // This path must stop working when a future build gains any physical write capability.
         guard !DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl else { throw ControlError.unauthorized }
-        try requireInstalledLocation()
+        try validateCurrentInstallation()
         switch service.status {
         case .notRegistered, .notFound: try service.register()
         case .enabled, .requiresApproval: break
@@ -343,18 +343,40 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
         }
         throw ControlError.helperUnavailable
     }
-    private static func requireInstalledLocation() throws {
+    static func validateCurrentInstallation() throws {
         let url = Bundle.main.bundleURL.resolvingSymlinksInPath()
-        // Development builds retain the existing helper workflow. Distribution copies
-        // must be installed before registration, including App Translocation paths.
+        // Reject broken resource seals before touching either service registration.
+        // Valid development builds retain their existing workflow.
         var code: SecStaticCode?, information: CFDictionary?
         guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code,
-              SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess else { throw ControlError.unauthorized }
+              SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess else { throw HelperInstallationError.invalidSignature }
         let info = information as? [String: Any]
         let certificates = info?[kSecCodeInfoCertificates as String] as? [SecCertificate] ?? []
         let developerID = certificates.first.flatMap { SecCertificateCopySubjectSummary($0) as String? }?.hasPrefix("Developer ID Application:") == true
-        if developerID && url.path != "/Applications/Fandy.app" {
-            throw ControlError.invalidProfile("Move Fandy to Applications, then reopen it to enable fan control.")
+        let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate)
+        try HelperInstallationPolicy.validate(signatureStatus: SecStaticCodeCheckValidity(code, flags, nil),
+                                             developerID: developerID, bundleURL: url)
+    }
+}
+
+
+/// Resource-signature failures are installation problems, not missing background approval.
+enum HelperInstallationError: Error, LocalizedError, Equatable {
+    case invalidSignature, wrongLocation
+    var errorDescription: String? {
+        switch self {
+        case .invalidSignature:
+            "This copy of Fandy has an invalid app signature. Reinstall Fandy in Applications and open that copy."
+        case .wrongLocation:
+            "Move Fandy to Applications, then reopen it to enable fan control."
+        }
+    }
+}
+enum HelperInstallationPolicy {
+    static func validate(signatureStatus: OSStatus, developerID: Bool, bundleURL: URL) throws {
+        guard signatureStatus == errSecSuccess else { throw HelperInstallationError.invalidSignature }
+        if developerID && bundleURL.resolvingSymlinksInPath().path != "/Applications/Fandy.app" {
+            throw HelperInstallationError.wrongLocation
         }
     }
 }

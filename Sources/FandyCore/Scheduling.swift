@@ -59,11 +59,15 @@ public struct AppPreferences: Codable, Sendable, Equatable {
     public var menuSensors: [String] = []
     public var showFanSpeedBar: Bool = true
     public var showFanSpeedNumbers: Bool = true
+    public var showCustomFanSpeed: Bool = true
+    public var showActivationTiming: Bool = true
+    public var customFanSpeedDurationMinutes: Int = 5
+    public var customFanSpeedIndefinite: Bool = false
     public var shortcuts: [String: ShortcutBinding] = [:]
     public var automaticUpdates = true
     public var updateFrequency: UpdateFrequency = .daily
     public init() {}
-    private enum CodingKeys: String, CodingKey { case defaultProfileID, launchAtLogin, use24HourTime, showHelperProcesses, menuSensors, shortcuts, showFanSpeedBar, showFanSpeedNumbers, automaticUpdates, updateFrequency }
+    private enum CodingKeys: String, CodingKey { case defaultProfileID, launchAtLogin, use24HourTime, showHelperProcesses, menuSensors, shortcuts, showFanSpeedBar, showFanSpeedNumbers, showCustomFanSpeed, showActivationTiming, customFanSpeedDurationMinutes, customFanSpeedIndefinite, automaticUpdates, updateFrequency }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         defaultProfileID = try c.decodeIfPresent(String.self, forKey: .defaultProfileID) ?? "system"
@@ -72,6 +76,10 @@ public struct AppPreferences: Codable, Sendable, Equatable {
         showHelperProcesses = try c.decodeIfPresent(Bool.self, forKey: .showHelperProcesses) ?? false
         showFanSpeedBar = try c.decodeIfPresent(Bool.self, forKey: .showFanSpeedBar) ?? true
         showFanSpeedNumbers = try c.decodeIfPresent(Bool.self, forKey: .showFanSpeedNumbers) ?? true
+        showCustomFanSpeed = try c.decodeIfPresent(Bool.self, forKey: .showCustomFanSpeed) ?? true
+        showActivationTiming = try c.decodeIfPresent(Bool.self, forKey: .showActivationTiming) ?? true
+        customFanSpeedDurationMinutes = try c.decodeIfPresent(Int.self, forKey: .customFanSpeedDurationMinutes) ?? 5
+        customFanSpeedIndefinite = try c.decodeIfPresent(Bool.self, forKey: .customFanSpeedIndefinite) ?? false
         menuSensors = try c.decodeIfPresent([String].self, forKey: .menuSensors) ?? []
         shortcuts = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcuts) ?? [:]
         automaticUpdates = try c.decodeIfPresent(Bool.self, forKey: .automaticUpdates) ?? true
@@ -95,6 +103,7 @@ public struct AutomationConfiguration: Codable, Sendable, Equatable {
     }
     public func validate(profileIDs: Set<String>, allowConflicts: Bool = false) throws {
         guard periods.count <= 1024, pauses.count <= 256, preferences.menuSensors.count <= 16,
+              (1...44_640).contains(preferences.customFanSpeedDurationMinutes),
               Set(periods.map(\.id)).count == periods.count, Set(pauses.map(\.id)).count == pauses.count,
               Set(preferences.menuSensors).count == preferences.menuSensors.count,
               preferences.menuSensors.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 100 }) else { throw ScheduleError("Configuration limit exceeded or duplicate identifiers.") }

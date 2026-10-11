@@ -12,11 +12,12 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
     public var targetTemperature: TemperatureTarget?
     public var chipSources: Set<ChipSource>
     public var fanResponse: Double
+    public var showInMenuBar = true
     public init(id: String = UUID().uuidString, name: String, kind: ProfileKind = .custom, bundled: Bool = false, curves: [FanCurve], floor: Double = 0, automaticAtIdle: Bool = false, targetTemperature: TemperatureTarget? = nil, chipSources: Set<ChipSource> = [.cpu, .gpu], fanResponse: Double? = nil) {
         self.id = id; self.name = name; self.kind = kind; self.bundled = bundled; defaultRevision = 1; self.curves = curves; self.floor = floor; self.automaticAtIdle = automaticAtIdle; self.targetTemperature = targetTemperature
         self.chipSources = chipSources; self.fanResponse = fanResponse ?? (id == "school" ? 0 : 1)
     }
-    private enum CodingKeys: String, CodingKey { case id, name, kind, bundled, defaultRevision, curves, floor, automaticAtIdle, targetTemperature, chipSources, fanResponse }
+    private enum CodingKeys: String, CodingKey { case id, name, kind, bundled, defaultRevision, curves, floor, automaticAtIdle, targetTemperature, chipSources, fanResponse, showInMenuBar }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(String.self, forKey: .id); name = try values.decode(String.self, forKey: .name)
@@ -29,6 +30,7 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
         // Special modes have no chip curve; retain their canonical protected representation.
         if kind != .custom && !values.contains(.chipSources) { chipSources = [.cpu, .gpu] }
         fanResponse = try values.decodeIfPresent(Double.self, forKey: .fanResponse) ?? (id == "school" ? 0 : 1)
+        showInMenuBar = try values.decodeIfPresent(Bool.self, forKey: .showInMenuBar) ?? true
     }
     public var exportFilename: String {
         let forbidden = CharacterSet.controlCharacters.union(CharacterSet(charactersIn: "/:\\"))
@@ -51,7 +53,8 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
               floor.isFinite, (0...100).contains(floor), fanResponse.isFinite, (0...1).contains(fanResponse), curves.count <= 4,
               Set(curves.map(\.input)).count == curves.count else { throw ControlError.invalidProfile("Invalid profile name, floor, or curve set.") }
         if protected {
-            guard let original = BuiltInProfiles.all.first(where: { $0.id == id }), self == original else { throw ControlError.invalidProfile("System and Max are protected.") }
+            var definition = self; definition.showInMenuBar = true
+            guard let original = BuiltInProfiles.all.first(where: { $0.id == id }), definition == original else { throw ControlError.invalidProfile("System and Max are protected.") }
         } else { guard kind == .custom else { throw ControlError.invalidProfile("Only System and Max may use special modes.") } }
         try targetTemperature?.validate()
         if targetTemperature?.input == .chip || curves.contains(where: { $0.input == .chip && $0.enabled }) {
@@ -99,7 +102,7 @@ public enum BuiltInProfiles {
         }
         if (profile.defaultRevision == 1 && profile.floor == 20 && matches(original)) ||
             (profile.defaultRevision == 2 && profile.floor == 0 && matches(previous)) {
-            var updated = coolChassis; updated.fanResponse = profile.fanResponse; updated.chipSources = profile.chipSources; return updated
+            var updated = coolChassis; updated.fanResponse = profile.fanResponse; updated.chipSources = profile.chipSources; updated.showInMenuBar = profile.showInMenuBar; return updated
         }
         return profile
     }

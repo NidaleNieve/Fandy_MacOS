@@ -5,7 +5,7 @@
 <h1 align="center">Fandy</h1>
 <p align="center">Native Mac fan control with powerful profiles, automation, custom curves, and live temperatures.</p>
 <p align="center">
-  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.2.3-arm64.dmg"><strong>Download for Mac</strong></a>
+  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.3.2-arm64.dmg"><strong>Download for Mac</strong></a>
   · <a href="docs/INSTALLATION.md">Installation help</a>
   · <a href="https://github.com/NidaleNieve/Fandy_MacOS/issues">Report an issue</a>
 </p>
@@ -45,7 +45,7 @@ Create and edit custom profiles with intuitive graphs for chip and chassis tempe
 
 ## Fit it around your day
 
-- **Temporary cooling:** activate a profile for minutes or hours, until a time, or until an application closes.
+- **Temporary cooling:** activate a profile for minutes or hours, until a time, or until an application closes. Choose **Custom Fan Speed** to set a fixed speed with a slider, temporarily or indefinitely, without saving a profile.
 - **App triggers:** choose several programs for a profile. Activate when any opens and keep it active until all close.
 - **Schedules:** choose weekday periods, overnight schedules and vacation pauses.
 - **Customizable menu temperatures:** choose the sensor readings shown inside the menu, including CPU/GPU averages and chassis temperatures. Live readings are also available beside the profile editor.

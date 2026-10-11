@@ -28,9 +28,19 @@ public struct ControlMachine: Sendable {
     /// Presentation-only edits cannot restart a lease or change cooling policy.
     public mutating func updateSelectedName(from profile: Profile) throws {
         try profile.validate()
-        var renamed = selected; renamed.name = profile.name
-        guard renamed == profile else { throw ControlError.invalidProfile("Only the selected profile name may change here.") }
+        var renamed = selected; renamed.name = profile.name; renamed.showInMenuBar = profile.showInMenuBar
+        guard renamed == profile else { throw ControlError.invalidProfile("Only the selected profile presentation may change here.") }
         selected = profile
+    }
+    /// A fixed-demand edit preserves sensor admission, the governor and the current
+    /// lease. The next ordinary control tick transmits the newly governed demand.
+    public mutating func updateFixedSpeed(_ value: Double) throws {
+        guard value.isFinite, (0...100).contains(value), selected.kind == .custom,
+              selected.curves.isEmpty, selected.targetTemperature == nil, selected.chipSources.isEmpty,
+              !selected.automaticAtIdle, selected.fanResponse == 1,
+              state == .initializingCustom || state == .customActive else { throw ControlError.invalidProfile("No active fixed-speed selection.") }
+        selected.floor = value
+        percent = min(percent, value); governor.constrain(to: value)
     }
     public mutating func select(_ profile: Profile) throws -> ControlEffect {
         try profile.validate() // Invalid edits never replace the running configuration.

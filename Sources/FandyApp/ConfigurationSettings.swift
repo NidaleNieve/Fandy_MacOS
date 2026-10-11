@@ -20,6 +20,8 @@ struct ConfigurationSettings: View {
             Toggle("Use 24-hour time", isOn: Binding(get: { model.automation.preferences.use24HourTime }, set: { enabled in model.setPreferences { $0.use24HourTime = enabled } }))
         }
         Section("Menu Bar Menu") {
+            Toggle("Show activate for/until", isOn: Binding(get: { model.automation.preferences.showActivationTiming }, set: { value in model.setPreferences { $0.showActivationTiming = value } }))
+            Toggle("Show custom fan speed", isOn: Binding(get: { model.automation.preferences.showCustomFanSpeed }, set: { value in model.setPreferences { $0.showCustomFanSpeed = value } }))
             Toggle("Show fan speed bar", isOn: Binding(get: { model.automation.preferences.showFanSpeedBar }, set: { value in model.setPreferences { $0.showFanSpeedBar = value } }))
             Toggle("Show fan percentage and RPM", isOn: Binding(get: { model.automation.preferences.showFanSpeedNumbers }, set: { value in model.setPreferences { $0.showFanSpeedNumbers = value } }))
             Text("Temperatures").font(.subheadline)
