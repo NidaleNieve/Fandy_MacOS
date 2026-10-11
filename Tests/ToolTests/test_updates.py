@@ -24,6 +24,12 @@ class UpdateReleaseTests(unittest.TestCase):
         self.assertTrue(info['SUFeedURL'].startswith('https://raw.githubusercontent.com/'))
         self.assertEqual(len(info['SUPublicEDKey']), 44)
         self.assertIn('exact: "2.10.0"', (ROOT / 'Package.swift').read_text())
+    def test_readme_download_targets_the_current_release_asset(self):
+        version = plistlib.loads((ROOT / 'Config/App-Info.plist').read_bytes())['CFBundleShortVersionString']
+        readme = (ROOT / 'README.md').read_text()
+        urls = re.findall(r'https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/[^\"\s<>]+', readme)
+        self.assertEqual(urls, [f'https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-{version}-arm64.dmg'])
+
     def test_helper_has_explicit_argument_vector(self):
         helper = plistlib.loads((ROOT / 'Config/is.dsr.fandy.fan-service.plist').read_bytes())
         self.assertEqual(helper['BundleProgram'], 'Contents/Library/HelperTools/FandyFanHelper')
