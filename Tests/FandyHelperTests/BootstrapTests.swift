@@ -84,3 +84,17 @@ func actualHelperBootstrapRestoresBeforeSensorDiscovery(_ identity: DeviceIdenti
     #expect(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime).bootstrap?.stage == .ready)
     #expect(!packets.operations.contains { $0.1 == 6 })
 }
+
+@Test func unsupportedModeMetadataIsReportedByAHealthyObservationBackend() async throws {
+    let packets = StartupPackets(.init(model: "Mac14,9", chip: "Apple M2 Pro", appleSilicon: true))
+    packets.values["F0md"] = ("ui8 ", 128, [0])
+    let service = HelperService(hardwareFactory: { _ in
+        try AppleFanHardware(reader: SMCReader(transport: packets), identity: packets.identity)
+    })
+    await withCheckedContinuation { done in service.queue.async { service.startBackend(); done.resume() } }
+    let report = service.statusCache.read(at: ProcessInfo.processInfo.systemUptime)
+    #expect(report.bootstrap?.stage == .ready && report.observationOnly)
+    #expect(report.diagnostic?.fans.first { $0.id == 0 }?.modeAttributes == 128)
+    #expect(report.diagnostic?.failure?.kind == .metadata)
+    #expect(!packets.operations.contains { $0.1 == 6 })
+}
