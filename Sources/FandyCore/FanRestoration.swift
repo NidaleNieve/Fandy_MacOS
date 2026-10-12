@@ -5,6 +5,7 @@ public protocol FanHardwareIO: Sendable {
     func fanIDsForRestoration() throws -> [Int]
     func setAutomatic(fanID: Int) throws
     func readMode(fanID: Int) throws -> FanMode
+    func verifiedAutomaticMode(fanID: Int) throws -> FanMode
     func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool
     func applyValidatedTargets(_ targets: [FanTarget]) throws
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget]
@@ -17,6 +18,7 @@ public extension FanHardwareIO {
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { targets }
     func fanIDsForRestoration() throws -> [Int] { try enumerateFans().map(\.id) }
     func finishAutomaticRestoration() throws {}
+    func verifiedAutomaticMode(fanID: Int) throws -> FanMode { try readMode(fanID: fanID) }
     func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool { true }
     func acceptsAutomatic(_ mode: FanMode) -> Bool { mode == .automatic }
     func setControlRequirements(_ required: Set<SensorRole>) {}
@@ -38,7 +40,8 @@ public enum FanRestoration {
             var mode: FanMode?
             do {
                 mode = try io.readMode(fanID: id)
-                if let mode, !io.acceptsAutomatic(mode) { failure = failure ?? ControlError.restorationUnverified.localizedDescription }
+                // Firmware can retain manual mode until the global handover is released.
+                // Only the final independent readback establishes ownership.
             } catch { failure = failure ?? error.localizedDescription }
             outcomes.append(FanRestorationOutcome(fanID: id, initialMode: initial, commandSucceeded: commandSucceeded,
                                                   immediateMode: mode, observedMode: mode, failure: failure, alreadyAutomatic: alreadyAutomatic))
@@ -50,7 +53,7 @@ public enum FanRestoration {
         // A second readback catches ownership changes while restoring the other fan.
         for index in outcomes.indices {
             do {
-                let mode = try io.readMode(fanID: outcomes[index].fanID)
+                let mode = try io.verifiedAutomaticMode(fanID: outcomes[index].fanID)
                 outcomes[index].observedMode = mode
                 if !io.acceptsAutomatic(mode) { outcomes[index].failure = outcomes[index].failure ?? ControlError.restorationUnverified.localizedDescription }
             } catch { outcomes[index].failure = outcomes[index].failure ?? error.localizedDescription }
@@ -85,7 +88,7 @@ public struct FanRestorationOutcome: Codable, Sendable, Equatable {
     public var observedMode: FanMode?
     public var failure: String?
     public var alreadyAutomatic: Bool? = nil
-    public var verified: Bool { failure == nil && (commandSucceeded == true || alreadyAutomatic == true) && immediateMode?.isAutomatic == true && observedMode?.isAutomatic == true }
+    public var verified: Bool { failure == nil && (commandSucceeded == true || alreadyAutomatic == true) && observedMode?.isAutomatic == true }
     public var releasedManual: Bool { verified && initialMode == .manual }
 }
 public struct RestorationReport: Codable, Sendable, Equatable {

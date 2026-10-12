@@ -40,43 +40,79 @@ public enum SMCDecoder {
     }
 }
 public final class SMCReader: @unchecked Sendable {
-    private let handle: OpaquePointer
-    private let lock = NSLock()
-    public init() throws {
-        var error: Int32 = 0
-        guard let connection = fandy_smc_open(&error) else { throw HardwareError.smc(error) }
-        handle = connection
+    private let transport: any SMCStructTransport
+    private let clock: () -> Double
+    private let lock = NSRecursiveLock()
+    private struct Metadata { let type: String; let size: Int; let attributes: UInt8 }
+    private var metadata: [String: Metadata] = [:]
+    public convenience init() throws { self.init(transport: try NativeSMCTransport()) }
+    public init(transport: any SMCStructTransport, clock: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }) {
+        self.transport = transport; self.clock = clock
     }
-    deinit { fandy_smc_close(handle) }
+    public func transact(_ request: [UInt8]) throws -> SMCStructResponse {
+        lock.lock(); defer { lock.unlock() }
+        return try transport.transact(request)
+    }
+    private func request(key: String, command: UInt8) -> [UInt8] {
+        var input = [UInt8](repeating: 0, count: 80)
+        let number = key.utf8.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+        for index in 0..<4 { input[index] = UInt8(truncatingIfNeeded: number >> (index * 8)) }
+        input[42] = command; return input
+    }
+    private func response(_ input: [UInt8], key: String?, operation: String) throws -> [UInt8] {
+        let output = try transact(input)
+        guard output.count == 80, output.bytes.count == 80 else { throw HardwareError.invalidMetadata }
+        guard output.bytes[40] == 0 else { throw SMCReadFailure(operation: operation, key: key, result: output.bytes[40], status: output.bytes[41]) }
+        return output.bytes
+    }
     public func read(_ key: String) throws -> DiscoveredSensor {
         guard key.utf8.count == 4, key.utf8.allSatisfy({ $0 >= 32 && $0 <= 126 }) else { throw HardwareError.invalidKey }
         lock.lock(); defer { lock.unlock() }
-        var raw = FandySMCValue()
-        let result = key.withCString { fandy_smc_read(handle, $0, &raw) }
-        guard result == 0 else { throw HardwareError.smc(result) }
-        let type = withUnsafeBytes(of: raw.type) { String(bytes: $0.prefix(4), encoding: .ascii) ?? "????" }
-        let bytes = withUnsafeBytes(of: raw.bytes) { Array($0.prefix(Int(raw.size))) }
-        return DiscoveredSensor(key: key, type: type, size: Int(raw.size), attributes: raw.attributes, bytes: bytes, value: SMCDecoder.decode(type: type, bytes: bytes), error: nil, sampledAt: ProcessInfo.processInfo.systemUptime)
+        do {
+            let info: Metadata
+            // Fan metadata is always re-read. Only temperature metadata is cached;
+            // values and completion timestamps are acquired on every sample.
+            if key.hasPrefix("T"), let cached = metadata[key] { info = cached }
+            else {
+                let output = try response(request(key: key, command: 9), key: key, operation: "read_info")
+                let size = (0..<4).reduce(UInt32(0)) { $0 | UInt32(output[28 + $1]) << ($1 * 8) }
+                guard (1...32).contains(size), let type = String(bytes: output[32..<36].reversed(), encoding: .ascii) else { throw HardwareError.invalidMetadata }
+                info = Metadata(type: type, size: Int(size), attributes: output[36])
+            }
+            var input = request(key: key, command: 5)
+            for index in 0..<4 { input[28 + index] = UInt8(truncatingIfNeeded: UInt32(info.size) >> (index * 8)) }
+            let output = try response(input, key: key, operation: "read_value")
+            let bytes = Array(output[48..<(48 + info.size)])
+            if key.hasPrefix("T") { metadata[key] = SMCDecoder.decode(type: info.type, bytes: bytes) == nil ? nil : info }
+            return DiscoveredSensor(key: key, type: info.type, size: info.size, attributes: info.attributes, bytes: bytes,
+                value: SMCDecoder.decode(type: info.type, bytes: bytes), error: nil, sampledAt: clock())
+        } catch { metadata[key] = nil; throw error }
     }
     public func enumerate(prefix: String? = nil) throws -> [DiscoveredSensor] {
         let count = try read("#KEY")
         guard let value = count.value, value >= 1, value <= 20_000, value.rounded() == value else { throw HardwareError.invalidMetadata }
         var items: [DiscoveredSensor] = []
         for index in 0..<UInt32(value) {
-            var name = [CChar](repeating: 0, count: 5)
-            lock.lock(); let result = fandy_smc_key_at(handle, index, &name); lock.unlock()
-            guard result == 0 else { throw HardwareError.smc(result) }
-            let key = String(bytes: name.prefix(4).map { UInt8(bitPattern: $0) }, encoding: .ascii) ?? ""
+            var input = [UInt8](repeating: 0, count: 80); input[42] = 8
+            for offset in 0..<4 { input[44 + offset] = UInt8(truncatingIfNeeded: index >> (offset * 8)) }
+            let output = try response(input, key: nil, operation: "enumerate")
+            guard let key = String(bytes: output[0..<4].reversed(), encoding: .ascii) else { throw HardwareError.invalidMetadata }
             if let prefix, !key.hasPrefix(prefix) { continue }
             do { items.append(try read(key)) }
-            catch { items.append(DiscoveredSensor(key: key, type: "unknown", size: 0, attributes: 0, bytes: [], value: nil, error: error.localizedDescription)) }
+            catch { items.append(DiscoveredSensor(key: key, type: "unknown", size: 0, attributes: 0, bytes: [], value: nil, error: "read_failed")) }
         }
         return items
     }
     public func fanModeKey(_ id: Int) throws -> String {
         guard (0..<8).contains(id) else { throw ControlError.invalidFan }
         let names = ["F\(id)md", "F\(id)Md"]
-        for key in names { if let reading = try? read(key), reading.type == "ui8 ", reading.size == 1 { return key } }
+        for key in names {
+            do {
+                let reading = try read(key)
+                guard reading.type == "ui8 ", reading.size == 1 else { throw HardwareError.invalidMetadata }
+                return key
+            } catch where HardwareError.isMissingKey(error) { continue }
+        }
         throw HardwareError.invalidMetadata
     }
     public func fans() throws -> [Fan] {
@@ -96,6 +132,11 @@ public final class SMCReader: @unchecked Sendable {
     }
 }
 public enum HardwareError: Error, LocalizedError {
+    public static func isMissingKey(_ error: any Error) -> Bool {
+        if let failure = error as? SMCReadFailure { return failure.failure.code == 0x84 }
+        if case HardwareError.smc(let code) = error { return UInt32(bitPattern: code) == 0xFAD00084 }
+        return false
+    }
     case smc(Int32), invalidKey, invalidMetadata
     public var errorDescription: String? {
         switch self { case .smc(let code): "SMC read failed: \(String(UInt32(bitPattern: code), radix: 16))"; case .invalidKey: "Invalid SMC identifier"; case .invalidMetadata: "Unsupported or unreliable SMC metadata" }

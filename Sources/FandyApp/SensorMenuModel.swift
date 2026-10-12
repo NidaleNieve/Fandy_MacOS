@@ -37,8 +37,14 @@ actor DisplaySensorReader {
 
 @MainActor @Observable final class SensorMenuModel {
     private let reader = DisplaySensorReader()
-    private(set) var choices: [MenuSensor] = SensorRole.allCases.map {
-        MenuSensor(id: "role:\($0.rawValue)", name: DeviceRegistry.current.capabilities.sensorName($0), keys: [], role: $0, estimate: [.cpuAverage, .gpuAverage, .cpuPeak, .gpuPeak].contains($0))
+    private let identity: DeviceIdentity
+    private(set) var choices: [MenuSensor]
+    init(identity: DeviceIdentity = .current) {
+        self.identity = identity
+        choices = SensorRole.allCases.map {
+            MenuSensor(id: "role:\($0.rawValue)", name: $0 == .airflowTop ? "Top proximity" : $0.name,
+                keys: [], role: $0, estimate: [.cpuAverage, .gpuAverage, .cpuPeak, .gpuPeak].contains($0))
+        }
     }
     private(set) var displayed: [String: String] = [:]
     private var refreshTask: Task<Void, Never>?
@@ -54,7 +60,7 @@ actor DisplaySensorReader {
             let names = Set(catalog.hid.map(\.name)).sorted()
             choices += names.map { MenuSensor(id: "hid:" + $0, name: $0 + " · HID", keys: ["HID:" + $0], role: nil, estimate: false) }
             // Model manifests are display regions, not a claim about physical core numbering.
-            if HardwareSnapshotReader.machineModel() == SensorRegistry.model {
+            if identity.model == SensorRegistry.model {
                 let keys = Set(sensors.map(\.key))
                 for (id, name, members) in [("cpu-region", "CPU region average · estimate", SensorRegistry.cpuRegionCandidates),
                                             ("gpu-region", "GPU region average · estimate", SensorRegistry.gpuRegionCandidates),
@@ -62,10 +68,10 @@ actor DisplaySensorReader {
                                             ("tm-region", "Tm region average · estimate", SensorRegistry.cpuRegionCandidates.filter { $0.hasPrefix("Tm") })] where Set(members).isSubset(of: keys) {
                     choices.append(MenuSensor(id: "group:" + id, name: name, keys: members, role: nil, estimate: true))
                 }
-            } else if DeviceRegistry.current.identity.supportedNotebook {
-                let groups = DeviceRegistry.candidates(for: DeviceRegistry.current.identity)
-                let available = Set(DeviceRegistry.current.acquisitionKeys)
-                for (id, name, candidates) in [("efficiency", DeviceRegistry.current.identity.family == .m5 ? "Super-core region average · estimate" : "Efficiency-core region average · estimate", groups.efficiency),
+            } else if identity.supportedNotebook {
+                let groups = DeviceRegistry.candidates(for: identity)
+                let available = Set(sensors.map(\.key))
+                for (id, name, candidates) in [("efficiency", identity.family == .m5 ? "Super-core region average · estimate" : "Efficiency-core region average · estimate", groups.efficiency),
                     ("performance", "Performance-core region average · estimate", groups.performance)] {
                     let members = candidates.filter { available.contains($0) }
                     if !members.isEmpty { choices.append(MenuSensor(id: "group:" + id, name: name, keys: members, role: nil, estimate: true)) }

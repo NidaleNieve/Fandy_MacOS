@@ -30,11 +30,14 @@ public final class HelperCoordinator: @unchecked Sendable {
     public var leaseOwner: UUID? { safety.lease?.owner }
     private let capabilities: HardwareCapabilities
     public init(io: any FanHardwareIO, capabilities: HardwareCapabilities, read: @escaping () throws -> HardwareSnapshot,
-                clock: @escaping () -> Double, event: @escaping (String) -> Void = { _ in }, requireExclusive: @escaping () throws -> Void = {}) {
+                clock: @escaping () -> Double, event: @escaping (String) -> Void = { _ in }, requireExclusive: @escaping () throws -> Void = {}, startupRestoration: RestorationReport? = nil) {
         self.requireExclusive = requireExclusive; self.capabilities = capabilities; self.io = io; self.qualified = capabilities.canControl
         self.writesPermitted = capabilities.canRestore; self.read = read; self.clock = clock; self.event = event
         self.safety = HelperSafety(chipPolicy: capabilities.chipPolicy)
-
+        if let startupRestoration, startupRestoration.verified, writesPermitted {
+            self.restoration = startupRestoration; self.startupRestoration = startupRestoration
+            self.safety.restorationFinished(true)
+        }
     }
     @discardableResult public func startup() -> Bool {
         let result = restore(); startupRestoration = restoration; return result

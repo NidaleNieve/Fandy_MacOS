@@ -39,6 +39,10 @@ public struct ResolvedDevice: Sendable {
     public let capabilities: HardwareCapabilities
     public let mappings: [SensorMapping]
     public let fanInterface: FanInterface?
+    public let failure: HelperFailure?
+    public init(identity: DeviceIdentity, capabilities: HardwareCapabilities, mappings: [SensorMapping], fanInterface: FanInterface?, failure: HelperFailure? = nil) {
+        self.identity = identity; self.capabilities = capabilities; self.mappings = mappings; self.fanInterface = fanInterface; self.failure = failure
+    }
     public var acquisitionKeys: [String] { Set(mappings.flatMap(\.keys)).sorted() }
 }
 
@@ -56,13 +60,17 @@ public enum DeviceRegistry {
         ]
         return Dictionary(uniqueKeysWithValues: families.flatMap { family, models in models.map { ($0, family) } })
     }()
-    public static let current: ResolvedDevice = {
+    public static func canInstallHelper(identity: DeviceIdentity) -> Bool { identity.appleSilicon }
+    public static func declaredCapabilities(identity: DeviceIdentity) -> HardwareCapabilities {
+        HardwareCapabilities(model: identity.model, chipControl: identity.model == SensorRegistry.model ? .conservativeEnvelope : .cpuGPU)
+    }
+    public static var current: ResolvedDevice {
         let identity = DeviceIdentity.current
         guard let reader = try? SMCReader() else {
             return ResolvedDevice(identity: identity, capabilities: HardwareCapabilities(model: identity.model), mappings: [], fanInterface: nil)
         }
         return resolve(identity: identity, read: { try reader.read($0) })
-    }()
+    }
     public static func candidates(for identity: DeviceIdentity) -> (efficiency: [String], performance: [String], gpu: [String]) {
         switch identity.family {
         case .m1: (ReferenceSensorKeys.m1Efficiency, ReferenceSensorKeys.m1Performance, ReferenceSensorKeys.m1Gpu)
@@ -75,7 +83,74 @@ public enum DeviceRegistry {
         }
     }
     public static func resolve(identity: DeviceIdentity, read: (String) throws -> DiscoveredSensor) -> ResolvedDevice {
-        let interface = identity.supportedNotebook ? try? FanInterface.discover(identity: identity, read: read) : nil
+        resolveSensors(device: resolveFans(identity: identity, read: read), read: read)
+    }
+    public static func resolveFans(identity: DeviceIdentity, read: (String) throws -> DiscoveredSensor) -> ResolvedDevice {
+        var interface: FanInterface?, failure: HelperFailure?
+        if identity.supportedNotebook {
+            do { interface = try FanInterface.discover(identity: identity, read: read); failure = interface?.targetFailure }
+            catch { failure = Self.failure(error, operation: "fan_discovery") }
+        } else { failure = .init(kind: .metadata, domain: "Fandy", code: 0, operation: "fan_discovery") }
+        let cap = HardwareCapabilities(model: identity.model, stage: interface == nil ? .observation : .restorationQualification,
+            topology: interface == nil ? .pending : interface!.locallyTested ? .verified : .referenceSupported,
+            automaticRestoration: interface == nil ? .pending : .referenceSupported,
+            chipControl: identity.model == SensorRegistry.model ? .conservativeEnvelope : .cpuGPU,
+            evidence: interface == nil ? .unsupported : interface!.locallyTested ? .locallyTested : .referenceSupported)
+        return .init(identity: identity, capabilities: cap, mappings: [], fanInterface: interface, failure: failure)
+    }
+    public static func failure(_ error: any Error, operation: String) -> HelperFailure {
+        if let e = error as? SMCReadFailure { return e.failure }
+        if case HardwareError.smc(let code) = error { return .init(kind: .smc, domain: "IOKit", code: Int(code), operation: operation) }
+        return .init(kind: .metadata, domain: "Fandy", code: 0, operation: operation)
+    }
+    public static func report(device: ResolvedDevice) -> RuntimeDeviceReport {
+        .init(model: device.identity.model, chip: device.identity.chip, catalog: statsRevision,
+              recipe: device.fanInterface.map { $0.locallyTested ? "m5-direct" : $0.forceTestAvailable ? "reference-force-test" : "reference-direct" })
+    }
+    public static func validate(report: RuntimeDeviceReport, capabilities: HardwareCapabilities, identity: DeviceIdentity) throws -> HardwareCapabilities {
+        guard report.model == identity.model, report.chip == identity.chip, report.catalog == statsRevision,
+              capabilities.model == identity.model else { throw ControlError.hardwareUnqualified }
+        if capabilities.canRestore {
+            guard identity.supportedNotebook, ["m5-direct","reference-force-test","reference-direct"].contains(report.recipe ?? ""),
+                  (report.recipe == "m5-direct") == (identity.model == SensorRegistry.model) else { throw ControlError.hardwareUnqualified }
+        }
+        let groups = candidates(for: identity)
+        let chip = Set(groups.efficiency + groups.performance + groups.gpu)
+        let allowed = chip.union(["Ts0P","Ts1P","TaLP","TaTP","TaRF","TCHP","TPSP","TW0P"])
+            .union(identity.model == SensorRegistry.model ? SensorRegistry.chipEnvelopeKeys : [])
+        for sensor in capabilities.sensors {
+            guard !sensor.keys.isEmpty, Set(sensor.keys).isSubset(of: allowed),
+                  sensor.state != .verified || identity.model == SensorRegistry.model,
+                  identity.model == SensorRegistry.model || ![.socPeak,.cpuRegion,.gpuRegion].contains(sensor.role) else { throw ControlError.hardwareUnqualified }
+            let expected: Set<String>
+            switch sensor.role {
+            case .cpuAverage,.cpuPeak: expected = Set(groups.efficiency + groups.performance)
+            case .gpuAverage,.gpuPeak: expected = Set(groups.gpu)
+            case .trackpad: expected = ["Ts0P"]
+            case .actuator: expected = ["Ts1P"]
+            case .airflowLeft: expected = ["TaLP"]
+            case .airflowTop: expected = ["TaTP"]
+            case .airflowRight: expected = ["TaRF"]
+            case .charger: expected = ["TCHP"]
+            case .powerSupply: expected = ["TPSP"]
+            case .wireless: expected = ["TW0P"]
+            default: expected = allowed
+            }
+            if identity.model == SensorRegistry.model {
+                guard let mapping = SensorRegistry.mappings.first(where: { $0.role == sensor.role }),
+                      Set(sensor.keys) == Set(mapping.keys), sensor.keys.count == mapping.keys.count else { throw ControlError.hardwareUnqualified }
+            } else {
+                guard Set(sensor.keys).isSubset(of: expected), Set(sensor.keys).count == sensor.keys.count else { throw ControlError.hardwareUnqualified }
+                if sensor.state.supported && [.cpuAverage,.cpuPeak].contains(sensor.role) {
+                    guard !Set(sensor.keys).isDisjoint(with: groups.efficiency), !Set(sensor.keys).isDisjoint(with: groups.performance) else { throw ControlError.hardwareUnqualified }
+                }
+            }
+        }
+        guard capabilities.chipPolicy == declaredCapabilities(identity: identity).chipPolicy else { throw ControlError.hardwareUnqualified }
+        return capabilities
+    }
+    public static func resolveSensors(device: ResolvedDevice, read: (String) throws -> DiscoveredSensor) -> ResolvedDevice {
+        let identity = device.identity, interface = device.fanInterface
         if identity.model == SensorRegistry.model && identity.supportedNotebook {
             var cap = interface == nil ? HardwareCapabilities(model: identity.model, sensors: SensorRegistry.capabilities.sensors,
                 chipControl: .conservativeEnvelope) : SensorRegistry.capabilities
@@ -85,7 +160,7 @@ public enum DeviceRegistry {
                     automaticRestoration: .verified, manualTransaction: .pending,
                     chipControl: .conservativeEnvelope, evidence: .locallyTested)
             }
-            return ResolvedDevice(identity: identity, capabilities: cap, mappings: SensorRegistry.mappings, fanInterface: interface)
+            return ResolvedDevice(identity: identity, capabilities: cap, mappings: SensorRegistry.mappings, fanInterface: interface, failure: device.failure)
         }
         let groups = candidates(for: identity)
         // Probe only published candidates, once. An absent variant member may be excluded
@@ -97,7 +172,7 @@ public enum DeviceRegistry {
             do {
                 let sample = try read(key); samples[key] = sample
                 if sample.key != key || !SensorMapping.usableTemperature(sample) { invalidKeys.insert(key) }
-            } catch HardwareError.smc(let code) where UInt32(bitPattern: code) == 0xFAD00084 {
+            } catch where HardwareError.isMissingKey(error) {
                 // Source-table members absent on a variant are explicit startup omissions.
             } catch { invalidKeys.insert(key) }
         }
@@ -128,6 +203,6 @@ public enum DeviceRegistry {
             automaticRestoration: interface == nil ? .pending : .referenceSupported,
             manualTransaction: interface?.supportsTargets == true ? .referenceSupported : .pending, chipControl: .cpuGPU,
             evidence: interface == nil ? .unsupported : .referenceSupported)
-        return ResolvedDevice(identity: identity, capabilities: cap, mappings: mappings, fanInterface: interface)
+        return ResolvedDevice(identity: identity, capabilities: cap, mappings: mappings, fanInterface: interface, failure: device.failure)
     }
 }

@@ -5,7 +5,7 @@
 <h1 align="center">Fandy</h1>
 <p align="center">Native Mac fan control with powerful profiles, automation, custom curves, and live temperatures.</p>
 <p align="center">
-  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.3.2-arm64.dmg"><strong>Download for Mac</strong></a>
+  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.3.3-arm64.dmg"><strong>Download for Mac</strong></a>
   · <a href="docs/INSTALLATION.md">Installation help</a>
   · <a href="https://github.com/NidaleNieve/Fandy_MacOS/issues">Report an issue</a>
 </p>

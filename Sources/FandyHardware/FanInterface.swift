@@ -8,6 +8,7 @@ public struct FanInterface: Sendable {
     public let targetFormats: [Int: FanRPMFormat]
     public let forceTestAvailable: Bool
     public let locallyTested: Bool
+    public var targetFailure: HelperFailure? = nil
     public var supportsTargets: Bool { targetFormats.count == fanIDs.count }
     public static func discover(identity: DeviceIdentity, read: (String) throws -> DiscoveredSensor) throws -> Self {
         guard identity.supportedNotebook else { throw ControlError.hardwareUnqualified }
@@ -17,18 +18,32 @@ public struct FanInterface: Sendable {
         let ids = Array(0..<Int(count.bytes[0])), local = identity.model == SensorRegistry.model
         guard !local || ids == SensorRegistry.observedFanIDs else { throw HardwareError.invalidMetadata }
         var keys: [Int: String] = [:], formats: [Int: FanRPMFormat] = [:]
+        var targetFailure: HelperFailure?
+        var protectedMode = false
         for id in ids {
             var matches: [DiscoveredSensor] = []
             for key in ["F\(id)md", "F\(id)Md"] {
                 do { matches.append(try read(key)) }
-                catch HardwareError.smc(let code) where UInt32(bitPattern: code) == 0xFAD00084 { }
+                catch where HardwareError.isMissingKey(error) { }
                 catch { throw error }
             }
-            guard matches.count == 1, let metadata = matches.first else { throw HardwareError.invalidMetadata }
-            try validateMode(metadata, id: id, locallyTested: local)
-            keys[id] = metadata.key
-            if let target = try? read("F\(id)Tg"), let format = FanRPMFormat(rawValue: target.type),
-               (try? validateTarget(target, id: id, format: format, locallyTested: local)) != nil { formats[id] = format }
+            guard !matches.isEmpty else { throw HardwareError.invalidMetadata }
+            for match in matches { try validateMode(match, id: id, locallyTested: local) }
+            guard Set(matches.map(\.value)).count == 1 else { throw HardwareError.invalidMetadata }
+            // Reviewed source prefers lowercase when both aliases agree. A
+            // contradictory alias blocks writes rather than guessing ownership.
+            let metadata = matches.first { $0.key == "F\(id)md" } ?? matches[0]
+            keys[id] = metadata.key; protectedMode = protectedMode || metadata.value == 3
+            do {
+                let target = try read("F\(id)Tg")
+                guard let format = FanRPMFormat(rawValue: target.type) else { throw HardwareError.invalidMetadata }
+                try validateTarget(target, id: id, format: format, locallyTested: local)
+                formats[id] = format
+            } catch {
+                let failure = DeviceRegistry.failure(error, operation: "fan_discovery")
+                targetFailure = targetFailure ?? HelperFailure(kind: failure.kind, domain: failure.domain,
+                    code: failure.code, operation: failure.operation, key: "F\(id)Tg")
+            }
         }
         // Absence is specifically the SMC not-found result. A corrupt/unreadable
         // global handover flag must not be silently treated as a direct interface.
@@ -37,13 +52,13 @@ public struct FanInterface: Sendable {
             let flag = try read("Ftst")
             guard !local else { throw HardwareError.invalidMetadata }
             try validateFlag(flag); forceTest = true
-        } catch HardwareError.smc(let code) where UInt32(bitPattern: code) == 0xFAD00084 {
+        } catch where HardwareError.isMissingKey(error) {
             forceTest = false
         } catch {
             throw error
         }
-        guard forceTest || keys.values.allSatisfy({ key in (try? read(key).value) != 3 }) else { throw HardwareError.invalidMetadata }
-        return Self(fanIDs: ids, modeKeys: keys, targetFormats: formats, forceTestAvailable: forceTest, locallyTested: local)
+        guard forceTest || !protectedMode else { throw HardwareError.invalidMetadata }
+        return Self(fanIDs: ids, modeKeys: keys, targetFormats: formats, forceTestAvailable: forceTest, locallyTested: local, targetFailure: targetFailure)
     }
     public func validateMode(_ metadata: DiscoveredSensor, id: Int) throws {
         guard modeKeys[id] == metadata.key else { throw HardwareError.invalidMetadata }
