@@ -212,3 +212,28 @@ func qualifiedCapabilities(stage: HardwareStage = .qualifiedControl) -> Hardware
     #expect(throws: ControlError.invalidFan) { try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: fresh.id, targets: [FanTarget(0, 3000.2), FanTarget(1, 3000.7)]), owner: owner) }
     #expect(spy.fans.allSatisfy { $0.mode == .automatic })
 }
+
+private final class DeferredReleaseSpy: FanHardwareIO, @unchecked Sendable {
+    var mode: FanMode = .manual
+    var calls: [String] = []
+    func enumerateFans() throws -> [Fan] { [Fan(id: 0, min: 1000, max: 6000, actual: 2000, mode: mode)] }
+    func readMode(fanID: Int) throws -> FanMode { mode }
+    func setAutomatic(fanID: Int) throws { calls.append("mode") }
+    func finishAutomaticRestoration() throws { calls.append("global-release"); mode = .automatic }
+    func applyValidatedTargets(_ targets: [FanTarget]) throws {}
+}
+@Test func finalOwnershipAfterGlobalReleaseResolvesIntermediateManualReadback() throws {
+    let io = DeferredReleaseSpy(), report = try FanRestoration.report(using: io)
+    #expect(io.calls == ["mode","global-release"])
+    #expect(report.fans.first?.immediateMode == .manual)
+    #expect(report.verified && report.fans.first?.releasedManual == true)
+}
+
+@Test func verifiedStartupRecoveryCanBeAdoptedWithoutRepeatingPhysicalWrites() throws {
+    let spy = FanSpy()
+    let report = try FanRestoration.report(using: spy)
+    let calls = spy.calls
+    let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(), read: { spy.snapshot() }, clock: { spy.now }, startupRestoration: report)
+    #expect(coordinator.status().automaticVerified && spy.calls == calls)
+    #expect(coordinator.status().startupRestoration?.verified == true)
+}

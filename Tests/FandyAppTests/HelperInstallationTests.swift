@@ -44,3 +44,34 @@ import FandyCore
         #expect(!menu.items.contains { $0.title == "Allow Fan Control…" })
     }
 }
+
+@Test func embeddedHelperIdentityAndSealAreRequiredEvenWhenAppIsValid() {
+    for state in [(errSecCSUnsigned, true), (errSecSuccess, false)] {
+        #expect(throws: HelperInstallationError.invalidSignature) {
+            try HelperInstallationPolicy.validate(signatureStatus: errSecSuccess, developerID: true,
+                bundleURL: URL(fileURLWithPath: "/Applications/Fandy.app"),
+                helperSignatureStatus: state.0, identitiesMatch: state.1)
+        }
+    }
+}
+
+@MainActor @Test func registrationLifecycleSerializesDifferentOperationsAndRecoversAfterFailure() async throws {
+    let lifecycle = HelperLifecycleCoordinator()
+    var events: [String] = []
+    let first = Task { @MainActor in
+        try await lifecycle.run {
+            events.append("release-start")
+            try await Task.sleep(for: .milliseconds(40))
+            events.append("release-end")
+            throw ControlError.restorationUnverified
+        }
+    }
+    await Task.yield()
+    let second = Task { @MainActor in
+        try await lifecycle.run { events.append("register") }
+    }
+    do { try await first.value; Issue.record("Expected release failure") } catch ControlError.restorationUnverified {}
+    try await second.value
+    #expect(events == ["release-start", "release-end", "register"])
+    #expect(!lifecycle.busy)
+}
