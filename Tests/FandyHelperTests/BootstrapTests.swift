@@ -69,3 +69,18 @@ func actualHelperBootstrapRestoresBeforeSensorDiscovery(_ identity: DeviceIdenti
         #expect(prior.filter { $0.1 == 6 }.map(\.0) == ["F0md", "F1md"])
     } else { #expect(!prior.contains { $0.1 == 6 }) }
 }
+
+@Test func transientStartupFailureCanRetryAfterWakeWithoutCreatingControl() async throws {
+    let packets = StartupPackets(.init(model: "Mac14,9", chip: "Apple M2 Pro", appleSilicon: true))
+    var attempts = 0
+    let service = HelperService(hardwareFactory: { _ in
+        attempts += 1
+        if attempts == 1 { throw HardwareError.smc(5) }
+        return try AppleFanHardware(reader: SMCReader(transport: packets), identity: packets.identity)
+    })
+    await withCheckedContinuation { done in service.queue.async { service.startBackend(); done.resume() } }
+    #expect(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime).bootstrap?.stage == .failed)
+    await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in service.queue.async { service.retryBackendAfterWake(); done.resume() } }
+    #expect(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime).bootstrap?.stage == .ready)
+    #expect(!packets.operations.contains { $0.1 == 6 })
+}

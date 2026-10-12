@@ -564,9 +564,19 @@ func delayedReferenceAdmissionTargetsEachFanOnce(_ item: (String, String)) throw
 func everyNotebookUsesProductionPacketDiscovery(_ model: String) throws {
     let family = DeviceRegistry.notebookFamilies[model]!
     let base = ["MacBookPro17,1","Mac14,7","Mac15,3","Mac16,1","Mac17,2"].contains(model)
-    let chip = "Apple M\(family.rawValue)" + (base ? "" : " Pro")
+    let maxModels: Set<String> = ["MacBookPro18,2", "MacBookPro18,4", "Mac14,5", "Mac14,6",
+        "Mac15,8", "Mac15,9", "Mac15,10", "Mac15,11", "Mac16,5", "Mac16,6", "Mac17,6", "Mac17,7"]
+    let chip = "Apple M\(family.rawValue)" + (base ? "" : maxModels.contains(model) ? " Max" : " Pro")
     let fixture = CompatibilitySMC(model: model, chip: chip, count: base ? 1 : 2, fixed: family == .m1, forceTest: family != .m5)
     if model == SensorRegistry.model { for key in SensorRegistry.chipEnvelopeKeys { fixture.put(key, 40, "flt ") } }
+    else {
+        // Synthetic permission-bit variants, explicitly not captured attributes.
+        for id in 0..<(base ? 1 : 2) {
+            let key = "F\(id)" + (family == .m5 ? "md" : "Md")
+            fixture.values[key]?.attributes = 0xC0 | UInt8(family.rawValue)
+            fixture.values["F\(id)Tg"]?.attributes = 0xC0 | UInt8(family.rawValue + id)
+        }
+    }
     let reader = SMCReader(transport: fixture, clock: { fixture.now })
     let fanOnly = DeviceRegistry.resolveFans(identity: fixture.identity, read: reader.read)
     #expect(fanOnly.mappings.isEmpty && fanOnly.capabilities.canRestore)
