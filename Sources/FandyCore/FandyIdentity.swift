@@ -2,7 +2,9 @@
 public enum FandyIdentity {
     public static let appIdentifier = "is.dsr.fandy"
     public static let helperIdentifier = "is.dsr.fandy.fan-helper"
-    public static let launchDaemonPlist = "is.dsr.fandy.fan-service.plist"
+    public static let launchDaemonPlist = "is.dsr.fandy.fan-control-v2.plist"
     public static let legacyLaunchDaemonPlist = "is.dsr.fandy.fan-helper.plist"
+    public static let previousLaunchDaemonPlist = "is.dsr.fandy.fan-service.plist"
+    public static let installedAppPath = "/Applications/Fandy.app"
     public static let logSubsystem = "is.dsr.fandy"
 }

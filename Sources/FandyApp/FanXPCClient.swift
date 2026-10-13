@@ -267,23 +267,38 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
 @MainActor enum HelperManager {
     static var service:SMAppService { .daemon(plistName:FandyIdentity.launchDaemonPlist) }
     static var installed:Bool { service.status == .enabled }
-    private static var legacyService: SMAppService { .daemon(plistName: FandyIdentity.legacyLaunchDaemonPlist) }
+    private static var legacyServices: [SMAppService] {
+        [FandyIdentity.legacyLaunchDaemonPlist, FandyIdentity.previousLaunchDaemonPlist]
+            .map { .daemon(plistName: $0) }
+    }
+    private static var hasLegacyRegistration: Bool {
+        legacyServices.contains { $0.status == .enabled || $0.status == .requiresApproval }
+    }
     /// Older development registrations retain validation category 3 after an
     /// upgrade to Developer ID (category 6), even across unregister/register.
-    /// Remove that registration before creating the distribution service; the
+    /// Broken BTM parent records can also survive replacement of the published
+    /// fan-service job. Remove both predecessors before creating the new service; the
     /// XPC name, helper signing identity and caller authentication stay fixed.
     static func migrateLegacyService(client: FanXPCClient) async throws {
         try validateCurrentInstallation()
-        guard legacyService.status == .enabled || legacyService.status == .requiresApproval else { return }
-        if legacyService.status == .enabled {
-            do { try await client.restoreAutomatic() }
-            catch ControlError.helperUnavailable { /* Dead legacy job: replacement startup must verify release. */ }
+        for legacy in legacyServices {
+            try await migrateLegacyRegistration(status: legacy.status,
+                restore: { try await client.restoreAutomatic() },
+                unregister: { try await unregister(service: legacy) })
         }
-        try await unregister(service: legacyService)
         client.disconnectForRecoveryTest()
     }
+    static func migrateLegacyRegistration(status: SMAppService.Status,
+        restore: () async throws -> Void, unregister: () async throws -> Void) async throws {
+        guard status == .enabled || status == .requiresApproval else { return }
+        if status == .enabled {
+            do { try await restore() }
+            catch ControlError.helperUnavailable { /* Replacement startup must independently verify release. */ }
+        }
+        try await unregister()
+    }
     static func install() throws {
-        guard legacyService.status != .enabled && legacyService.status != .requiresApproval else { throw ControlError.helperUnavailable }
+        guard !hasLegacyRegistration else { throw ControlError.helperUnavailable }
         guard DeviceRegistry.current.capabilities.canRestore else { throw ControlError.hardwareUnqualified }
         try validateCurrentInstallation()
         switch service.status {
@@ -295,6 +310,7 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     static func installObservation() throws {
         // This path must stop working when a future build gains any physical write capability.
         guard !DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl else { throw ControlError.unauthorized }
+        guard !hasLegacyRegistration else { throw ControlError.helperUnavailable }
         try validateCurrentInstallation()
         switch service.status {
         case .notRegistered, .notFound: try service.register()
@@ -346,7 +362,7 @@ private final class ReplyGate<T: Sendable>: @unchecked Sendable {
     static func validateCurrentInstallation() throws {
         let url = Bundle.main.bundleURL.resolvingSymlinksInPath()
         // Reject broken resource seals before touching either service registration.
-        // Valid development builds retain their existing workflow.
+        // Signed development copies must use the same fixed helper installation path.
         var code: SecStaticCode?, information: CFDictionary?
         guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code,
               SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess else { throw HelperInstallationError.invalidSignature }
@@ -375,7 +391,7 @@ enum HelperInstallationError: Error, LocalizedError, Equatable {
 enum HelperInstallationPolicy {
     static func validate(signatureStatus: OSStatus, developerID: Bool, bundleURL: URL) throws {
         guard signatureStatus == errSecSuccess else { throw HelperInstallationError.invalidSignature }
-        if developerID && bundleURL.resolvingSymlinksInPath().path != "/Applications/Fandy.app" {
+        if bundleURL.resolvingSymlinksInPath().path != FandyIdentity.installedAppPath {
             throw HelperInstallationError.wrongLocation
         }
     }

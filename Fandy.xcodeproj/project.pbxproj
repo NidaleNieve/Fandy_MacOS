@@ -517,6 +517,12 @@
 		"F4192AA9D6EB80EDACFBE056" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Config/is.dsr.fandy.fan-control-v2.plist";
+			"sourceTree" = "<group>";
+		};
+		"F08DB4D15CC2D70FDCC6319B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
 			"path" = "Config/is.dsr.fandy.fan-service.plist";
 			"sourceTree" = "<group>";
 		};
@@ -660,6 +666,7 @@
 				F6B3CB705C2406A666E17CA8,
 				45E3598E5F4AC81F2D119516,
 				59407258BF62199A2697374B,
+				F08DB4D15CC2D70FDCC6319B,
 				F4192AA9D6EB80EDACFBE056,
 				ED8F7DF021C9E9C519408A96,
 				7367AB9A454559025D4D8EE2,
@@ -1066,6 +1073,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = F4192AA9D6EB80EDACFBE056;
 		};
+		"E589230E2B711B987A0D305B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = F08DB4D15CC2D70FDCC6319B;
+		};
 		"EDC0263597BF60BDB8301E61" = {
 			"isa" = "PBXCopyFilesBuildPhase";
 			"buildActionMask" = 2147483647;
@@ -1084,6 +1095,7 @@
 			"dstSubfolderSpec" = 1;
 			"files" = (
 				1C17FDA0F9A5703C63602A24,
+				E589230E2B711B987A0D305B,
 				C858CF793488417DECF17A19,
 			);
 			"name" = "Embed Launch Daemon";
