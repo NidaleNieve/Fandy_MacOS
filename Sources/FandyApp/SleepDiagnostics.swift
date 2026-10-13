@@ -23,9 +23,8 @@ import FandyHardware
         }
         defer { center.removeObserver(sleep); center.removeObserver(wake); model.stop(); try? FileManager.default.removeItem(at: root) }
         do {
-            guard model.capabilities.stage == .qualifiedControl else { throw ControlError.hardwareUnqualified }
+            try await HelperDiagnostics.prepare(model, action: .profilesSleep)
             let reader = try SMCReader()
-            for _ in 0..<5 { await model.tick() }
             model.select("cool-chassis")
             for _ in 0..<15 {
                 await model.tick()

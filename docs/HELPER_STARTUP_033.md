@@ -1,4 +1,4 @@
-# Helper startup — 0.3.3 build 30 local candidate
+# Helper startup — 0.3.3 build 31 local candidate
 
 The app registers its correctly signed embedded helper independently of GUI-side hardware access. App and helper seals, fixed identifiers, matching signing teams and matching development/distribution classes are checked before registration. Native approval, authenticated service availability, monitoring and profile eligibility remain separate. Only `requiresApproval` opens the background-activity guide.
 
@@ -29,6 +29,9 @@ The exact M2 official failure is still unknown. Synthetic coverage does not cert
 
 ## Local verification state
 
-The final complete suite passed 535 Swift tests and 59 Python tool tests. Full AddressSanitizer passed 529 tests before the final sensor-menu and stalled-status additions; focused AddressSanitizer covered the changed sensor-menu path and focused ThreadSanitizer covered the status/lifecycle changes. The additional transient-wake regression and varied Base/Pro/Max packet scenarios are included in the final required CI run. Signed arm64 Release compilation succeeded with macOS 15 deployment.
+The final complete suite passed 536 Swift tests and 59 Python tool tests. Full AddressSanitizer passed 529 tests before the final sensor-menu and stalled-status additions; focused AddressSanitizer covered the changed sensor-menu path and focused ThreadSanitizer covered the status/lifecycle changes. The additional transient-wake regression and varied Base/Pro/Max packet scenarios are included in the final required CI run. Signed arm64 Release compilation succeeded with macOS 15 deployment.
 
 Initial notarization preflight reported the existing FandyNotary item missing from both default and login Keychain lookups. After resumption its default lookup succeeded. No credentials were recreated and no unnotarized DMG was published. Final packaging and physical acceptance are recorded below when completed; an earlier build must not be presented as the candidate.
+
+
+Build 30 was notarized and retained separately. Build 31 also shares authenticated readiness preparation across profile, recovery, sleep and maximum diagnostics. Live recovery diagnostics use a temporary chip-checked definition capped at 10%, request an upward margin of at least 200 RPM within each fan's bounds, and skip when that quiet margin is unavailable. They never alter stored user profiles. Maximum diagnostics remain implemented but are not run during quiet local acceptance.

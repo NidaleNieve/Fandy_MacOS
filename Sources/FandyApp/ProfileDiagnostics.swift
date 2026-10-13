@@ -106,11 +106,7 @@ import FandyHardware
     /// Runtime qualification arrives through authenticated status, never a GUI SMC probe.
     static func prepare(_ model: AppModel,
         pause: @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(500)) }) async throws {
-        for attempt in 0..<5 {
-            await model.tick()
-            if attempt < 4 { try await pause() }
-        }
-        guard model.capabilities.stage == .qualifiedControl else { throw ControlError.hardwareUnqualified }
+        try await HelperDiagnostics.prepare(model, action: .profilesLive, pause: pause)
     }
     /// Three fixed modest entries; independent 20-Hz reads can expose a visible
     /// overshoot, but cannot rule out physical events shorter than 50 milliseconds.

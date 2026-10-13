@@ -59,6 +59,17 @@ enum HelperDiagnosticAction: String, CaseIterable {
 }
 
 @MainActor enum HelperDiagnostics {
+    static func prepare(_ model: AppModel, action: HelperDiagnosticAction,
+        pause: @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(500)) }) async throws {
+        for attempt in 0..<5 {
+            await model.tick()
+            if attempt < 4 { try await pause() }
+        }
+        let maximum = [HelperDiagnosticAction.maximumCheck, .maximumQuit, .maximumHeartbeat].contains(action)
+        guard maximum ? model.capabilities.permits(BuiltInProfiles.maximum) : model.capabilities.stage == .qualifiedControl else {
+            throw ControlError.hardwareUnqualified
+        }
+    }
     static func run(_ action: HelperDiagnosticAction) async -> Int32 {
         let client = FanXPCClient()
         do {
@@ -258,9 +269,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyMaxCheck-\(UUID().uuidString)")
         let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false)
         do {
-            guard model.capabilities.permits(BuiltInProfiles.maximum), HelperManager.installed else { throw ControlError.hardwareUnqualified }
+            try await prepare(model, action: action)
+            guard HelperManager.installed else { throw ControlError.helperUnavailable }
             let reader = try SMCReader()
-            for _ in 0..<5 { await model.tick(); try await Task.sleep(for: .milliseconds(250)) }
             guard model.ownership == .appleObserved, model.canActivate(BuiltInProfiles.maximum) else { throw ControlError.restorationUnverified }
             model.select("max")
             for _ in 0..<10 {

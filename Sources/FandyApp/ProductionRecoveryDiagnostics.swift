@@ -10,16 +10,23 @@ import FandyHardware
         let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false, client: client)
         defer { model.stop(); try? FileManager.default.removeItem(at: root) }
         do {
-            guard model.capabilities.stage == .qualifiedControl else { throw ControlError.hardwareUnqualified }
+            try await HelperDiagnostics.prepare(model, action: action)
             let reader = try SMCReader()
-            for _ in 0..<5 { await model.tick() }
-            model.select("cool-chassis")
+            guard let trial = try quietProfile(fans: reader.fans()) else {
+                emit(["event": "recoverySkipped", "reason": "No quiet upward margin available"])
+                await model.prepareForTermination(); return 0
+            }
+            guard let snapshot = model.snapshot,
+                  try model.capabilities.chipPolicy.temperature(in: snapshot, now: ProcessInfo.processInfo.systemUptime) < MeasurementSafety.ceilingC else { throw ControlError.thermalPressure }
+            model.profiles.append(trial)
+            guard model.canActivate(trial) else { throw ControlError.hardwareUnqualified }
+            model.select(trial.id)
             for _ in 0..<15 {
                 await model.tick()
-                if model.isSelected("cool-chassis"), try reader.fans().allSatisfy({ $0.mode == .manual && $0.actualRPM >= $0.minimumRPM * 0.9 }) { break }
+                if model.isSelected(trial.id), try reader.fans().allSatisfy({ $0.mode == .manual && $0.actualRPM >= $0.minimumRPM * 0.9 }) { break }
                 try await Task.sleep(for: .seconds(1))
             }
-            guard model.isSelected("cool-chassis"), try reader.fans().allSatisfy({ $0.mode == .manual && $0.actualRPM >= $0.minimumRPM * 0.9 }) else { throw ControlError.invalidFan }
+            guard model.isSelected(trial.id), try reader.fans().allSatisfy({ $0.mode == .manual && $0.actualRPM >= $0.minimumRPM * 0.9 }) else { throw ControlError.invalidFan }
             let began = ContinuousClock.now
             emit(["event": "recoveryReady", "action": action.rawValue, "pid": ProcessInfo.processInfo.processIdentifier,
                   "modes": try reader.fans().map { $0.mode.rawValue }])
@@ -52,6 +59,22 @@ import FandyHardware
             await model.prepareForTermination()
             emit(["event": "recoveryFailed", "action": action.rawValue, "error": error.localizedDescription]); return 1
         }
+    }
+    /// A fixed, short-lived diagnostic definition; never edits a user's profiles.
+    static func quietProfile(fans: [Fan]) throws -> Profile? {
+        guard (1...2).contains(fans.count), Set(fans.map(\.id)).count == fans.count else { throw ControlError.invalidFan }
+        var requested: [Double] = []
+        for fan in fans {
+            try fan.validate()
+            guard fan.mode.isAutomatic else { throw ControlError.restorationUnverified }
+            let rpm = fan.actualRPM + 200
+            guard rpm >= fan.minimumRPM, rpm <= fan.maximumRPM else { return nil }
+            requested.append(try fan.percent(rpm: rpm))
+        }
+        let floor = max(5, ceil((requested.max() ?? 0) * 10) / 10)
+        guard floor <= 10 else { return nil }
+        return Profile(id: "diagnostic-recovery", name: "Recovery diagnostic", curves: [], floor: floor,
+            automaticAtIdle: false, fanResponse: 1)
     }
     private static func emit(_ report: [String: Any]) {
         var report = report; report["timestamp"] = ISO8601DateFormatter().string(from: Date())
