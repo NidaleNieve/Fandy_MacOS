@@ -36,3 +36,26 @@ import FandyHardware
     #expect(report["connectionFailure"] != nil)
     await model.prepareForTermination()
 }
+
+@MainActor @Test func nativeProfileDiagnosticsWaitForAuthenticatedRuntimeCapabilities() async throws {
+    let identity = DeviceIdentity(model: "Mac14,9", chip: "Apple M2 Pro", appleSilicon: true)
+    let groups = DeviceRegistry.candidates(for: identity)
+    let cap = HardwareCapabilities(model: identity.model, stage: .qualifiedControl,
+        sensors: [.init(role: .cpuPeak, keys: [groups.efficiency[0], groups.performance[0]], state: .referenceSupported, source: "fixture", limitation: "synthetic"),
+                  .init(role: .gpuPeak, keys: [groups.gpu[0]], state: .referenceSupported, source: "fixture", limitation: "synthetic")],
+        topology: .referenceSupported, automaticRestoration: .referenceSupported, manualTransaction: .referenceSupported,
+        chipControl: .cpuGPU, evidence: .referenceSupported)
+    var status = HelperStatus(automaticVerified: true, manualQualified: true,
+        snapshot: HardwareSnapshot(at: 10, sensors: [.init(.cpuPeak, 35, at: 10), .init(.gpuPeak, 35, at: 10)],
+            fans: [.init(id: 0, min: 1000, max: 6000, actual: 0)]), capabilities: cap, bootstrap: .init(stage: .ready))
+    status.deviceReport = .init(model: identity.model, chip: identity.chip, catalog: DeviceRegistry.statsRevision, recipe: "reference-direct")
+    status.helperBuild = FandyBuild.identifier
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false,
+        client: BootstrapClient(status), helperAvailable: { true }, deviceIdentity: identity, clock: { 10 })
+    #expect(model.capabilities.stage == .observation)
+    try await ProfileDiagnostics.prepare(model, pause: {})
+    #expect(model.capabilities.stage == .qualifiedControl && model.canActivate(BuiltInProfiles.systemPlus))
+    await model.prepareForTermination()
+}
