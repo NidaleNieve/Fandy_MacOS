@@ -60,3 +60,13 @@ func nativeProfileDiagnosticsWaitForAuthenticatedRuntimeCapabilities(_ action: H
     #expect(model.capabilities.stage == .qualifiedControl && model.canActivate(BuiltInProfiles.systemPlus))
     await model.prepareForTermination()
 }
+
+@MainActor @Test func quietRecoveryProfileIsUpwardBoundedAndSkipsUnavailableMargins() throws {
+    let fans = [Fan(id: 0, min: 1000, max: 6000, actual: 1100), Fan(id: 1, min: 1100, max: 6500, actual: 1200)]
+    let profile = try #require(ProductionRecoveryDiagnostics.quietProfile(fans: fans))
+    #expect(profile.floor > 0 && profile.floor <= 10 && !profile.automaticAtIdle)
+    for fan in fans { #expect(try fan.rpm(percent: profile.floor) >= fan.actualRPM + 200) }
+    #expect(try ProductionRecoveryDiagnostics.quietProfile(fans: [.init(id: 0, min: 1000, max: 6000, actual: 0)]) == nil)
+    #expect(try ProductionRecoveryDiagnostics.quietProfile(fans: [.init(id: 0, min: 1000, max: 6000, actual: 5900)]) == nil)
+    #expect(try ProductionRecoveryDiagnostics.quietProfile(fans: [.init(id: 0, min: 1000, max: 6000, actual: 2000)]) == nil)
+}
