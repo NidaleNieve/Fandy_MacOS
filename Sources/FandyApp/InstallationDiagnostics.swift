@@ -13,6 +13,7 @@ struct InstallationObservation: Codable, Sendable {
     var appSignatureValid: Bool
     var helperSignatureValid: Bool
     var identitiesMatch: Bool
+    var signingClassesMatch: Bool
     var launchd: LaunchdObservation
 }
 /// Fixed read-only service query and signature assessment, off the main actor.
@@ -38,15 +39,17 @@ enum InstallationDiagnostics {
         let location = url.path == "/Applications/Fandy.app" ? "applications" : url.path.contains("/AppTranslocation/") ? "translocated" : "other"
         let matching = app.team != nil && app.team == helper.team && app.identifier == FandyIdentity.appIdentifier && helper.identifier == FandyIdentity.helperIdentifier
         return .init(location: location, appSignatureValid: app.valid, helperSignatureValid: helper.valid,
-            identitiesMatch: matching, launchd: queryLaunchd())
+            identitiesMatch: matching, signingClassesMatch: app.developerID != nil && app.developerID == helper.developerID, launchd: queryLaunchd())
     }
-    private static func signature(_ url: URL) -> (valid: Bool, team: String?, identifier: String?) {
+    private static func signature(_ url: URL) -> (valid: Bool, team: String?, identifier: String?, developerID: Bool?) {
         var code: SecStaticCode?, information: CFDictionary?
-        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else { return (false, nil, nil) }
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else { return (false, nil, nil, nil) }
         let valid = SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate), nil) == errSecSuccess
         _ = SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information)
         let info = information as? [String: Any]
-        return (valid, info?[kSecCodeInfoTeamIdentifier as String] as? String, info?[kSecCodeInfoIdentifier as String] as? String)
+        let certificates = info?[kSecCodeInfoCertificates as String] as? [SecCertificate] ?? []
+        let developerID = certificates.first.flatMap { SecCertificateCopySubjectSummary($0) as String? }.map { $0.hasPrefix("Developer ID Application:") }
+        return (valid, info?[kSecCodeInfoTeamIdentifier as String] as? String, info?[kSecCodeInfoIdentifier as String] as? String, developerID)
     }
     private static func queryLaunchd() -> LaunchdObservation {
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("fandy-query-" + UUID().uuidString)

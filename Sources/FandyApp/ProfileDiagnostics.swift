@@ -9,9 +9,8 @@ import FandyHardware
         let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false)
         defer { model.stop(); try? FileManager.default.removeItem(at: root) }
         do {
-            guard model.capabilities.stage == .qualifiedControl else { throw ControlError.hardwareUnqualified }
+            try await prepare(model)
             let reader = try SMCReader()
-            for _ in 0..<5 { await model.tick() }
             if action == .schoolResponse { try await transitions(model, reader: reader) }
             var custom = BuiltInProfiles.systemPlus.duplicated()
             custom.id = "diagnostic-custom"; custom.name = "Diagnostic Custom"; custom.floor = 5; custom.automaticAtIdle = false
@@ -103,6 +102,15 @@ import FandyHardware
             emit(["event": "profilesFailed", "error": error.localizedDescription])
             return 1
         }
+    }
+    /// Runtime qualification arrives through authenticated status, never a GUI SMC probe.
+    static func prepare(_ model: AppModel,
+        pause: @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(500)) }) async throws {
+        for attempt in 0..<5 {
+            await model.tick()
+            if attempt < 4 { try await pause() }
+        }
+        guard model.capabilities.stage == .qualifiedControl else { throw ControlError.hardwareUnqualified }
     }
     /// Three fixed modest entries; independent 20-Hz reads can expose a visible
     /// overshoot, but cannot rule out physical events shorter than 50 milliseconds.

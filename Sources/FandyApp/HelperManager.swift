@@ -126,11 +126,14 @@ import FandyHardware
             _ = SecCodeCopySigningInformation(helperCode, SecCSFlags(rawValue: kSecCSSigningInformation), &helperInformation)
         }
         let helperInfo = helperInformation as? [String: Any]
+        let helperCertificates = helperInfo?[kSecCodeInfoCertificates as String] as? [SecCertificate] ?? []
+        let helperDeveloperID = helperCertificates.first.flatMap { SecCertificateCopySubjectSummary($0) as String? }?.hasPrefix("Developer ID Application:") == true
+        let classesMatch = !certificates.isEmpty && !helperCertificates.isEmpty && developerID == helperDeveloperID
         let team = info?[kSecCodeInfoTeamIdentifier as String] as? String
         let helperTeam = helperInfo?[kSecCodeInfoTeamIdentifier as String] as? String
         let match = team != nil && team == helperTeam && info?[kSecCodeInfoIdentifier as String] as? String == FandyIdentity.appIdentifier && helperInfo?[kSecCodeInfoIdentifier as String] as? String == FandyIdentity.helperIdentifier
         try HelperInstallationPolicy.validate(signatureStatus: SecStaticCodeCheckValidity(code, flags, nil),
-                                             developerID: developerID, bundleURL: url, helperSignatureStatus: helperStatus, identitiesMatch: match)
+                                             developerID: developerID, bundleURL: url, helperSignatureStatus: helperStatus, identitiesMatch: match, signingClassesMatch: classesMatch)
     }
 }
 
@@ -148,8 +151,8 @@ enum HelperInstallationError: Error, LocalizedError, Equatable {
     }
 }
 enum HelperInstallationPolicy {
-    static func validate(signatureStatus: OSStatus, developerID: Bool, bundleURL: URL, helperSignatureStatus: OSStatus = errSecSuccess, identitiesMatch: Bool = true) throws {
-        guard signatureStatus == errSecSuccess, helperSignatureStatus == errSecSuccess, identitiesMatch else { throw HelperInstallationError.invalidSignature }
+    static func validate(signatureStatus: OSStatus, developerID: Bool, bundleURL: URL, helperSignatureStatus: OSStatus = errSecSuccess, identitiesMatch: Bool = true, signingClassesMatch: Bool = true) throws {
+        guard signatureStatus == errSecSuccess, helperSignatureStatus == errSecSuccess, identitiesMatch, signingClassesMatch else { throw HelperInstallationError.invalidSignature }
         if developerID && bundleURL.resolvingSymlinksInPath().path != "/Applications/Fandy.app" {
             throw HelperInstallationError.wrongLocation
         }

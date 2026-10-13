@@ -1,6 +1,6 @@
 # Helper startup — 0.3.3 build 30 local candidate
 
-The app registers its correctly signed embedded helper independently of GUI-side hardware access. App and helper seals, fixed identifiers and matching signing teams are checked before registration. Native approval, authenticated service availability, monitoring and profile eligibility remain separate. Only `requiresApproval` opens the background-activity guide.
+The app registers its correctly signed embedded helper independently of GUI-side hardware access. App and helper seals, fixed identifiers, matching signing teams and matching development/distribution classes are checked before registration. Native approval, authenticated service availability, monitoring and profile eligibility remain separate. Only `requiresApproval` opens the background-activity guide.
 
 Registration, legacy migration, removal and replacement use a serialized lifecycle coordinator. Replacement preserves handback from a reachable controller and waits for the native unregister status transition. A missing-service XPC result is confirmed twice more before the single automatic rebind; timeouts, authentication rejection and reported startup progress never trigger that rebind. An explicit Retry remains available. Expected helper build verification detects stale replacement without trusting registration status as proof of launch.
 
@@ -29,6 +29,6 @@ The exact M2 official failure is still unknown. Synthetic coverage does not cert
 
 ## Local verification state
 
-The final complete suite passed 533 Swift tests and 59 Python tool tests. Full AddressSanitizer passed 529 tests before the final sensor-menu and stalled-status additions; focused AddressSanitizer covered the changed sensor-menu path and focused ThreadSanitizer covered the status/lifecycle changes. The additional transient-wake regression and varied Base/Pro/Max packet scenarios are included in the final required CI run. Signed arm64 Release compilation succeeded with macOS 15 deployment.
+The final complete suite passed 535 Swift tests and 59 Python tool tests. Full AddressSanitizer passed 529 tests before the final sensor-menu and stalled-status additions; focused AddressSanitizer covered the changed sensor-menu path and focused ThreadSanitizer covered the status/lifecycle changes. The additional transient-wake regression and varied Base/Pro/Max packet scenarios are included in the final required CI run. Signed arm64 Release compilation succeeded with macOS 15 deployment.
 
-Notarization preflight reported the existing FandyNotary item missing from both default and login Keychain lookups. No credentials were recreated, and no unnotarized DMG was published. Local notarized delivery remains pending restoration of that saved item. Installed application and user configuration have not been replaced during this implementation.
+Initial notarization preflight reported the existing FandyNotary item missing from both default and login Keychain lookups. After resumption its default lookup succeeded. No credentials were recreated and no unnotarized DMG was published. Final packaging and physical acceptance are recorded below when completed; an earlier build must not be presented as the candidate.

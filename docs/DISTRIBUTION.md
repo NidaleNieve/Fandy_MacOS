@@ -53,3 +53,8 @@ Release order:
 Only the DMG is a release attachment; checksums and verification reports stay local. The updater fetches the fixed HTTPS raw GitHub feed, follows GitHub’s archive redirects, and sends no sensor or profile data.
 
 For the isolated real Sparkle test, unpack the pinned official Sparkle tools into `build/SparkleTools`, then run `python3 Scripts/test-updater.py` and `python3 Scripts/test-updater.py --corrupt`. A local HTTP feed is limited to this fixture; production uses HTTPS. The fixture has its own bundle/defaults identity, no helper and no fan writes. Pure clock tests cover weekly checks and the two-week reminder without wall-clock waiting. Native archive tests cover replacement on quit and signature rejection; they do not establish a two-week elapsed runtime observation.
+
+
+## 0.3.3 build 30 candidate
+
+The current candidate validates matching app/helper signing classes as well as teams and identifiers. Final source has software acceptance coverage and signed Release compilation. Local notarized packaging is held while the existing FandyNotary credential item is unavailable; missing default and login Keychain lookups must not trigger silent credential recreation. No candidate DMG or updater entry may be published before notarization and local acceptance. Official M2 installation and clean VM sessions remain pending; packaging verification alone cannot prove those outcomes.
