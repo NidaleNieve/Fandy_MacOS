@@ -37,7 +37,8 @@ import FandyHardware
     await model.prepareForTermination()
 }
 
-@MainActor @Test func nativeProfileDiagnosticsWaitForAuthenticatedRuntimeCapabilities() async throws {
+@MainActor @Test(arguments: [HelperDiagnosticAction.profilesLive, .productionDisconnect, .profilesSleep, .maximumCheck])
+func nativeProfileDiagnosticsWaitForAuthenticatedRuntimeCapabilities(_ action: HelperDiagnosticAction) async throws {
     let identity = DeviceIdentity(model: "Mac14,9", chip: "Apple M2 Pro", appleSilicon: true)
     let groups = DeviceRegistry.candidates(for: identity)
     let cap = HardwareCapabilities(model: identity.model, stage: .qualifiedControl,
@@ -55,7 +56,7 @@ import FandyHardware
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false,
         client: BootstrapClient(status), helperAvailable: { true }, deviceIdentity: identity, clock: { 10 })
     #expect(model.capabilities.stage == .observation)
-    try await ProfileDiagnostics.prepare(model, pause: {})
+    try await HelperDiagnostics.prepare(model, action: action, pause: {})
     #expect(model.capabilities.stage == .qualifiedControl && model.canActivate(BuiltInProfiles.systemPlus))
     await model.prepareForTermination()
 }
