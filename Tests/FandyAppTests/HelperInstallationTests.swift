@@ -75,3 +75,11 @@ import FandyCore
     #expect(events == ["release-start", "release-end", "register"])
     #expect(!lifecycle.busy)
 }
+
+@Test func mixedDevelopmentAndDistributionSignaturesFailBeforeRegistration() {
+    #expect(throws: HelperInstallationError.invalidSignature) {
+        try HelperInstallationPolicy.validate(signatureStatus: errSecSuccess, developerID: true,
+            bundleURL: URL(fileURLWithPath: "/Applications/Fandy.app"),
+            helperSignatureStatus: errSecSuccess, identitiesMatch: true, signingClassesMatch: false)
+    }
+}
