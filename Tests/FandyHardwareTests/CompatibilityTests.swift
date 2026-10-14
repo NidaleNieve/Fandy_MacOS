@@ -60,6 +60,8 @@ private final class CompatibilitySMC: SMCStructTransport {
         var output = [UInt8](repeating: 0, count: 80)
         if input[42] == 9 {
             output[28] = UInt8(old.size); output.replaceSubrange(32..<36, with: old.type.utf8.reversed()); output[36] = old.attributes
+        } else if input[42] == 5 {
+            output.replaceSubrange(48..<(48 + old.size), with: old.bytes)
         } else if input[42] == 6 {
             if failKey == key { output[40] = 0x82 }
             else if blockDirect && key.hasSuffix("Md") && input[48] == 1 && values["Ftst"]?.value == 0 { output[40] = 0x82 }
@@ -142,7 +144,7 @@ func referenceFamiliesSelectTheirOwnCompleteGroups(_ item: (String, String)) thr
     #expect(try single.interface().fanIDs == [0])
     let fixed = CompatibilitySMC(fixed: true)
     #expect(try fixed.interface().targetFormats[1] == .fixed)
-    let ambiguous = CompatibilitySMC(); ambiguous.put("F0md", 0, "ui8 ")
+    let ambiguous = CompatibilitySMC(); ambiguous.put("F0md", 1, "ui8 ")
     #expect(throws: (any Error).self) { try ambiguous.interface() }
     let corrupt = CompatibilitySMC(); corrupt.values["Ftst"]!.attributes = 0
     #expect(throws: (any Error).self) { try corrupt.interface() }
@@ -556,4 +558,125 @@ func delayedReferenceAdmissionTargetsEachFanOnce(_ item: (String, String)) throw
         })
     }
     #expect(!fixture.writes.contains { $0.0.hasSuffix("Tg") })
+}
+
+@Test(arguments: DeviceRegistry.notebookFamilies.keys.sorted())
+func everyNotebookUsesProductionPacketDiscovery(_ model: String) throws {
+    let family = DeviceRegistry.notebookFamilies[model]!
+    let base = ["MacBookPro17,1","Mac14,7","Mac15,3","Mac16,1","Mac17,2"].contains(model)
+    let maxModels: Set<String> = ["MacBookPro18,2", "MacBookPro18,4", "Mac14,5", "Mac14,6",
+        "Mac15,8", "Mac15,9", "Mac15,10", "Mac15,11", "Mac16,5", "Mac16,6", "Mac17,6", "Mac17,7"]
+    let chip = "Apple M\(family.rawValue)" + (base ? "" : maxModels.contains(model) ? " Max" : " Pro")
+    let fixture = CompatibilitySMC(model: model, chip: chip, count: base ? 1 : 2, fixed: family == .m1, forceTest: family != .m5)
+    if model == SensorRegistry.model { for key in SensorRegistry.chipEnvelopeKeys { fixture.put(key, 40, "flt ") } }
+    else {
+        // Synthetic permission-bit variants, explicitly not captured attributes.
+        for id in 0..<(base ? 1 : 2) {
+            let key = "F\(id)" + (family == .m5 ? "md" : "Md")
+            fixture.values[key]?.attributes = 0xC0 | UInt8(family.rawValue)
+            fixture.values["F\(id)Tg"]?.attributes = 0xC0 | UInt8(family.rawValue + id)
+        }
+    }
+    let reader = SMCReader(transport: fixture, clock: { fixture.now })
+    let fanOnly = DeviceRegistry.resolveFans(identity: fixture.identity, read: reader.read)
+    #expect(fanOnly.mappings.isEmpty && fanOnly.capabilities.canRestore)
+    let resolved = DeviceRegistry.resolveSensors(device: fanOnly, read: reader.read)
+    #expect(resolved.capabilities.canControl)
+    #expect(try reader.fans().count == (base ? 1 : 2))
+    let sampler = try HardwareSnapshotReader(device: resolved, reader: reader, clock: { fixture.now })
+    let snapshot = try sampler.snapshot()
+    #expect(!snapshot.sensors.isEmpty && snapshot.fans.count == (base ? 1 : 2))
+    try snapshot.validate(now: fixture.now, required: resolved.capabilities.chipPolicy.required)
+    let report = DeviceRegistry.report(device: resolved)
+    let validated = try DeviceRegistry.validate(report: report, capabilities: resolved.capabilities, identity: fixture.identity)
+    #expect(validated.canControl)
+}
+@Test func canonicalAliasesNeedAgreementAndDiscoveryFailuresStayObservable() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+    fixture.put("F0md", 0, "ui8 ")
+    #expect(try fixture.interface().modeKeys[0] == "F0md")
+    fixture.put("F0md", 1, "ui8 ")
+    #expect(throws: HardwareError.self) { try fixture.interface() }
+    fixture.values.removeValue(forKey: "F0md"); fixture.failRead = "F0Md"
+    let device = DeviceRegistry.resolveFans(identity: fixture.identity, read: fixture.read)
+    #expect(device.fanInterface == nil && device.failure?.operation == "fan_discovery")
+    #expect(!device.capabilities.canControl)
+}
+@Test func runtimeReportCannotExpandCompiledHardwareAuthority() throws {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+    let device = DeviceRegistry.resolve(identity: fixture.identity, read: fixture.read)
+    let wrong = RuntimeDeviceReport(model: "Mac17,9", chip: "Apple M5 Pro", catalog: DeviceRegistry.statsRevision, recipe: "direct")
+    #expect(throws: (any Error).self) { try DeviceRegistry.validate(report: wrong, capabilities: device.capabilities, identity: fixture.identity) }
+    var evidence = device.capabilities.sensors
+    evidence.append(.init(role: .socPeak, keys: ["FAKE"], state: .verified, source: "caller", limitation: ""))
+    let forged = HardwareCapabilities(model: fixture.identity.model, stage: .qualifiedControl, sensors: evidence, topology: .verified, automaticRestoration: .verified, manualTransaction: .verified)
+    #expect(throws: (any Error).self) { try DeviceRegistry.validate(report: DeviceRegistry.report(device: device), capabilities: forged, identity: fixture.identity) }
+}
+
+@Test func localRuntimeReportCannotNarrowTheCompleteChipEnvelope() throws {
+    let fixture = CompatibilitySMC(model: SensorRegistry.model, chip: "Apple M5 Pro", forceTest: false)
+    let resolved = DeviceRegistry.resolve(identity: fixture.identity, read: fixture.read)
+    let original = resolved.capabilities
+    let sensors = original.sensors.map { evidence in
+        SensorEvidence(role: evidence.role, keys: evidence.role == .socPeak ? [SensorRegistry.chipEnvelopeKeys[0]] : evidence.keys,
+            state: evidence.state, source: evidence.source, limitation: evidence.limitation, displayName: evidence.displayName)
+    }
+    let narrowed = HardwareCapabilities(model: original.model, stage: original.stage, sensors: sensors,
+        topology: original.topology, automaticRestoration: original.automaticRestoration, manualTransaction: original.manualTransaction,
+        chipControl: original.chipControl, evidence: original.evidence)
+    #expect(throws: ControlError.hardwareUnqualified) {
+        try DeviceRegistry.validate(report: DeviceRegistry.report(device: resolved), capabilities: narrowed, identity: fixture.identity)
+    }
+}
+
+@Test func unreadableTargetRetainsRestorationButReportsWhyControlIsBlocked() {
+    let fixture = CompatibilitySMC(); fixture.failRead = "F0Tg"
+    let device = DeviceRegistry.resolveFans(identity: fixture.identity, read: fixture.read)
+    #expect(device.capabilities.canRestore)
+    #expect(!device.capabilities.canControl)
+    #expect(device.failure?.key == "F0Tg")
+}
+
+@Test func predecessorCleanupRequiresFreshCompleteAutomaticOwnershipWithoutWrites() throws {
+    for (model, chip, forceTest) in [("Mac14,9", "Apple M2 Pro", true), ("Mac17,9", "Apple M5 Pro", false)] {
+        let io = CompatibilitySMC(model: model, chip: chip, forceTest: forceTest)
+        let reader = SMCReader(transport: io, clock: { io.now })
+        try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+        #expect(io.writes.isEmpty)
+        if forceTest {
+            io.put("F0Md", 3, "ui8 ")
+            try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+            io.put("Ftst", 1, "ui8 ")
+            #expect(throws: (any Error).self) {
+                try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+            }
+            io.put("Ftst", 0, "ui8 ")
+        }
+        io.put(forceTest ? "F1Md" : "F1md", 1, "ui8 ")
+        #expect(throws: (any Error).self) {
+            try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+        }
+        #expect(io.writes.isEmpty)
+    }
+}
+@Test func predecessorCleanupRejectsStaleMissingContradictoryOrChangingObservations() {
+    for scenario in ["stale", "missing", "alias", "topology", "flag"] {
+        let io = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+        if scenario == "alias" { io.put("F0md", 1, "ui8 ") }
+        if scenario == "missing" { io.failRead = "F1Md" }
+        if scenario == "flag" { io.put("Ftst", 0, "ui16") }
+        var countReads = 0
+        #expect(throws: (any Error).self) {
+            try AutomaticOwnershipObservation.verify(identity: io.identity, read: { key in
+                if key == "FNum" {
+                    countReads += 1
+                    if scenario == "topology", countReads > 1 { io.put("FNum", 1, "ui8 ") }
+                }
+                var value = try io.read(key)
+                if scenario == "stale" { value.sampledAt = 1 }
+                return value
+            }, clock: { io.now })
+        }
+        #expect(io.writes.isEmpty)
+    }
 }

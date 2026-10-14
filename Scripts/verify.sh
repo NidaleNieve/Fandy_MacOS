@@ -10,7 +10,7 @@ swift --version
 case "${1:-}" in
   --sanitizers)
     ASAN_OPTIONS=detect_leaks=0 Scripts/test.sh -j 1 --no-parallel --sanitize address
-    Scripts/test.sh -j 1 --no-parallel --sanitize thread --filter 'concurrentAdmission|concurrentDiagnosticRecords|pollingRestart|overlappingLifecycle|failedRelease|cancellingOneWaiter'
+    Scripts/test.sh -j 1 --no-parallel --sanitize thread --filter 'concurrentAdmission|concurrentDiagnosticRecords|pollingRestart|overlappingLifecycle|failedRelease|cancellingOneWaiter|productionStatusDispatch|registrationLifecycle|stalledBootstrap|transientStartupFailureCanRetry'
     ;;
   --native-build) Scripts/build.sh -jobs 1 CODE_SIGNING_ALLOWED=NO ;;
   *)

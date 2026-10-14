@@ -116,11 +116,16 @@ public final class HardwareSnapshotReader: @unchecked Sendable {
     private let lock = NSLock()
     private let reader: SMCReader
     private var sequence: UInt64 = 0
-    public init(device: ResolvedDevice = DeviceRegistry.current) throws { self.device = device; reader = try SMCReader() }
+    private let clock: () -> Double
+    public init(device: ResolvedDevice? = nil, reader: SMCReader? = nil, clock: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }) throws {
+        let session = try reader ?? SMCReader()
+        self.reader = session; self.clock = clock
+        self.device = device ?? DeviceRegistry.resolve(identity: .current, read: session.read)
+    }
     public func snapshot() throws -> HardwareSnapshot {
         lock.lock(); defer { lock.unlock() }
         sequence += 1
-        let started = ProcessInfo.processInfo.systemUptime
+        let started = clock()
         // Cache each key once per acquisition; averages and maxima can have independent groups.
         var samples: [String: DiscoveredSensor] = [:]
         for key in device.acquisitionKeys {
@@ -144,11 +149,11 @@ public final class HardwareSnapshotReader: @unchecked Sendable {
             do {
                 let flag = try reader.read("Ftst"); try FanInterface.validateFlag(flag)
                 handover = flag.value == 1
-            } catch HardwareError.smc(let code) where UInt32(bitPattern: code) == 0xFAD00084 && device.fanInterface?.forceTestAvailable != true {
+            } catch where HardwareError.isMissingKey(error) && device.fanInterface?.forceTestAvailable != true {
                 handover = false
             } catch { fans = [] } // Unknown global ownership cannot claim automatic control.
         }
-        var snapshot = HardwareSnapshot(at: ProcessInfo.processInfo.systemUptime, sensors: sensors, fans: fans, pressure: pressure)
+        var snapshot = HardwareSnapshot(at: clock(), sensors: sensors, fans: fans, pressure: pressure)
         snapshot.fanHandoverActive = handover
         return snapshot
     }

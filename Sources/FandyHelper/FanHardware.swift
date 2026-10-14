@@ -8,28 +8,49 @@ import os
 final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     private let commandLog = Logger(subsystem: "is.dsr.fandy", category: "fan-transaction")
     private let reader: SMCReader
-    private let connection: io_connect_t
     let cancellation: HardwareOperationFence
-    let device: ResolvedDevice
+    private(set) var device: ResolvedDevice
     // Written only on the serial hardware queue; captured at authenticated ingress.
     var admittedOperation: HardwareOperationFence.Token?
-    private let interface: FanInterface?
+    private var interface: FanInterface? { device.fanInterface }
+    private var sampler: HardwareSnapshotReader?
     private var ownsForceTest = false
     private var transactionToken: HardwareOperationFence.Token?
     private(set) var transitions: [FanTransition] = []
     private var controlRequirements: Set<SensorRole> = []
-    init(cancellation: HardwareOperationFence = HardwareOperationFence()) throws {
+    init(cancellation: HardwareOperationFence = HardwareOperationFence(), reader injectedReader: SMCReader? = nil, identity: DeviceIdentity = .current) throws {
         self.cancellation = cancellation
-        let observationReader = try SMCReader(); reader = observationReader
-        device = DeviceRegistry.resolve(identity: .current, read: { try observationReader.read($0) })
-        interface = device.fanInterface
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
-        guard service != 0 else { throw HardwareError.invalidMetadata }; defer { IOObjectRelease(service) }
-        var port: io_connect_t = 0
-        let result = IOServiceOpen(service,mach_task_self_,0,&port)
-        guard result == KERN_SUCCESS else { throw HardwareError.smc(result) }; connection = port
+        let session = try injectedReader ?? SMCReader(transport: NativeSMCTransport(allowWrites: true))
+        reader = session
+        device = DeviceRegistry.resolveFans(identity: identity, read: session.read)
     }
-    deinit { IOServiceClose(connection) }
+    func resolveSensors() throws -> HardwareSnapshotReader {
+        device = DeviceRegistry.resolveSensors(device: device, read: reader.read)
+        let source = try HardwareSnapshotReader(device: device, reader: reader)
+        sampler = source
+        return source
+    }
+    func metadataReport() -> [FanMetadataReport] {
+        let ids: [Int]
+        if let interface { ids = interface.fanIDs }
+        else {
+            // Diagnostic-only discovery: readable metadata is not write authority.
+            guard let count = try? reader.read("FNum"), count.type == "ui8 ", count.bytes.count == 1,
+                  (1...2).contains(count.bytes[0]) else { return [] }
+            ids = Array(0..<Int(count.bytes[0]))
+        }
+        return ids.map { id in
+            let key = interface?.modeKeys[id]
+            let mode = key.flatMap { try? reader.read($0) } ?? (try? reader.read("F\(id)md")) ?? (try? reader.read("F\(id)Md"))
+            let target = try? reader.read("F\(id)Tg")
+            var report = FanMetadataReport(id: id)
+            report.modeKey = key ?? mode?.key; report.modeType = mode?.type; report.modeAttributes = mode?.attributes
+            report.targetType = target?.type; report.targetAttributes = target?.attributes
+            report.minimumRPM = (try? reader.read("F\(id)Mn"))?.value
+            report.maximumRPM = (try? reader.read("F\(id)Mx"))?.value
+            return report
+        }
+    }
     func enumerateFans() throws -> [Fan] {
         let fans = try reader.fans()
         guard let interface, Set(fans.map(\.id)) == Set(interface.fanIDs) else { throw ControlError.invalidFan }
@@ -51,11 +72,19 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         let key = try qualifiedModeKey(fanID), mode = try reader.read(key)
         guard mode.type == "ui8 ", mode.size == 1, mode.bytes.count == 1 else { throw HardwareError.invalidMetadata }
         try interface.restoreMode(id: fanID, metadata: mode, transport: self)
-        if !interface.locallyTested {
+        if !interface.locallyTested && !interface.forceTestAvailable {
             try FanHandover.awaitRelease(deadline: ProcessInfo.processInfo.systemUptime + 1,
                 clock: { ProcessInfo.processInfo.systemUptime }, read: { [self] in try readMode(fanID: fanID) },
                 pause: { Thread.sleep(forTimeInterval: 0.05) })
         }
+    }
+    func verifiedAutomaticMode(fanID: Int) throws -> FanMode {
+        if interface?.locallyTested == false {
+            try FanHandover.awaitRelease(deadline: ProcessInfo.processInfo.systemUptime + 1,
+                clock: { ProcessInfo.processInfo.systemUptime }, read: { [self] in try readMode(fanID: fanID) },
+                pause: { Thread.sleep(forTimeInterval: 0.05) })
+        }
+        return try readMode(fanID: fanID)
     }
     func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool { interface?.locallyTested == true || !mode.isAutomatic }
     func acceptsAutomatic(_ mode: FanMode) -> Bool { interface?.locallyTested == true ? mode == .automatic : mode.isAutomatic }
@@ -84,7 +113,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     }
     private func applyReferenceTargets(_ targets: [FanTarget], interface: FanInterface) throws {
         let token = admittedOperation ?? cancellation.token()
-        let sampler = try HardwareSnapshotReader(device: device)
+        guard let sampler else { throw ControlError.invalidSnapshot }
         try ReferenceFanTransaction.apply(targets, interface: interface, transport: self,
             clock: { ProcessInfo.processInfo.systemUptime }, read: { [reader] in try reader.read($0) },
             fans: { [self] in try enumerateFans() }, requiresForceTestOwnership: ownsForceTest, check: { [self] in
@@ -173,13 +202,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     func transact(_ input: [UInt8]) throws -> SMCStructResponse {
         guard geteuid() == 0, interface != nil,
               input.count == 80 else { throw ControlError.unauthorized }
-        var output = [UInt8](repeating: 0, count: 80)
-        var outputSize = 80
-        let result = input.withUnsafeBytes { source in output.withUnsafeMutableBytes { destination in
-            IOConnectCallStructMethod(connection, 2, source.baseAddress, 80, destination.baseAddress, &outputSize)
-        }}
-        guard result == KERN_SUCCESS else { throw HardwareError.smc(result) }
-        return SMCStructResponse(bytes: output, count: outputSize)
+        return try reader.transact(input)
     }
 }
 extension AppleFanHardware: SMCStructTransport {}

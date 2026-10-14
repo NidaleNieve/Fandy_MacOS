@@ -16,15 +16,15 @@ struct HelperApprovalPromptGate {
 }
 
 extension AppModel {
-    var needsHelperSetup: Bool { !simulation && capabilities.canRestore && !helperSetupInitializing && helperInstallationIssue == nil && helperSetupStatus == .requiresApproval }
+    var needsHelperSetup: Bool { !simulation && helperInstallationSupported && !helperSetupInitializing && helperInstallationIssue == nil && helperSetupStatus == .requiresApproval }
     var needsHelperAttention: Bool {
-        !simulation && capabilities.canRestore && !helperSetupInitializing &&
-        (helperInstallationIssue != nil || needsHelperSetup || helperSetupStatus != .enabled || helperHealth == .unavailable || (helperHealth == .fault && helperConnectionFailureCode != nil) || helperBootstrap?.stage == .failed)
+        !simulation && helperInstallationSupported && !helperSetupInitializing &&
+        (helperInstallationIssue != nil || needsHelperSetup || helperSetupStatus != .enabled || (helperHealth == .unavailable && (helperDiagnostic?.stalled == true || (helperBootstrap?.stage != .initializing && helperBootstrap?.stage != .restoring))) || (helperHealth == .fault && helperConnectionFailureCode != nil) || helperBootstrap?.stage == .failed)
     }
     /// Not registered yet is initialization, not evidence that permission was denied.
     var shouldPresentHelperApproval: Bool { needsHelperSetup && helperSetupStatus == .requiresApproval }
     var helperSetupMessage: String {
-        helperSetupError ?? (shouldPresentHelperApproval
+        helperSetupError ?? helperFailure?.localizedDescription ?? (helperDiagnostic?.stalled == true ? "Fan hardware work is taking longer than expected. Export diagnostics." : nil) ?? (shouldPresentHelperApproval
             ? "Allow Fandy under Background App Activity in System Settings to enable fan control."
             : "Fan helper could not start")
     }
@@ -41,7 +41,7 @@ extension AppModel {
         refreshHelperSetup()
         // Tests/diagnostics never install a service. Distribution registration
         // retains the Applications-location and signed-client requirements.
-        guard !simulation, capabilities.canRestore, helperSetupStatus != .enabled,
+        guard !simulation, helperInstallationSupported, helperSetupStatus != .enabled,
               Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
               !CommandLine.arguments.contains("--functional-check"),
               (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
@@ -60,8 +60,12 @@ extension AppModel {
         let panel = ExportSavePanel.make(filename: "Fandy Diagnostics.json")
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            do { try self.sanitizedDiagnostics().write(to: url, options: .atomic) }
-            catch { self.draftError = "Diagnostics could not be exported." }
+            Task { @MainActor in
+                let bundleURL = Bundle.main.bundleURL
+                self.installationObservation = await Task.detached { InstallationDiagnostics.collect(bundleURL: bundleURL) }.value
+                do { try self.sanitizedDiagnostics().write(to: url, options: .atomic) }
+                catch { self.draftError = "Diagnostics could not be exported." }
+            }
         }
     }
     func retryFanHelper() {

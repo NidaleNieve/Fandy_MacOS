@@ -5,7 +5,7 @@
 <h1 align="center">Fandy</h1>
 <p align="center">Native Mac fan control with powerful profiles, automation, custom curves, and live temperatures.</p>
 <p align="center">
-  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.3.2-arm64.dmg"><strong>Download for Mac</strong></a>
+  <a href="https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-0.3.3-arm64.dmg"><strong>Download for Mac</strong></a>
   · <a href="docs/INSTALLATION.md">Installation help</a>
   · <a href="https://github.com/NidaleNieve/Fandy_MacOS/issues">Report an issue</a>
 </p>
@@ -78,6 +78,10 @@ open build/DerivedData/Build/Products/Debug/Fandy.app
 ```
 
 Open `Fandy.xcodeproj` with the **Fandy** scheme. Set up [local signing](docs/LOCAL_CONFIGURATION.md) before using the helper. Follow the [hardware gates](docs/HARDWARE_GATES.md) for physical tests.
+
+For live fan control, quit the installed copy, install the signed build as
+`/Applications/Fandy.app`, and open that copy. The helper uses this fixed path;
+running another copy remains suitable for simulation but cannot register fan control.
 
 [Architecture](ARCHITECTURE.md) · [Distribution](docs/DISTRIBUTION.md) · [App Store assessment](docs/APP_STORE_READINESS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 

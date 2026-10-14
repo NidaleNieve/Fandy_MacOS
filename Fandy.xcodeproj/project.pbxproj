@@ -100,6 +100,18 @@
 			"path" = "Sources/FandyApp/HelperDiagnostics.swift";
 			"sourceTree" = "<group>";
 		};
+		"3FF4C9F839174663FDDDB56C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/HelperLifecycleCoordinator.swift";
+			"sourceTree" = "<group>";
+		};
+		"2FC5305134FA377DA8529EDC" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/HelperManager.swift";
+			"sourceTree" = "<group>";
+		};
 		"D0E46CA8B6D9B723EBA7C52B" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -110,6 +122,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyApp/HelperSetupWindow.swift";
+			"sourceTree" = "<group>";
+		};
+		"DF3A1479C504888E8C986196" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/InstallationDiagnostics.swift";
 			"sourceTree" = "<group>";
 		};
 		"34BAD267582F8214CA24776A" = {
@@ -316,6 +334,12 @@
 			"path" = "Sources/FandyCore/HelperCoordinator.swift";
 			"sourceTree" = "<group>";
 		};
+		"F571BFE1DDA071C131B3035C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/HelperDiagnosticsModel.swift";
+			"sourceTree" = "<group>";
+		};
 		"D5171724E8DC95710602ADE6" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -484,6 +508,12 @@
 			"path" = "Sources/FandyHardware/SMCRecoveryWriter.swift";
 			"sourceTree" = "<group>";
 		};
+		"19B0E6E150AF94237C24926A" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyHardware/SMCSession.swift";
+			"sourceTree" = "<group>";
+		};
 		"41F3ACA045E77688F708EE66" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -515,6 +545,12 @@
 			"sourceTree" = "<group>";
 		};
 		"F4192AA9D6EB80EDACFBE056" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Config/is.dsr.fandy.fan-control-v2.plist";
+			"sourceTree" = "<group>";
+		};
+		"F08DB4D15CC2D70FDCC6319B" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "text.plist.xml";
 			"path" = "Config/is.dsr.fandy.fan-service.plist";
@@ -590,8 +626,11 @@
 				51D0B8FD680608BAF5020BFE,
 				A02906912D3FA3D0197F9768,
 				C86459ECAEFA78BC4D8D517C,
+				3FF4C9F839174663FDDDB56C,
+				2FC5305134FA377DA8529EDC,
 				D0E46CA8B6D9B723EBA7C52B,
 				E66268C4BFD3549393B82499,
+				DF3A1479C504888E8C986196,
 				34BAD267582F8214CA24776A,
 				C1EFD3A2EB26D1281AEED0C1,
 				32E24315218F49A3390F9915,
@@ -626,6 +665,7 @@
 				E38AB440B2BCDAE2D4200AFB,
 				B667C9E9D379A0D402773C64,
 				190A0C3A4F860B1556438087,
+				F571BFE1DDA071C131B3035C,
 				D5171724E8DC95710602ADE6,
 				BFAB6D8C689DF42DBD689F6F,
 				380AABF370EB0AB44A1CCF6F,
@@ -654,12 +694,14 @@
 				031749FCE3DFED0C14D7F2D5,
 				9BB8432D0B42288D0ECD032D,
 				36CDDBD597C201712771CAE8,
+				19B0E6E150AF94237C24926A,
 				41F3ACA045E77688F708EE66,
 				57FCB5DCEC16155E559464C3,
 				80A626670EC6CC202A4A8911,
 				F6B3CB705C2406A666E17CA8,
 				45E3598E5F4AC81F2D119516,
 				59407258BF62199A2697374B,
+				F08DB4D15CC2D70FDCC6319B,
 				F4192AA9D6EB80EDACFBE056,
 				ED8F7DF021C9E9C519408A96,
 				7367AB9A454559025D4D8EE2,
@@ -810,6 +852,14 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = C86459ECAEFA78BC4D8D517C;
 		};
+		"7E03C5C7F223077CA0229E84" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 3FF4C9F839174663FDDDB56C;
+		};
+		"98D16799C3DD10AF278BD2D3" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = 2FC5305134FA377DA8529EDC;
+		};
 		"EB004A97D671C57776034277" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = D0E46CA8B6D9B723EBA7C52B;
@@ -817,6 +867,10 @@
 		"10F7629662CF36AEF2B9D90C" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = E66268C4BFD3549393B82499;
+		};
+		"0FB4A159E87DD7A6B980C2E3" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = DF3A1479C504888E8C986196;
 		};
 		"D2001D7D8DADEC0BC7F883FF" = {
 			"isa" = "PBXBuildFile";
@@ -934,8 +988,11 @@
 				B542E6D429544F89E6775EC5,
 				1383D537ECBA6634ADB6E3C4,
 				D03C65C5E28591996732114F,
+				7E03C5C7F223077CA0229E84,
+				98D16799C3DD10AF278BD2D3,
 				EB004A97D671C57776034277,
 				10F7629662CF36AEF2B9D90C,
+				0FB4A159E87DD7A6B980C2E3,
 				D2001D7D8DADEC0BC7F883FF,
 				91DD4C2AEE77B3EB195A5706,
 				8EE76D94E97782437366585F,
@@ -1066,6 +1123,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = F4192AA9D6EB80EDACFBE056;
 		};
+		"E589230E2B711B987A0D305B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = F08DB4D15CC2D70FDCC6319B;
+		};
 		"EDC0263597BF60BDB8301E61" = {
 			"isa" = "PBXCopyFilesBuildPhase";
 			"buildActionMask" = 2147483647;
@@ -1084,6 +1145,7 @@
 			"dstSubfolderSpec" = 1;
 			"files" = (
 				1C17FDA0F9A5703C63602A24,
+				E589230E2B711B987A0D305B,
 				C858CF793488417DECF17A19,
 			);
 			"name" = "Embed Launch Daemon";

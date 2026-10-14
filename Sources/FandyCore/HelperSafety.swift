@@ -121,6 +121,8 @@ public struct TargetRequest: Codable, Sendable, HelperCommand {
     public init(leaseID: UUID, generation: UInt64, snapshotID: UUID, targets: [FanTarget]) { version = Wire.version; self.leaseID = leaseID; self.generation = generation; self.snapshotID = snapshotID; self.targets = targets }
 }
 public struct HelperStatus: Codable, Sendable {
+    public var diagnostic: HelperDiagnosticReport? = nil
+    public var deviceReport: RuntimeDeviceReport? = nil
     public var transitions: [FanTransition]? = nil
     public var fanInterface: HelperFanInterface? = nil
     public var bootstrap: HelperBootstrapStatus? = nil
@@ -137,7 +139,7 @@ public struct HelperStatus: Codable, Sendable {
     public var startupRestoration: RestorationReport?
     public var recovery: RecoveryTrialStatus?
     public var recoveryBlocker: String?
-    public init(automaticVerified: Bool, manualQualified: Bool = false, observationOnly: Bool = false, snapshot: HardwareSnapshot? = nil, fault: String? = nil, capabilities: HardwareCapabilities? = nil, restoration: RestorationReport? = nil, startupRestoration: RestorationReport? = nil) { self.startupRestoration = startupRestoration; self.capabilities = capabilities; self.restoration = restoration; self.automaticVerified = automaticVerified; self.manualQualified = manualQualified; self.observationOnly = observationOnly; self.snapshot = snapshot; self.fault = fault }
+    public init(automaticVerified: Bool, manualQualified: Bool = false, observationOnly: Bool = false, snapshot: HardwareSnapshot? = nil, fault: String? = nil, capabilities: HardwareCapabilities? = nil, restoration: RestorationReport? = nil, startupRestoration: RestorationReport? = nil, bootstrap: HelperBootstrapStatus? = nil) { self.bootstrap = bootstrap; self.startupRestoration = startupRestoration; self.capabilities = capabilities; self.restoration = restoration; self.automaticVerified = automaticVerified; self.manualQualified = manualQualified; self.observationOnly = observationOnly; self.snapshot = snapshot; self.fault = fault }
 }
 @objc public protocol FanHelperXPC {
     func status(withReply reply: @escaping (Data?, String?) -> Void)

@@ -13,6 +13,7 @@ let package = Package(
         .executableTarget(name: "FandyHelper", dependencies: ["FandyCore", "FandyHardware"], linkerSettings: [.linkedFramework("Security")]),
         .executableTarget(name: "FandyMeasurement", dependencies: ["FandyCore", "FandyHardware"], linkerSettings: [.linkedFramework("Metal")]),
         .testTarget(name: "FandyAppTests", dependencies: ["FandyApp"]),
+        .testTarget(name: "FandyHelperTests", dependencies: ["FandyHelper"]),
         .testTarget(name: "FandyCoreTests", dependencies: ["FandyCore"]),
         .testTarget(name: "FandyHardwareTests", dependencies: ["FandyHardware"])
     ]

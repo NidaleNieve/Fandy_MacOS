@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import FandyCore
 
-@Test func release032UsesANewBuildAcrossAppAndHelper() {
-    #expect(FandyBuild.version == "0.3.2")
-    #expect(FandyBuild.identifier == "29")
+@Test func release033UsesANewerDownloadBuildWithoutChangingDisplayVersion() {
+    #expect(FandyBuild.version == "0.3.3")
+    #expect(FandyBuild.identifier == "32")
 }
 
 @Test func updateFrequencyOffersOnlyIntervalsAndLegacyNeverUsesToggle() throws {

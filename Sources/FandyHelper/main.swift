@@ -11,6 +11,9 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "helper")
     let requests = HelperRequestGate()
     let cancellation = HardwareOperationFence()
+    let statusCache = HelperStatusStore()
+    private var diagnostic = HelperDiagnosticReport(phase: "listener", progressAt: 0)
+    private var lastPublication = -Double.infinity
     private(set) var coordinator: HelperCoordinator?
     private(set) var recovery: RecoveryTrialCoordinator?
     private var releaseCoordinator: HelperCoordinator?
@@ -22,11 +25,22 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     private var powerSuspended = false
     var timer: DispatchSourceTimer?
     var power: PowerNotifications?
-    override init() { super.init(); listener.delegate = self }
+    private let hardwareFactory: (HardwareOperationFence) throws -> AppleFanHardware
+    override convenience init() { self.init(hardwareFactory: { try AppleFanHardware(cancellation: $0) }) }
+    init(hardwareFactory: @escaping (HardwareOperationFence) throws -> AppleFanHardware) {
+        self.hardwareFactory = hardwareFactory; super.init(); listener.delegate = self
+    }
+    func startBackend() { startedAt = ProcessInfo.processInfo.systemUptime; bootstrapAttempt() }
+    func retryBackendAfterWake() {
+        guard coordinator == nil, bootstrap.stage == .failed, diagnostic.failure?.kind == .smc else { return }
+        retry = HelperBootstrapRetry(); startedAt = ProcessInfo.processInfo.systemUptime
+        bootstrapAttempt()
+    }
     func run() throws {
         guard geteuid() == 0 else { throw ControlError.unauthorized }
         listener.setConnectionCodeSigningRequirement(try PeerRequirement.make(team: ownSigningTeam(), identifier: FandyIdentity.appIdentifier))
         // Authentication is established before listener publication; SMC failure cannot kill status.
+        publishBootstrap(phase: "listener")
         listener.activate()
         startedAt = ProcessInfo.processInfo.systemUptime
         let source = DispatchSource.makeTimerSource(queue: queue)
@@ -47,8 +61,10 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
                     case .didWake:
                         guard powerSuspended else { return }
                         releaseCoordinator?.systemDidWake(); powerSuspended = false
+                        retryBackendAfterWake()
                         timer?.schedule(deadline: .now(), repeating: .milliseconds(100))
                     }
+                    publishStatus()
                 }
             }
         } catch { powerAvailable = false }
@@ -57,12 +73,15 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         RunLoop.current.run()
     }
     private func bootstrapAttempt() {
-        guard !powerSuspended else { return }
+        guard !powerSuspended, coordinator == nil else { return }
         guard retry.beginAttempt() else { return }
         bootstrap = .init(attempt: retry.attempts)
+        publishBootstrap(phase: "smc_open")
         do {
-            let hardware = try AppleFanHardware(cancellation: cancellation)
+            let hardware = try hardwareFactory(cancellation)
             self.hardware = hardware
+            if hardware.device.fanInterface == nil, let failure = hardware.device.failure, failure.kind == .smc { throw failure }
+            publishBootstrap(phase: "fan_discovery")
             let events = Logger(subsystem: FandyIdentity.logSubsystem, category: "safety")
             var sampler: HardwareSnapshotReader?
             let control = HelperCoordinator(io: hardware, capabilities: hardware.device.capabilities,
@@ -71,23 +90,36 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
                 requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() })
             releaseCoordinator = control
             bootstrap.stage = .restoring
+            publishBootstrap(phase: "restoring")
             if hardware.device.capabilities.canRestore { guard control.startup() else { throw ControlError.restorationUnverified } }
             guard powerAvailable else { throw BootstrapFailure.powerNotifications }
             // Automatic restoration precedes temperature-reader construction.
-            sampler = try HardwareSnapshotReader(device: hardware.device)
+            publishBootstrap(phase: "sensor_discovery")
+            sampler = try hardware.resolveSensors()
+            let readyControl = HelperCoordinator(io: hardware, capabilities: hardware.device.capabilities,
+                read: { guard let sampler else { throw ControlError.helperUnavailable }; return try sampler.snapshot() },
+                clock: { ProcessInfo.processInfo.systemUptime }, event: { events.notice("\($0, privacy: .public)") },
+                requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() }, startupRestoration: control.lastRestoration)
+            releaseCoordinator = readyControl
             let source = RecoverySampleSource(sampler: sampler!)
             let recovery = RecoveryTrialCoordinator(io: hardware, capabilities: hardware.device.capabilities,
                 read: { try source.read() }, clock: { ProcessInfo.processInfo.systemUptime },
-                restore: { _ = control.restore(); return control.lastRestoration },
+                restore: { _ = readyControl.restore(); return readyControl.lastRestoration },
                 requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() })
-            self.coordinator = control; self.recovery = recovery
+            self.coordinator = readyControl; self.recovery = recovery
             bootstrap = .init(stage: .ready, attempt: retry.attempts)
+            diagnostic.failure = hardware.device.failure
+            publishBootstrap(phase: "ready")
+            publishStatus()
             logger.notice("Helper backend ready")
         } catch {
             bootstrap = .init(stage: .failed, attempt: retry.attempts, failureCode: Self.failureCode(error))
+            diagnostic.failure = error is BootstrapFailure ? .init(kind: .power, domain: "Fandy", code: 0, operation: "power") : error as? HelperFailure ?? (error as? ControlError == .restorationUnverified ? .init(kind: .restoration, domain: "Fandy", code: 0, operation: "restore") : DeviceRegistry.failure(error, operation: diagnostic.phase))
+            publishBootstrap(phase: diagnostic.phase)
             logger.error("Helper bootstrap failed: \(self.bootstrap.failureCode ?? "unknown", privacy: .public)")
             let transient: Bool
             if case HardwareError.smc(let code) = error { transient = UInt32(bitPattern: code) != 0xFAD00084 }
+            else if let failure = error as? HelperFailure { transient = failure.kind == .smc }
             else { transient = false }
             if let offset = retry.nextOffset(transient: transient) {
                 queue.asyncAfter(deadline: .now() + max(0, startedAt + offset - ProcessInfo.processInfo.systemUptime)) { [self] in bootstrapAttempt() }
@@ -116,10 +148,25 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
                 targetTypes: interface.fanIDs.compactMap { interface.targetFormats[$0]?.rawValue }, forceTest: interface.forceTestAvailable)
         }
         status.bootstrap = bootstrap; status.helperBuild = FandyBuild.identifier
+        if let hardware { status.deviceReport = DeviceRegistry.report(device: hardware.device) }
+        status.diagnostic = diagnostic
         if coordinator != nil && (status.capabilities?.canQualifyRecovery == true || status.capabilities?.canControl == true) {
             do { try RecoveryOwnershipProbe.requireNoKnownController() } catch { status.recoveryBlocker = error.localizedDescription }
         }
         return status
+    }
+    private func publishBootstrap(phase: String) {
+        diagnostic.phase = phase; diagnostic.progressAt = ProcessInfo.processInfo.systemUptime
+        var value = statusCache.read(at: diagnostic.progressAt)
+        value.bootstrap = bootstrap; value.helperBuild = FandyBuild.identifier; value.diagnostic = diagnostic
+        if let hardware { value.capabilities = hardware.device.capabilities; value.deviceReport = DeviceRegistry.report(device: hardware.device) }
+        statusCache.publish(value, at: diagnostic.progressAt)
+    }
+    func publishStatus() {
+        let now = ProcessInfo.processInfo.systemUptime
+        // Fan metadata is bounded and is collected once per bootstrap, never at XPC ingress.
+        if diagnostic.fans.isEmpty { diagnostic.fans = hardware?.metadataReport() ?? [] }
+        statusCache.publish(status(), at: now); lastPublication = now
     }
     func requireCoordinator() throws -> HelperCoordinator {
         guard !powerSuspended, let coordinator, bootstrap.stage == .ready else { throw ControlError.helperUnavailable }; return coordinator
@@ -128,10 +175,12 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         guard !powerSuspended, let recovery, bootstrap.stage == .ready else { throw ControlError.helperUnavailable }; return recovery
     }
     func restore() -> Bool {
+        defer { publishStatus() }
         if let recovery { return recovery.release(reason: "System requested") }
         return releaseCoordinator?.restore() ?? false
     }
     private func watchdog() {
+        defer { if !powerSuspended, ProcessInfo.processInfo.systemUptime - lastPublication >= 0.5 { publishStatus() } }
         guard !powerSuspended, let coordinator, let recovery, let hardware else { return }
         let owner = coordinator.leaseOwner ?? recovery.activeOwner
         do {
@@ -153,13 +202,14 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
             queue.async { [self] in
                 coordinator?.disconnected(owner: object.owner); recovery?.disconnected(owner: object.owner)
                 requests.disconnected(owner: object.owner)
+                publishStatus()
             }
         }
         connection.interruptionHandler = connection.invalidationHandler
         connection.resume(); return true
     }
     func admit(_ token: HardwareOperationFence.Token) throws { try cancellation.require(token); hardware?.admittedOperation = token }
-    func finishHardwareOperation() { hardware?.admittedOperation = nil }
+    func finishHardwareOperation() { hardware?.admittedOperation = nil; publishStatus() }
 }
 
 func ownSigningTeam() throws -> String {
@@ -203,7 +253,12 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
         }
     }
     func status(withReply reply: @escaping (Data?, String?) -> Void) {
-        request(reply: DataReply(reply)) { try Wire.encode($0.status()) }
+        do {
+            let ticket = try service.requests.admitStatus(owner: owner, now: ProcessInfo.processInfo.systemUptime)
+            defer { service.requests.finish(ticket) }
+            guard service.requests.isOpen(ticket) else { throw ControlError.staleSession }
+            reply(try Wire.encode(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime)), nil)
+        } catch { reply(nil, error.localizedDescription) }
     }
     func qualifyRecovery(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {
         request(bytes: data.count, reply: DataReply(reply)) { [service, owner] _ in

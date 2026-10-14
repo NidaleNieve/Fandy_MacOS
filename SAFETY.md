@@ -41,3 +41,8 @@ A dead or blocked helper cannot run its watchdog. launchd restart can restore au
 ## Verification limits
 
 Only the M5 Pro Mac17,9 is available for physical testing. Other compiled M1–M5 recipes have source-backed synthetic transport coverage, not physical acceptance. The reported M2 Pro startup problem remains pending friend testing/diagnostics. Real active sleep/wake and sustained gaming calibration remain separate follow-ups. See [build-20 verification](docs/FAN_RESPONSE_024.md), [compatibility](docs/COMPATIBILITY.md) and [hardware gates](docs/HARDWARE_GATES.md).
+
+
+### 0.3.3 status and recovery
+
+The responsive health channel serves only the last completed hardware observation. After three seconds without a fresh snapshot it cannot verify ownership; stalled startup/work is reported. It does not interrupt a blocked kernel call or make watchdog execution possible while the helper is blocked or dead. Hardware effects stay on the serialized queue with existing authentication, cancellation and bounds checks. A transient failed startup can retry after wake; a ready backend or active lease cannot change sensor membership through a delayed retry. Missing targets or read-only mode metadata can retain monitoring without granting control. Public compatibility still requires the separate physical acceptance described in [the compatibility matrix](docs/COMPATIBILITY.md).

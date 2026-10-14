@@ -8,13 +8,16 @@ public final class HelperRequestGate: @unchecked Sendable {
         public let owner: UUID
         fileprivate let kind: Kind
     }
-    fileprivate enum Kind: Sendable, Hashable { case ordinary, restoration, rejection }
+    fileprivate enum Kind: Sendable, Hashable { case ordinary, restoration, rejection, status }
     private struct Peer {
         var open = true
         var limiter = MessageRateLimiter()
         var ordinary = 0
         var restoration = false
         var rejection = false
+        var status = false
+        var statusWindow: Double?
+        var statusCount = 0
     }
     private let lock = NSLock()
     private var peers: [UUID: Peer] = [:]
@@ -39,6 +42,16 @@ public final class HelperRequestGate: @unchecked Sendable {
         guard allowed, peer.ordinary < 2, ordinaryCount < 4 else { throw ControlError.excessiveMessages }
         peer.ordinary += 1; peers[owner] = peer; ordinaryCount += 1
         return ticket(owner: owner, kind: .ordinary)
+    }
+    public func admitStatus(owner: UUID, now: Double) throws -> Ticket {
+        lock.lock(); defer { lock.unlock() }
+        guard var peer = peers[owner], peer.open else { throw ControlError.staleSession }
+        guard now.isFinite, !peer.status else { throw ControlError.excessiveMessages }
+        guard peer.statusWindow.map({ now >= $0 }) ?? true else { throw ControlError.excessiveMessages }
+        if peer.statusWindow == nil || now - (peer.statusWindow ?? now) >= 1 { peer.statusWindow = now; peer.statusCount = 0 }
+        guard peer.statusCount < 30 else { throw ControlError.excessiveMessages }
+        peer.statusCount += 1; peer.status = true; peers[owner] = peer
+        return ticket(owner: owner, kind: .status)
     }
     public func admitRestoration(owner: UUID) throws -> Ticket {
         lock.lock(); defer { lock.unlock() }
@@ -71,6 +84,7 @@ public final class HelperRequestGate: @unchecked Sendable {
         case .ordinary: peer.ordinary -= 1
         case .restoration: peer.restoration = false
         case .rejection: peer.rejection = false
+        case .status: peer.status = false
         }
         peers[ticket.owner] = peer
     }

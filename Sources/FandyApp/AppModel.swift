@@ -56,7 +56,14 @@ import ServiceManagement
     private(set) var simulation = false
     private var requestedSimulation: Bool
     private(set) var helperHealth: HelperHealth = .unavailable
-    let capabilities: HardwareCapabilities
+    private(set) var capabilities: HardwareCapabilities
+    let deviceIdentity: DeviceIdentity
+    private let usesRuntimeCapabilities: Bool
+    var helperFailure: HelperFailure?
+    var helperDiagnostic: HelperDiagnosticReport?
+    var observedHelperBuild: String?
+    var installationObservation: InstallationObservation?
+    var helperInstallationSupported: Bool { capabilities.canRestore || DeviceRegistry.canInstallHelper(identity: deviceIdentity) }
     var busy = false
     var renameRequest: ProfileRenameRequest?
     var draftError: String?
@@ -112,6 +119,7 @@ import ServiceManagement
          provider: (any TemperatureSensorProvider)? = nil, client: (any PrivilegedFanClient)? = nil,
          capabilities: HardwareCapabilities? = nil, helperAvailable: (@MainActor () -> Bool)? = nil,
          helperRegistrationStatus: (@MainActor () -> SMAppService.Status)? = nil,
+         deviceIdentity: DeviceIdentity = .current,
          powerCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
          wallClock: @escaping @Sendable () -> Date = { Date() },
          applicationCatalog: (@MainActor () -> [RunningProcess])? = nil,
@@ -121,8 +129,10 @@ import ServiceManagement
         if let helperRegistrationStatus { self.helperRegistrationStatus = helperRegistrationStatus }
         else if let helperAvailable { self.helperRegistrationStatus = { helperAvailable() ? .enabled : .notRegistered } }
         else { self.helperRegistrationStatus = { HelperManager.service.status } }
-        self.capabilities = capabilities ?? DeviceRegistry.current.capabilities
-        self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : self.capabilities.chipPolicy)
+        self.deviceIdentity = deviceIdentity; self.usesRuntimeCapabilities = capabilities == nil
+        let initialCapabilities = capabilities ?? DeviceRegistry.declaredCapabilities(identity: deviceIdentity)
+        self.capabilities = initialCapabilities
+        self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : initialCapabilities.chipPolicy)
         self.clock = clock; self.wallClock = wallClock; self.applicationCatalog = applicationCatalog; self.powerCenter = powerCenter
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         store = ProfileStore(url: storeURL ?? root.appendingPathComponent("Fandy/profiles.json"))
@@ -160,7 +170,7 @@ import ServiceManagement
     }
     func sanitizedDiagnostics() throws -> Data {
         // Allowlist-only export: no arbitrary messages, names, paths or signing identity.
-        let object: [String: Any] = [
+        var object: [String: Any] = [
             "build": FandyBuild.identifier,
             "macOS": ProcessInfo.processInfo.operatingSystemVersionString,
             "registration": String(describing: helperSetupStatus),
@@ -173,13 +183,23 @@ import ServiceManagement
             "restorationVerified": helperRestoration?.verified ?? false,
             "fanRestoration": helperRestoration?.fans.map { ["fanID": $0.fanID, "initialMode": $0.initialMode?.rawValue ?? -1, "observedMode": $0.observedMode?.rawValue ?? -1, "alreadyAutomatic": $0.alreadyAutomatic == true, "verified": $0.verified] as [String: Any] } ?? [],
             "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",
-            "model": HardwareSnapshotReader.machineModel(),
+            "model": deviceIdentity.model, "chip": deviceIdentity.chip,
+            "observedHelperBuild": observedHelperBuild ?? "unreachable",
+            "connectionFailure": helperFailure.map { ["kind": $0.kind.rawValue, "domain": $0.domain, "code": $0.code, "operation": $0.operation] as [String: Any] } ?? [:],
+            "startupPhase": helperDiagnostic?.phase ?? "unreachable",
+            "sensorGroups": capabilities.sensors.map { ["role": $0.role.rawValue, "keys": $0.keys, "state": $0.state.rawValue] as [String: Any] },
             "controllerState": machine.state.rawValue, "helperHealth": helperHealth.rawValue,
             "hardwareStage": capabilities.stage.rawValue, "ownership": ownership.rawValue,
             "compatibilityEvidence": capabilities.compatibilityEvidence.rawValue,
             "simulation": simulation, "unsavedChanges": unsavedChanges,
             "failureCodes": [hardwareError == nil ? nil : "monitoring_or_control_error", saveError == nil ? nil : "persistence_error"].compactMap { $0 }
         ]
+        if let installationObservation {
+            object["installation"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(installationObservation))
+        }
+        if let helperDiagnostic {
+            object["helperDiagnostic"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(helperDiagnostic))
+        }
         return try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
     }
     func canMove(_ direction: Int) -> Bool {
@@ -417,12 +437,9 @@ import ServiceManagement
                         guard !helperRefreshAttempted else { throw ControlError.invalidProfile("Fan helper update could not complete. Retry the helper or export diagnostics.") }
                         helperRefreshAttempted = true; refreshingHelper = true; helperHealth = .unavailable
                         defer { refreshingHelper = false }
-                        try await client.restoreAutomatic()
+                        guard let native = client as? FanXPCClient else { throw ControlError.helperUnavailable }
+                        try await HelperManager.replace(client: native)
                         guard token == lifecycleToken, !quitting, !preparingUpdate else { return }
-                        try await HelperManager.unregisterService()
-                        (client as? FanXPCClient)?.disconnectForRecoveryTest()
-                        guard token == lifecycleToken, !quitting, !preparingUpdate else { return }
-                        try HelperManager.install()
                         helperHealth = .unavailable
                         hardwareError = "Updating fan helper…"
                         return
@@ -431,8 +448,13 @@ import ServiceManagement
                     helperTransitions = status.transitions ?? []
                     helperInterface = status.fanInterface; helperRestoration = status.restoration
                     helperBootstrap = status.bootstrap
-                    helperConnectionFailureCode = nil
-                    if status.bootstrap?.stage == .failed { throw ControlError.helperUnavailable }
+                    helperDiagnostic = status.diagnostic; helperFailure = status.diagnostic?.failure
+                    observedHelperBuild = status.helperBuild
+                    if usesRuntimeCapabilities, let report = status.deviceReport, let cap = status.capabilities {
+                        capabilities = try DeviceRegistry.validate(report: report, capabilities: cap, identity: deviceIdentity)
+                    }
+                    helperConnectionFailureCode = helperFailure?.kind.rawValue
+                    if status.bootstrap?.stage == .failed { if let helperFailure { throw helperFailure }; throw ControlError.helperUnavailable }
                     if status.bootstrap?.stage == .initializing || status.bootstrap?.stage == .restoring {
                         helperHealth = .unavailable; hardwareError = "Starting fan helper…"; return
                     }
@@ -451,7 +473,7 @@ import ServiceManagement
                     observedBlocker = status.recoveryBlocker
                     helperHealth = status.manualQualified && !status.observationOnly && capabilities.canControl && status.fault == nil && observedBlocker == nil ? .controlReady : .monitoring
                 } else {
-                    if hardware == nil { hardware = try AppleSiliconSensorProvider() }
+                    if hardware == nil { hardware = try await Task.detached { try AppleSiliconSensorProvider() }.value }
                     guard let provider = hardware else { throw ControlError.invalidSnapshot }
                     reading = try await provider.snapshot()
                     guard token == lifecycleToken, !quitting else { return }
@@ -480,8 +502,9 @@ import ServiceManagement
             sensorMenu.scheduleRefresh(selected: automation.preferences.menuSensors, simulation: simulation, snapshot: nil)
             if simulation { await execute(machine.fail(error)) }
             else {
+                if let failure = error as? HelperFailure { helperFailure = failure; helperConnectionFailureCode = failure.kind.rawValue }
                 if let control = error as? ControlError { helperConnectionFailureCode = control == .unauthorized ? "authentication" : control == .helperUnavailable ? "connection_or_backend" : nil }
-                hardwareError = helperBootstrap?.stage == .failed ? "Fan helper could not start" : error.localizedDescription
+                hardwareError = helperFailure?.localizedDescription ?? (helperBootstrap?.stage == .failed ? "Fan helper could not start" : error.localizedDescription)
                 snapshot = monitoringReading; helperHealth = .fault
                 if capabilities.canRestore && helperAvailable() {
                     await execute(machine.observationFailed(error, restoration: restorationReport))
@@ -495,24 +518,24 @@ import ServiceManagement
     /// a disabled service, authentication failure or another controller.
     private func connectedHelperStatus(token: UUID) async throws -> HelperStatus {
         do { return try await client.status() }
-        catch ControlError.helperUnavailable {
-            guard let native = client as? FanXPCClient,
-                  Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
+        catch let failure as HelperFailure where failure.kind == .serviceUnavailable {
+            guard let native = client as? FanXPCClient, Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
                   HelperManager.service.status == .enabled, !helperReconnectAttempted,
-                  token == lifecycleToken, !quitting, !preparingUpdate else { throw ControlError.helperUnavailable }
+                  token == lifecycleToken, !quitting, !preparingUpdate else { throw failure }
+            // Confirm a missing service twice more; timeout/authentication/progress
+            // never trigger registration churn.
+            for delay in [100, 300] {
+                try await Task.sleep(for: .milliseconds(delay))
+                do { return try await native.status() }
+                catch let next as HelperFailure where next.kind == .serviceUnavailable { }
+            }
+            guard token == lifecycleToken, !quitting, !preparingUpdate else { throw ControlError.staleSession }
             helperReconnectAttempted = true; refreshingHelper = true; helperHealth = .unavailable
             defer { refreshingHelper = false }
             automationFailed()
-            await execute(machine.fail(ControlError.helperUnavailable))
-            // Best-effort release is independent of sensor availability. If IPC
-            // is dead, only the replacement helper can verify startup handback.
-            try? await native.restoreAutomatic()
-            guard token == lifecycleToken, !quitting, !preparingUpdate else { throw ControlError.staleSession }
-            try await HelperManager.unregisterService()
-            native.disconnectForRecoveryTest()
-            guard token == lifecycleToken, !quitting, !preparingUpdate else { throw ControlError.staleSession }
-            try HelperManager.install()
-            throw ControlError.helperUnavailable // Next tick must independently acknowledge restoration.
+            await execute(machine.fail(failure))
+            try await HelperManager.replace(client: native, allowUnavailable: true)
+            throw failure // The next tick independently acknowledges startup restoration.
         }
     }
     func retryApprovedHelper() async {
@@ -524,18 +547,8 @@ import ServiceManagement
         lifecycleToken = UUID(); automationFailed()
         do {
             try HelperManager.validateCurrentInstallation()
-            if HelperManager.installed {
-                do { try await native.restoreAutomatic() }
-                catch ControlError.helperUnavailable { /* Unreachable service: replacement must restore on startup. */ }
-                catch {
-                    // A backend that never initialized cannot own a Fandy lease. A failed
-                    // restoration, however, must not be hidden by unregistering it.
-                    guard helperBootstrap?.stage == .failed, helperBootstrap?.failureCode != "restoration_unverified" else { throw error }
-                }
-                try await HelperManager.unregisterService()
-            }
-            native.disconnectForRecoveryTest()
-            try HelperManager.install()
+            try await HelperManager.replace(client: native, allowUnavailable: true,
+                bootstrapFailed: helperBootstrap?.stage == .failed && helperBootstrap?.failureCode != "restoration_unverified")
             helperReconnectAttempted = true; helperRefreshAttempted = true
             helperBootstrap = nil; helperSetupError = nil; helperHealth = .unavailable
             hardwareError = "Starting fan helper…"
@@ -569,7 +582,7 @@ import ServiceManagement
                     // An observation-only build never acquired a lease and cannot release an
                     // external controller. Only fresh independent evidence can show Apple ownership.
                     do {
-                        if hardware == nil { hardware = try AppleSiliconSensorProvider() }
+                        if hardware == nil { hardware = try await Task.detached { try AppleSiliconSensorProvider() }.value }
                         guard let reading = try await hardware?.snapshot() else { throw ControlError.invalidSnapshot }
                         guard token == lifecycleToken else { return }
                         try reading.validateFans(now: clock())

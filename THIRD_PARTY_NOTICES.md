@@ -20,3 +20,7 @@ Additional source inspection on 2026-10-01: [iSMC](https://github.com/dkorunic/i
 ## Sparkle 2.10.0
 
 Fandy uses [Sparkle](https://github.com/sparkle-project/Sparkle/tree/2.10.0) for signed application updates. Its license and bundled component notices are reproduced in [docs/licenses/Sparkle.txt](docs/licenses/Sparkle.txt).
+
+## Helper startup compatibility review — 0.3.3
+
+Additional MIT-licensed source inspection: Stats `88d5359ad3466efaa16985646a0bb15c6599109f` (canonical fan mode precedence and global handover release) and ThermalForge `42bb5345bc0a8d41a9c47719c3ceb0fbc7249687` (separation of service startup and hardware failure reporting). The retained license notices apply. No installer, thermal policy or adapter implementation was copied. Sensor arrays continue using the existing pinned Stats revision above.

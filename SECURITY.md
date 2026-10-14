@@ -16,7 +16,7 @@ The production qualifiedControl build is registered through SMAppService. Its co
 
 | Method | Accepted data | Purpose |
 | --- | --- | --- |
-| status | No arguments | Bounded versioned status with independently sampled sensors/fans and fresh observed ownership. Wire version 2 includes observationOnly and optional informational capability/per-fan and retained startup restoration reports. Never renews heartbeat. |
+| status | No arguments | Bounded versioned status from a hardware-queue-published snapshot, with stale ownership verification removed at delivery. Wire version 2 includes observationOnly and optional informational capability/per-fan and retained startup restoration reports. Never renews heartbeat. |
 | beginLease | Version, UInt64 generation, enumerated required sensor roles | Creates one connection-owned expiring UUID lease after valid fan telemetry and policy-required sensors; empty roles designate fixed maximum. |
 | applyTargets | Version, lease UUID, generation, recent helper snapshot UUID, complete fan-ID/RPM list | Validates again inside helper, enforces fixed maximum or validated curve targets and complete required inputs, applies a bounded transaction and renews heartbeat. |
 | restoreAutomatic | No arguments | Revoke/release ordinary and recovery ownership, verify every fan; reserved admission capacity. |
@@ -36,7 +36,7 @@ JSON input is capped at 16 KiB before queueing, versioned and decoded into fixed
 
 Admission is bounded to eight connections, four outstanding ordinary requests globally, and two per connection. Automatic restoration has separate capacity: one outstanding request per connection and eight globally, independent of ordinary traffic and token budgets. Duplicate pending releases receive an explicit error; the app shares overlapping lifecycle releases through one RPC. Successful release is never cached for later requests. Rejection notifications coalesce to one per connection, with eight globally, so rejected traffic cannot itself build an unlimited safety-queue backlog. Disconnect immediately invalidates queued tickets and schedules exactly one owned-lease cleanup; closed connections retain their slot until that cleanup runs. These bounds reduce queue starvation; they do not make blocked hardware I/O interruptible. An arbitrary unsigned process cannot access the interface.
 
-The helper has one serial queue for XPC, watchdog and power events. No filesystem lease, profile deserialization or user-configured trust policy exists in the root process. In-memory state is discarded on process restart. Blocked I/O remains an explicit watchdog limitation.
+The helper has one serial queue for hardware commands, watchdog and power work. Authenticated health requests use a separate short-lock snapshot and never touch hardware or renew a lease. Health ingress is bounded to one outstanding reply per connection and 30 requests per second independently of the command token bucket. No filesystem lease, profile deserialization or user-configured trust policy exists in the root process. In-memory state is discarded on process restart. Blocked I/O remains an explicit watchdog limitation.
 
 ## Uninstall
 
@@ -72,7 +72,7 @@ The temporary helper restart test could signal only its own process during an au
 
 The helper validates the complete fixed 105-key chip envelope. Each required member must be typed, plausible and freshly acquired; no estimate/partial group substitutes on failure. Top proximity remains a mandatory airflow-group input with its uncertainty disclosed. Profile targets round upward to whole RPM within each fan's verified integral limits, and acknowledgement tracking uses normalized values. Invalid normalization restores both fans. Curves themselves retain continuous interpolation.
 
-The reviewed transaction establishes both manual modes before writing validated targets. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
+The reviewed transaction admits, acknowledges and promptly targets each fan before admitting the next. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
 
 Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKILL and normal quit passed. Live profile activation, rapid switching and handback passed. Earlier helper-restart evidence remains applicable because startup restoration is unchanged. A dead or blocked helper cannot run its watchdog; active physical sleep/wake still needs an observed test.
 
@@ -117,3 +117,23 @@ The old `is.dsr.fandy.fan-helper.plist` remains embedded only for ServiceManagem
 Profile imports select CPU/GPU inputs and response settings, but cannot remove the complete compiled chip-input requirement or grant hardware authority. The helper no longer raises valid targets through an independent temperature-to-fan curve; pressure and sensor failure revoke ownership instead. The five authenticated XPC methods, closed shapes, per-fan bounds, bounded request gate and connection-owned heartbeat remain unchanged.
 
 The authenticated listener remains available after bootstrap failure. A failed or initializing backend cannot admit leases; status carries fixed startup stages/error codes and a capped transition history. The GUI exports only allowlisted build/macOS/native registration/startup/fan-interface fields, plus sanitized control evidence; no personal paths, profile names, schedules, signing identity or arbitrary log text. Native `requiresApproval` alone opens the permission guide. Retry preserves failed-handback evidence and limits automatic rebind to one attempt for an enabled stale registration.
+
+
+## 0.3.3 startup and installation boundary
+
+App and embedded helper signatures, fixed identifiers, signing teams and signing classes must match before native registration. GUI-side SMC discovery is no longer an installation gate. A compiled model/catalog plus fresh authenticated helper observations determines profile eligibility; imported settings cannot grant it. Health replies remain responsive while serialized hardware work is delayed, and explicitly flag stalled work without claiming that the kernel call can be interrupted.
+
+The helper shares one SMC session for discovery, acquisition and writing. Successful temperature metadata is cached, failed/invalid reads invalidate it, and fan write metadata remains validated afresh. Final handback is evaluated after global handover release and independent bounded per-fan readback. Diagnostics retain OS/firmware codes and readable unsupported metadata while excluding personal paths, signing identity and arbitrary logs. Registration operations are serialized; a single rebind requires repeated missing-service results, never merely slow startup or an authentication error.
+
+
+### Retiring a stale predecessor registration
+
+A replaced running executable can fail XPC signature validation during a manual
+upgrade. The migration never accepts that connection. Only after validating the
+new installed app/helper seals and identities may it retire Fandy's own predecessor
+registration using fresh independent SMC evidence: a compiled supported fan recipe,
+all fans automatic, cleared Ftst where present, unchanged topology and completed
+reads within one second. The check is read-only and runs outside the main actor.
+Manual/unknown/stale/failed observations and failed handback block cleanup. Replacement
+startup still verifies automatic recovery before admitting leases. Sparkle's normal
+update path unregisters after verified handback and before replacing files.

@@ -14,7 +14,7 @@ class PackagingTests(unittest.TestCase):
     def metadata(self):
         return ({'CFBundleIdentifier': 'is.dsr.fandy', 'CFBundleExecutable': 'Fandy',
                  'CFBundleShortVersionString': '0.1.0', 'CFBundleVersion': '1', 'LSMinimumSystemVersion': '15.0'},
-                {'Label': 'is.dsr.fandy.fan-service', 'BundleProgram': str(PACKAGE.HELPER),
+                {'Label': 'is.dsr.fandy.fan-control-v2', 'Program': '/Applications/Fandy.app/Contents/Library/HelperTools/FandyFanHelper',
                  'MachServices': {'is.dsr.fandy.fan-helper': True}, 'ProgramArguments': ['FandyFanHelper']})
 
     def test_wrong_identity_helper_path_and_service_are_rejected(self):
@@ -25,10 +25,22 @@ class PackagingTests(unittest.TestCase):
             invalid = dict(info, **{field: value})
             with self.assertRaises(ValueError):
                 PACKAGE.validate_metadata(invalid, service)
-        for field, value in [('BundleProgram', '/bin/sh'), ('Label', 'example.fake'),
+        for field, value in [('Program', '/bin/sh'), ('Label', 'example.fake'),
                              ('MachServices', {'example.fake': True}), ('ProgramArguments', ['/bin/sh'])]:
             with self.assertRaises(ValueError):
                 PACKAGE.validate_metadata(info, dict(service, **{field: value}))
+
+    def test_helper_cannot_override_its_signed_program_with_an_arbitrary_executable(self):
+        info, service = self.metadata()
+        for program in ['/bin/sh', '/tmp/FandyFanHelper', '../FandyFanHelper']:
+            with self.assertRaises(ValueError):
+                PACKAGE.validate_metadata(info, dict(service, Program=program))
+
+    def test_fixed_installation_program_does_not_require_bundle_resolution(self):
+        info, service = self.metadata()
+        PACKAGE.validate_metadata(info, service)
+        with self.assertRaises(ValueError):
+            PACKAGE.validate_metadata(info, dict(service, BundleProgram='Contents/Library/HelperTools/FandyFanHelper'))
 
     def test_private_files_and_source_paths_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
