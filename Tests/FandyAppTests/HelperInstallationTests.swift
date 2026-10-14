@@ -18,10 +18,21 @@ import FandyCore
     try HelperInstallationPolicy.validate(signatureStatus: errSecSuccess, developerID: true,
                                           bundleURL: URL(fileURLWithPath: "/Applications/Fandy.app"))
     try HelperInstallationPolicy.validate(signatureStatus: errSecSuccess, developerID: false,
-                                          bundleURL: URL(fileURLWithPath: "/Development/Fandy.app"))
+                                          bundleURL: URL(fileURLWithPath: "/Applications/Fandy.app"))
     #expect(throws: HelperInstallationError.wrongLocation) {
         try HelperInstallationPolicy.validate(signatureStatus: errSecSuccess, developerID: true,
                                               bundleURL: URL(fileURLWithPath: "/Downloads/Fandy.app"))
+    }
+}
+
+@Test func fixedHelperProgramCannotRegisterAnotherInstalledOrDevelopmentCopy() {
+    for developerID in [false, true] {
+        for path in ["/Development/Fandy.app", "/Volumes/Fandy/Fandy.app", "/Applications/Renamed.app"] {
+            #expect(throws: HelperInstallationError.wrongLocation) {
+                try HelperInstallationPolicy.validate(signatureStatus: errSecSuccess, developerID: developerID,
+                                                      bundleURL: URL(fileURLWithPath: path))
+            }
+        }
     }
 }
 @MainActor @Test func invalidAppCopyIsNotMisreportedAsMissingBackgroundPermission() {

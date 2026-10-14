@@ -66,6 +66,13 @@ class ProjectGenerationTests(unittest.TestCase):
             self.assertTrue(all(settings['OTHER_CODE_SIGN_FLAGS'] == '--identifier is.dsr.fandy.fan-helper' for settings in helpers))
             references = [value.get('path') for value in objects.values() if value['isa'] == 'PBXFileReference']
             self.assertIn('Config/is.dsr.fandy.fan-helper.plist', references)
+            self.assertIn('Config/is.dsr.fandy.fan-service.plist', references)
+            self.assertIn('Config/is.dsr.fandy.fan-control-v2.plist', references)
+            daemon_phases = [v for v in objects.values() if v.get('name') == 'Embed Launch Daemon']
+            self.assertEqual(len(daemon_phases), 1)
+            embedded = [objects[objects[x]['fileRef']]['path'] for x in daemon_phases[0]['files']]
+            self.assertEqual(set(embedded), {'Config/is.dsr.fandy.fan-helper.plist',
+                'Config/is.dsr.fandy.fan-service.plist', 'Config/is.dsr.fandy.fan-control-v2.plist'})
             self.assertNotIn('Config/local.fandy.fan-helper.plist', references)
             self.assertTrue(all('DEVELOPMENT_TEAM' not in value['buildSettings'] for value in objects.values()
                                 if value['isa'] == 'XCBuildConfiguration'))

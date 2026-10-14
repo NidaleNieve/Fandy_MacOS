@@ -31,10 +31,10 @@ class UpdateReleaseTests(unittest.TestCase):
         self.assertEqual(urls, [f'https://github.com/NidaleNieve/Fandy_MacOS/releases/latest/download/Fandy-{version}-arm64.dmg'])
 
     def test_helper_has_explicit_argument_vector(self):
-        helper = plistlib.loads((ROOT / 'Config/is.dsr.fandy.fan-service.plist').read_bytes())
-        self.assertEqual(helper['BundleProgram'], 'Contents/Library/HelperTools/FandyFanHelper')
+        helper = plistlib.loads((ROOT / 'Config/is.dsr.fandy.fan-control-v2.plist').read_bytes())
+        self.assertEqual(helper['Program'], '/Applications/Fandy.app/Contents/Library/HelperTools/FandyFanHelper')
         self.assertEqual(helper['ProgramArguments'], ['FandyFanHelper'])
-        self.assertNotIn('Program', helper)
+        self.assertNotIn('BundleProgram', helper)
     def test_framework_signing_is_inside_out(self):
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory)/'Fandy.app'
