@@ -44,18 +44,44 @@ PR #1 contributes physical Mac14,9 / M2 Pro observations on macOS 27.0.1: temper
 Reference release waits at most one second per commanded fan, then retains global release and independent final readback. Already-automatic observations still do not claim release from manual ownership. Silent is the former School built-in; its stable `school` ID preserves automation and saved selection.
 
 
-## Build 30 installation and production-path coverage
+## 0.3.3 installation and production-path coverage
 
 | Area | Available evidence | Still required |
 | --- | --- | --- |
 | Official installation identity | App/helper signature and team matching before registration; serialized replacement; expected build checked after connection | Official M2 install/upgrade acceptance on the reported failing machine |
 | Status responsiveness | Actual XPC dispatcher replies while its hardware queue is blocked; under 250 ms in software regression | Runtime behavior during a blocked kernel call cannot guarantee watchdog execution |
 | M1–M5 discovery | All 27 compiled identifiers through the production 80-byte SMC decoder and registry; synthetic variants include one/two fans, fixed/float RPM and different bounds | Physical measurements on inaccessible models |
-| Startup ordering | Actual helper bootstrap fixtures for M1–M4 already-automatic reference paths; M5 unit process verifies root write rejection before sensor discovery | Current official M5 candidate's installed lifecycle regression |
+| Startup ordering | Actual helper bootstrap fixtures for M1–M4 already-automatic reference paths; M5 unit process verifies root write rejection before sensor discovery | Installed Developer ID migration passed on Mac17,9; manual recovery trial skipped because quiet upward margin unavailable |
 | macOS 15+ | Deployment target and required native CI builds | Clean-install/upgrade/reboot VM runtime sessions; no VM app or restore image available locally |
 
 Registration no longer depends on a successful unprivileged SMC probe. The helper publishes approval-independent startup phases, preserved OS/firmware failures and authenticated runtime capabilities. Monitoring remains distinct from control eligibility. Temperature metadata is cached only after usable successful reads; fan write metadata remains validated afresh. Final restoration is judged after the global Ftst release and bounded independent per-fan readback.
 
-The M2 contributor used different locally signed identities. That result supports its delayed-acknowledgement recipe; it does not establish that the official Developer ID service registration works. Build 30 must not be described as a confirmed physical M2 fix before that acceptance.
+The M2 contributor used different locally signed identities. That result supports its delayed-acknowledgement recipe; it does not establish that the official Developer ID service registration works. 0.3.3 must not be described as a confirmed physical M2 fix before that acceptance.
 
 Additional reviewed references: [Stats SMC 88d5359](https://github.com/exelban/stats/blob/88d5359ad3466efaa16985646a0bb15c6599109f/SMC/smc.swift), [Apple ServiceManagement](https://developer.apple.com/documentation/servicemanagement/smappservice), [Apple DTS embedded executable update discussion](https://developer.apple.com/forums/thread/804561), and [ThermalForge 42bb534](https://github.com/ProducerGuy/ThermalForge/tree/42bb5345bc0a8d41a9c47719c3ceb0fbc7249687). No ThermalForge installer or thermal policy was copied. The existing sensor-source revision remains unchanged.
+
+
+## Fixed-path registration recovery — PR #6
+
+The M2 contributor reports a lost BTM parent container and EX_CONFIG (78). A new
+service label with a fixed `/Applications/Fandy.app` helper path avoids that specific
+BundleProgram resolution failure. Both predecessor plists are retained for native
+migration; no other application's registrations are touched. This is a shared macOS
+installation correction, not an M2-specific SMC recipe.
+
+The contributor tested development signing on Mac14,9; official Developer ID M2
+startup remains pending. Existing per-model fan and sensor checks remain mandatory.
+
+Manual replacement may leave a running predecessor whose on-disk executable no
+longer matches its loaded signature. The migration can retire this registration
+only after independently observing complete fresh automatic ownership with a cleared
+handover flag. It cannot accept that peer's unauthenticated reports or enable control.
+Unsupported/read-failed hardware cannot use this recovery exception.
+
+
+Official M5 installation acceptance of this integration passed: notarized Developer
+ID build 31 recovered the stale predecessor registration, started the new service,
+retained approval and preserved configuration. Both fans finished automatic. Native
+read-only status/performance and negative protocol checks passed. This result does
+not certify M2 or replace pending manual recovery/sleep tests. Public build 32 changes
+only version metadata from the locally installed functional candidate.

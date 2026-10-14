@@ -124,3 +124,16 @@ The authenticated listener remains available after bootstrap failure. A failed o
 App and embedded helper signatures, fixed identifiers, signing teams and signing classes must match before native registration. GUI-side SMC discovery is no longer an installation gate. A compiled model/catalog plus fresh authenticated helper observations determines profile eligibility; imported settings cannot grant it. Health replies remain responsive while serialized hardware work is delayed, and explicitly flag stalled work without claiming that the kernel call can be interrupted.
 
 The helper shares one SMC session for discovery, acquisition and writing. Successful temperature metadata is cached, failed/invalid reads invalidate it, and fan write metadata remains validated afresh. Final handback is evaluated after global handover release and independent bounded per-fan readback. Diagnostics retain OS/firmware codes and readable unsupported metadata while excluding personal paths, signing identity and arbitrary logs. Registration operations are serialized; a single rebind requires repeated missing-service results, never merely slow startup or an authentication error.
+
+
+### Retiring a stale predecessor registration
+
+A replaced running executable can fail XPC signature validation during a manual
+upgrade. The migration never accepts that connection. Only after validating the
+new installed app/helper seals and identities may it retire Fandy's own predecessor
+registration using fresh independent SMC evidence: a compiled supported fan recipe,
+all fans automatic, cleared Ftst where present, unchanged topology and completed
+reads within one second. The check is read-only and runs outside the main actor.
+Manual/unknown/stale/failed observations and failed handback block cleanup. Replacement
+startup still verifies automatic recovery before admitting leases. Sparkle's normal
+update path unregisters after verified handback and before replacing files.

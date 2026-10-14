@@ -29,18 +29,35 @@ import FandyHardware
         for legacy in legacyServices {
             try await migrateLegacyRegistration(status: legacy.status,
                 restore: { try await client.restoreAutomatic() },
-                unregister: { try await unregister(service: legacy) })
+                unregister: { try await unregister(service: legacy) },
+                verifyAutomatic: {
+                    await Task.detached {
+                        do {
+                            let reader = try SMCReader()
+                            try AutomaticOwnershipObservation.verify(identity: .current, read: reader.read,
+                                clock: { ProcessInfo.processInfo.systemUptime })
+                            return true
+                        } catch { return false }
+                    }.value
+                })
         }
         if registered { client.disconnectForRecoveryTest() }
     }
     /// A dead predecessor can be replaced; startup must independently restore.
-    /// Authentication, timeout and failed handback are never treated as absence.
+    /// Authentication needs independent automatic proof; timeout and failed
+    /// handback never authorize replacement.
     static func migrateLegacyRegistration(status: SMAppService.Status,
-        restore: () async throws -> Void, unregister: () async throws -> Void) async throws {
+        restore: () async throws -> Void, unregister: () async throws -> Void,
+        verifyAutomatic: () async throws -> Bool = { false }) async throws {
         switch status {
         case .enabled:
             do { try await restore() }
             catch let failure as HelperFailure where failure.kind == .serviceUnavailable { }
+            catch let failure as HelperFailure where failure.kind == .authentication {
+                // A replaced inode can invalidate an old running helper. Never
+                // accept that connection; require independent automatic state.
+                guard (try? await verifyAutomatic()) == true else { throw failure }
+            }
             catch ControlError.helperUnavailable { }
             try await unregister()
         case .requiresApproval: try await unregister()

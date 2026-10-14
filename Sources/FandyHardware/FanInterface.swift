@@ -214,3 +214,37 @@ public enum FanHandover {
         guard clock() < deadline else { throw ControlError.staleSession }
     }
 }
+
+/// Read-only evidence for retiring an authenticated predecessor whose executable
+/// was replaced. This permits native registration cleanup, never an XPC lease.
+public enum AutomaticOwnershipObservation {
+    public static func verify(identity: DeviceIdentity,
+        read: (String) throws -> DiscoveredSensor, clock: () -> Double) throws {
+        let began = clock()
+        guard began.isFinite, identity.supportedNotebook else { throw ControlError.restorationUnverified }
+        func fresh(_ key: String) throws -> DiscoveredSensor {
+            let value = try read(key), now = clock()
+            guard let completed = value.sampledAt, completed.isFinite, now.isFinite,
+                  completed >= began, completed <= now, now - began <= 1,
+                  value.key == key, value.error == nil else { throw ControlError.restorationUnverified }
+            return value
+        }
+        let interface = try FanInterface.discover(identity: identity, read: fresh)
+        for id in interface.fanIDs {
+            guard let key = interface.modeKeys[id] else { throw ControlError.restorationUnverified }
+            let mode = try fresh(key)
+            try interface.validateMode(mode, id: id)
+            guard let value = mode.value, let decoded = FanMode(rawValue: Int(value)), decoded.isAutomatic else {
+                throw ControlError.restorationUnverified
+            }
+        }
+        if interface.forceTestAvailable {
+            let flag = try fresh("Ftst")
+            try FanInterface.validateFlag(flag)
+            guard flag.value == 0 else { throw ControlError.restorationUnverified }
+        }
+        let count = try fresh("FNum")
+        guard count.type == "ui8 ", count.size == 1, count.bytes == [UInt8(interface.fanIDs.count)],
+              count.value == Double(interface.fanIDs.count) else { throw ControlError.restorationUnverified }
+    }
+}
