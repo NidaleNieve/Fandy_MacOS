@@ -79,6 +79,10 @@ open build/DerivedData/Build/Products/Debug/Fandy.app
 
 Open `Fandy.xcodeproj` with the **Fandy** scheme. Set up [local signing](docs/LOCAL_CONFIGURATION.md) before using the helper. Follow the [hardware gates](docs/HARDWARE_GATES.md) for physical tests.
 
+For live fan control, quit the installed copy, install the signed build as
+`/Applications/Fandy.app`, and open that copy. The helper uses this fixed path;
+running another copy remains suitable for simulation but cannot register fan control.
+
 [Architecture](ARCHITECTURE.md) · [Distribution](docs/DISTRIBUTION.md) · [App Store assessment](docs/APP_STORE_READINESS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Released under the [MIT license](LICENSE). Third-party notices retain their original licenses.

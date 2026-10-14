@@ -11,7 +11,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 HELPER = Path('Contents/Library/HelperTools/FandyFanHelper')
-SERVICE = Path('Contents/Library/LaunchDaemons/is.dsr.fandy.fan-service.plist')
+SERVICE = Path('Contents/Library/LaunchDaemons/is.dsr.fandy.fan-control-v2.plist')
+INSTALLED_HELPER = Path('/Applications/Fandy.app') / HELPER
 
 
 
@@ -31,7 +32,8 @@ def validate_metadata(info, service):
             raise ValueError('Invalid bundle version')
     if info.get('LSMinimumSystemVersion') != '15.0':
         raise ValueError('Review changed minimum macOS version before packaging')
-    if service.get('Label') != 'is.dsr.fandy.fan-service' or service.get('BundleProgram') != str(HELPER):
+    if (service.get('Label') != 'is.dsr.fandy.fan-control-v2'
+            or service.get('Program') != str(INSTALLED_HELPER) or 'BundleProgram' in service):
         raise ValueError('Unexpected helper identity or program path')
     if service.get('ProgramArguments') != ['FandyFanHelper']:
         raise ValueError('Unexpected helper argument vector')
