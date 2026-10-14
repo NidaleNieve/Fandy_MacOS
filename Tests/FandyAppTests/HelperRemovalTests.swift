@@ -72,3 +72,29 @@ import FandyCore
     #expect(FandyIdentity.legacyLaunchDaemonPlist == "is.dsr.fandy.fan-helper.plist")
     #expect(FandyIdentity.helperIdentifier == "is.dsr.fandy.fan-helper")
 }
+
+@MainActor @Test func staleAuthenticatedPredecessorNeedsIndependentAutomaticProofBeforeRemoval() async throws {
+    let failure = HelperFailure(kind: .authentication, domain: "NSCocoaErrorDomain", code: 4102, operation: "restore")
+    var events: [String] = []
+    try await HelperManager.migrateLegacyRegistration(status: .enabled,
+        restore: { events.append("restore"); throw failure },
+        unregister: { events.append("remove") },
+        verifyAutomatic: { events.append("independent"); return true })
+    #expect(events == ["restore", "independent", "remove"])
+    events = []
+    await #expect(throws: failure) {
+        try await HelperManager.migrateLegacyRegistration(status: .enabled,
+            restore: { events.append("restore"); throw failure },
+            unregister: { events.append("remove") },
+            verifyAutomatic: { events.append("independent"); return false })
+    }
+    #expect(events == ["restore", "independent"])
+    events = []
+    await #expect(throws: ControlError.restorationUnverified) {
+        try await HelperManager.migrateLegacyRegistration(status: .enabled,
+            restore: { throw ControlError.restorationUnverified },
+            unregister: { events.append("remove") },
+            verifyAutomatic: { events.append("independent"); return true })
+    }
+    #expect(events.isEmpty)
+}

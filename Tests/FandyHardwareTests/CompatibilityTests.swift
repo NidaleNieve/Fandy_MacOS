@@ -636,3 +636,47 @@ func everyNotebookUsesProductionPacketDiscovery(_ model: String) throws {
     #expect(!device.capabilities.canControl)
     #expect(device.failure?.key == "F0Tg")
 }
+
+@Test func predecessorCleanupRequiresFreshCompleteAutomaticOwnershipWithoutWrites() throws {
+    for (model, chip, forceTest) in [("Mac14,9", "Apple M2 Pro", true), ("Mac17,9", "Apple M5 Pro", false)] {
+        let io = CompatibilitySMC(model: model, chip: chip, forceTest: forceTest)
+        let reader = SMCReader(transport: io, clock: { io.now })
+        try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+        #expect(io.writes.isEmpty)
+        if forceTest {
+            io.put("F0Md", 3, "ui8 ")
+            try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+            io.put("Ftst", 1, "ui8 ")
+            #expect(throws: (any Error).self) {
+                try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+            }
+            io.put("Ftst", 0, "ui8 ")
+        }
+        io.put(forceTest ? "F1Md" : "F1md", 1, "ui8 ")
+        #expect(throws: (any Error).self) {
+            try AutomaticOwnershipObservation.verify(identity: io.identity, read: reader.read, clock: { io.now })
+        }
+        #expect(io.writes.isEmpty)
+    }
+}
+@Test func predecessorCleanupRejectsStaleMissingContradictoryOrChangingObservations() {
+    for scenario in ["stale", "missing", "alias", "topology", "flag"] {
+        let io = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+        if scenario == "alias" { io.put("F0md", 1, "ui8 ") }
+        if scenario == "missing" { io.failRead = "F1Md" }
+        if scenario == "flag" { io.put("Ftst", 0, "ui16") }
+        var countReads = 0
+        #expect(throws: (any Error).self) {
+            try AutomaticOwnershipObservation.verify(identity: io.identity, read: { key in
+                if key == "FNum" {
+                    countReads += 1
+                    if scenario == "topology", countReads > 1 { io.put("FNum", 1, "ui8 ") }
+                }
+                var value = try io.read(key)
+                if scenario == "stale" { value.sampledAt = 1 }
+                return value
+            }, clock: { io.now })
+        }
+        #expect(io.writes.isEmpty)
+    }
+}
