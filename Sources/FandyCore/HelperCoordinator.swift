@@ -19,7 +19,9 @@ public final class HelperCoordinator: @unchecked Sendable {
     private var qualificationFloors: [Int: Double] = [:]
     private var targetsStartedAt: Double?
     private var lastWatchdogObservationAt: Double?
-    /// Expiry/release decisions run every 100ms; full SMC acquisition is bounded to 2Hz.
+    private var lastAcquisition: HardwareSnapshot?
+    public var requiresFrequentWatchdog: Bool { safety.lease != nil || safety.restoring }
+    /// Active expiry/release decisions run every 100ms; watchdog SMC acquisition is bounded to 2Hz.
     private let watchdogObservationInterval = 0.5
     public private(set) var powerSuspended = false
     private var fault: String?
@@ -47,7 +49,7 @@ public final class HelperCoordinator: @unchecked Sendable {
             safety.revoke(); fault = ControlError.hardwareUnqualified.localizedDescription
             return false
         }
-        event("Restoring automatic fan control"); safety.revoke(); targets = []; leaseFans = []; targetsStartedAt = nil; lastWatchdogObservationAt = nil; qualificationFloors = [:]; restoration = nil
+        event("Restoring automatic fan control"); safety.revoke(); targets = []; leaseFans = []; targetsStartedAt = nil; lastWatchdogObservationAt = nil; qualificationFloors = [:]; restoration = nil; lastAcquisition = nil
         do {
             restoration = try FanRestoration.report(using: io)
             if let report = restoration, let data = try? JSONEncoder().encode(report), let text = String(data: data, encoding: .utf8) { event("Restoration report: " + text) }
@@ -71,8 +73,9 @@ public final class HelperCoordinator: @unchecked Sendable {
         do {
         let snapshot = try read()
         try recordHealthy(snapshot)
+        lastAcquisition = snapshot
         return snapshot
-        } catch { healthy = 0; samples = []; throw error }
+        } catch { healthy = 0; samples = []; lastAcquisition = nil; throw error }
     }
     private func recordHealthy(_ snapshot: HardwareSnapshot) throws {
         samples.append(snapshot); samples = Array(samples.filter { clock() - $0.sampledAt <= 3 }.suffix(32))
@@ -86,18 +89,24 @@ public final class HelperCoordinator: @unchecked Sendable {
         try freshness.check(snapshot, required: safety.lease?.required ?? [], now: clock())
         healthy = min(5, healthy + 1)
     }
-    public func status() -> HelperStatus {
+    public func status(reuseObservation: Bool = false) -> HelperStatus {
         if powerSuspended { return HelperStatus(automaticVerified: restoration?.verified == true, fault: fault, capabilities: capabilities, restoration: restoration) }
         if !writesPermitted { return observationStatus() }
         // Status never renews a lease. It also detects a conflicting controller changing ownership.
         var observedSnapshot: HardwareSnapshot?
         do {
             let snapshot: HardwareSnapshot
-            if safety.lease == nil {
+            if reuseObservation, let recent = lastAcquisition,
+               clock() >= recent.sampledAt, clock() - recent.sampledAt <= 0.25 {
+                snapshot = recent
+                try snapshot.validateFans(now: clock())
+                if safety.lease != nil { try snapshot.validate(now: clock(), required: safety.lease?.required ?? []) }
+            } else if safety.lease == nil {
                 snapshot = try read()
                 observedSnapshot = snapshot
                 try snapshot.validateFans(now: clock())
-                do { try recordHealthy(snapshot) } catch { healthy = 0; samples = [] }
+                do { try recordHealthy(snapshot); lastAcquisition = snapshot }
+                catch { healthy = 0; samples = []; lastAcquisition = nil }
             } else { snapshot = try acquire() }
             if safety.lease != nil {
                 try safety.requireLiveLease(at: clock())
@@ -111,6 +120,7 @@ public final class HelperCoordinator: @unchecked Sendable {
             var status = HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, snapshot: snapshot, fault: fault, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
             status.transitions = io.transitions; return status
         } catch {
+            lastAcquisition = nil
             if safety.lease != nil { _ = restore() }
             else { safety.observationFailed() }
             // Keep independently readable temperatures, but never expose invalid/stale fan

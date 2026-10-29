@@ -152,3 +152,11 @@ public protocol PrivilegedFanClient: FanController {
     func status() async throws -> HelperStatus
     func apply(_ targets: [FanTarget], generation: UInt64, required: Set<SensorRole>) async throws
 }
+
+/// Idle monitoring matches the one-second UI cadence. Control deadlines and
+/// failed-restoration retries retain the original 100 ms timer.
+public enum HelperPollingPolicy {
+    public static func interval(activeLease: Bool, recoveryActive: Bool, restorationPending: Bool) -> Double {
+        activeLease || recoveryActive || restorationPending ? 0.1 : 1
+    }
+}

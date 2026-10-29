@@ -6,6 +6,8 @@ session, or sample ordinary GUI use. Output is private local evidence, not expor
 """
 import argparse
 import json
+import math
+import statistics
 import subprocess
 import time
 
@@ -20,17 +22,38 @@ def cpu_seconds(value):
     return int(parts[0]) * 60 + float(parts[1])
 
 
+def summarize(rows):
+    if not rows:
+        raise ValueError('No process observations')
+    result = {}
+    for pid in sorted({row['pid'] for row in rows}):
+        samples = [r for r in rows if r['pid'] == pid]
+        first, last = samples[0], samples[-1]
+        duration = last['elapsedSeconds'] - first['elapsedSeconds']
+        delta = last['cpuSeconds'] - first['cpuSeconds']
+        if len(samples) < 2 or duration <= 0 or delta < 0:
+            raise ValueError('Incomplete or restarted process window')
+        result[str(pid)] = {'durationSeconds': duration, 'cpuPercent': 100 * delta / duration,
+            'cpuSeconds': delta, 'residentMedianKiB': statistics.median(r['residentKiB'] for r in samples),
+            'residentMaximumKiB': max(r['residentKiB'] for r in samples)}
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pids', type=int, nargs='+', required=True)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--seconds', type=float, default=1800)
+    parser.add_argument('--interval', type=float, default=5)
     args = parser.parse_args()
+    if not math.isfinite(args.seconds) or not 10 <= args.seconds <= 1800 or not math.isfinite(args.interval) or not 1 <= args.interval <= 30:
+        parser.error('Use 10–1800 seconds and a 1–30 second interval')
     if not args.pids or any(pid <= 0 for pid in args.pids):
         parser.error('positive process identifiers required')
     baseline = {}
     started = time.monotonic()
     with open(args.output, 'x', encoding='utf-8') as output:
-        while time.monotonic() - started < 1800:
+        while time.monotonic() - started <= args.seconds:
             result = subprocess.run(['/bin/ps', '-p', ','.join(map(str, args.pids)), '-o', 'pid=,time=,rss='], capture_output=True, text=True, check=False)
             if result.returncode:
                 raise RuntimeError('A measured process disappeared; session is incomplete')
@@ -47,7 +70,7 @@ def main():
                            'residentKiB': int(rss)}, output, sort_keys=True)
                 output.write('\n')
             output.flush()
-            time.sleep(min(5, max(0, 1800 - (time.monotonic()-started))))
+            time.sleep(args.interval)
 
 
 if __name__ == '__main__':

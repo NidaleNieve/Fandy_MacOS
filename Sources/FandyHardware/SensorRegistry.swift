@@ -115,12 +115,14 @@ public final class HardwareSnapshotReader: @unchecked Sendable {
     public let device: ResolvedDevice
     private let lock = NSLock()
     private let reader: SMCReader
+    private let verifiedRoles: Set<SensorRole>
     private var sequence: UInt64 = 0
     private let clock: () -> Double
     public init(device: ResolvedDevice? = nil, reader: SMCReader? = nil, clock: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }) throws {
         let session = try reader ?? SMCReader()
         self.reader = session; self.clock = clock
-        self.device = device ?? DeviceRegistry.resolve(identity: .current, read: session.read)
+        let resolved = device ?? DeviceRegistry.resolve(identity: .current, read: session.read)
+        self.device = resolved; self.verifiedRoles = resolved.capabilities.verifiedRoles
     }
     public func snapshot() throws -> HardwareSnapshot {
         lock.lock(); defer { lock.unlock() }
@@ -132,7 +134,7 @@ public final class HardwareSnapshotReader: @unchecked Sendable {
             samples[key] = try? reader.read(key)
         }
         let sensors = device.mappings.map { mapping in
-            mapping.reading(sequence: sequence, qualified: device.capabilities.verifiedRoles.contains(mapping.role),
+            mapping.reading(sequence: sequence, qualified: verifiedRoles.contains(mapping.role),
                             now: started, read: { key in
                 guard let sample = samples[key] else { throw HardwareError.invalidMetadata }; return sample
             })

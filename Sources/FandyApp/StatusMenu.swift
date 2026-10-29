@@ -1,6 +1,12 @@
 import SwiftUI
 import AppKit
 import FandyCore
+import Observation
+
+struct StatusItemPresentation: Equatable {
+    let attention: Bool
+    let tooltip: String
+}
 
 /// AppKit provides actual hierarchical menus with embedded controls; the editor remains SwiftUI.
 @MainActor final class StatusMenu: NSObject, NSMenuDelegate {
@@ -9,25 +15,23 @@ import FandyCore
     var openProfiles: () -> Void = {}
     var openSettings: () -> Void = {}
     var openHelperSetup: () -> Void = {}
-    private var observation: Task<Void, Never>?
+    private var lastPresentation: StatusItemPresentation?
+    private let onPresentation: ((StatusItemPresentation) -> Void)?
     private var actions: [UUID: () -> Void] = [:]
     private var profileRows: [String: NSMenuItem] = [:]
     private var timingRow: NSMenuItem?
     private var customSpeedRow: NSMenuItem?
     private(set) var isOpen = false
-    init(model: AppModel, install: Bool = true) {
-        self.model = model; item = install ? NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength) : nil; super.init()
+    init(model: AppModel, install: Bool = true, onPresentation: ((StatusItemPresentation) -> Void)? = nil) {
+        self.model = model; self.onPresentation = onPresentation; item = install ? NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength) : nil; super.init()
         let menu = NSMenu(); menu.delegate = self; item?.menu = menu
         item?.button?.image = NSImage(systemSymbolName: "fan", accessibilityDescription: "Fandy")
         item?.button?.imagePosition = .imageLeading
-        updateTitle()
-        guard install else { return }
-        observation = Task { [weak self] in
-            while !Task.isCancelled {
-                guard self != nil else { break }
-                self?.updateTitle()
-                do { try await Task.sleep(for: .seconds(1)) } catch { break }
-            }
+        observePresentation()
+    }
+    private func observePresentation() {
+        withObservationTracking { updateTitle() } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.observePresentation() }
         }
     }
     func toggle() {
@@ -35,18 +39,24 @@ import FandyCore
         else { item?.button?.performClick(nil) }
     }
     private func refreshSelection() {
-        for (id, row) in profileRows { row.state = model.menuSelectionID == id ? .on : .off; row.view?.needsDisplay = true }
+        for (id, row) in profileRows {
+            let next: NSControl.StateValue = model.menuSelectionID == id ? .on : .off
+            if row.state != next { row.state = next; if isOpen { row.view?.needsDisplay = true } }
+        }
         timingRow?.isEnabled = model.canSetActivationLimit
         customSpeedRow?.state = model.isCustomFanSpeedActive ? .on : .off
         customSpeedRow?.isEnabled = model.canActivateCustomFanSpeed
     }
     func updateTitle() {
         refreshSelection()
-        item?.button?.attributedTitle = NSAttributedString(
-            string: model.needsHelperAttention ? "●" : "",
+        let next = StatusItemPresentation(attention: model.needsHelperAttention,
+            tooltip: model.needsHelperAttention ? model.helperSetupMessage : model.statusText + " · " + model.activationDescription)
+        guard next != lastPresentation else { return }
+        lastPresentation = next; onPresentation?(next)
+        item?.button?.attributedTitle = NSAttributedString(string: next.attention ? "●" : "",
             attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.systemFont(ofSize: 8)])
-        item?.button?.setAccessibilityLabel(model.needsHelperAttention ? "Fandy — fan control unavailable" : "Fandy")
-        item?.button?.toolTip = model.needsHelperAttention ? model.helperSetupMessage : model.statusText + " · " + model.activationDescription
+        item?.button?.setAccessibilityLabel(next.attention ? "Fandy — fan control unavailable" : "Fandy")
+        item?.button?.toolTip = next.tooltip
     }
     func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
     func menuDidClose(_ menu: NSMenu) { isOpen = false }

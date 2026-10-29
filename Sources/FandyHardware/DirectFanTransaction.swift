@@ -40,8 +40,10 @@ public enum DirectFanTransaction {
                 fan.mode = .manual
             }
             try requireLive()
-            try SMCProfileWriter.target(target, fan: fan, metadata: previous, transport: transport)
-            record(.targetWritten)
+            if entering || previous.value != target.rpm {
+                try SMCProfileWriter.target(target, fan: fan, metadata: previous, transport: transport)
+                record(.targetWritten)
+            }
         }
         // No repeated fan enumeration between admissions: target every fan promptly,
         // then perform full acknowledgement while all requested modes are established.
