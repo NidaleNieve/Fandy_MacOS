@@ -98,3 +98,31 @@ func actualHelperBootstrapRestoresBeforeSensorDiscovery(_ identity: DeviceIdenti
     #expect(report.diagnostic?.failure?.kind == .metadata)
     #expect(!packets.operations.contains { $0.1 == 6 })
 }
+
+@Test func realHelperTimerSwitchesAtLeaseAdmissionAndRetainsFastRestorationRetries() async throws {
+    let packets = StartupPackets(.init(model: "Mac14,9", chip: "Apple M2 Pro", appleSilicon: true))
+    let service = HelperService(hardwareFactory: { _ in
+        try AppleFanHardware(reader: SMCReader(transport: packets), identity: packets.identity)
+    }, controllerPresence: ControllerPresenceObservation(inspect: {}))
+    try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, any Error>) in
+        service.queue.async {
+            let timer = DispatchSource.makeTimerSource(queue: service.queue)
+            timer.setEventHandler {}; timer.resume(); service.timer = timer
+            defer { timer.cancel() }
+            do {
+                service.startBackend()
+                #expect(service.pollingInterval == 1)
+                let coordinator = try service.requireCoordinator()
+                for _ in 0..<5 { _ = coordinator.status() }
+                _ = try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: UUID())
+                service.publishStatus(); #expect(service.pollingInterval == 0.1)
+                #expect(coordinator.restore())
+                service.publishStatus(); #expect(service.pollingInterval == 1)
+                packets.values.removeValue(forKey: "F0md")
+                #expect(!coordinator.restore())
+                service.publishStatus(); #expect(service.pollingInterval == 0.1)
+                done.resume()
+            } catch { done.resume(throwing: error) }
+        }
+    }
+}

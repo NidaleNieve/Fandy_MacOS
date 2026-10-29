@@ -680,3 +680,16 @@ func everyNotebookUsesProductionPacketDiscovery(_ model: String) throws {
         #expect(io.writes.isEmpty)
     }
 }
+
+@Test func unchangedDirectTargetsDoNotRewriteFansButStillRejectMetadataChanges() throws {
+    let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    for (id, rpm) in [(0,2500.0),(1,2600.0)] { io.put("F\(id)md", 1, "ui8 "); io.put("F\(id)Tg", rpm, "flt ", attributes: 212) }
+    let targets = [FanTarget(0,2500),FanTarget(1,2600)]
+    try DirectFanTransaction.apply(targets, transport: io, read: io.read, fans: io.fans, clock: { io.now }, check: {})
+    #expect(io.writes.isEmpty)
+    io.put("F1Tg",2600,"flt ",attributes:128)
+    #expect(throws: (any Error).self) {
+        try DirectFanTransaction.apply(targets, transport: io, read: io.read, fans: io.fans, clock: { io.now }, check: {})
+    }
+    #expect(io.writes.isEmpty)
+}
