@@ -3,6 +3,12 @@ import Testing
 import FandyCore
 @testable import FandyApp
 
+@Test func backgroundMemoryDiagnosticIsBoundedAndCannotAcceptTargetsOrDurations() throws {
+    #expect(try HelperDiagnosticAction.parse(["Fandy", "--background-memory-check"]) == .backgroundMemory)
+    #expect(throws: ControlError.malformedMessage) { try HelperDiagnosticAction.parse(["Fandy", "--background-memory-check", "--duration", "9999"]) }
+    #expect(try ProcessMemorySample.current().footprintBytes > 0)
+}
+
 @Test func latencySummaryUsesNearestRankAndRejectsMalformedSamples() throws {
     let summary = try LatencySummary(seconds: [0.004, 0.001, 0.003, 0.002])
     #expect(summary.samples == 4); #expect(summary.medianMilliseconds == 2)

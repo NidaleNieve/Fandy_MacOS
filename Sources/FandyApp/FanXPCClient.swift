@@ -10,6 +10,7 @@ import FandyHardware
     private var lease: ControlLease?
     private var latest: HelperStatus?
     private var runtimeCapabilities = DeviceRegistry.declaredCapabilities(identity: .current)
+    private var capabilityCache = RuntimeCapabilityCache(identity: .current)
     private var generation: UInt64?
     private var helperGeneration: UInt64 = 0
     private var operationToken = UUID()
@@ -56,7 +57,7 @@ import FandyHardware
         let status=try Wire.decode(HelperStatus.self,from:data)
         guard status.version == Wire.version else { throw ControlError.malformedMessage }
         if status.helperBuild == FandyBuild.identifier, let report = status.deviceReport, let capabilities = status.capabilities {
-            runtimeCapabilities = try DeviceRegistry.validate(report: report, capabilities: capabilities, identity: .current)
+            runtimeCapabilities = try capabilityCache.resolve(report: report, capabilities: capabilities)
         } else { runtimeCapabilities = DeviceRegistry.declaredCapabilities(identity: .current) }
         latest=status;return status
     }

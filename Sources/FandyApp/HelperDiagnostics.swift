@@ -33,7 +33,10 @@ enum HelperDiagnosticAction: String, CaseIterable {
     case productionSecurity = "--helper-security-check"
     case sensorMenu = "--sensor-menu-check"
     case automation = "--automation-check"
+    case backgroundSteady = "--performance-steady-background"
+    case backgroundChanging = "--performance-changing-background"
     case performance = "--performance-check"
+    case backgroundMemory = "--background-memory-check"
     case performanceMonitoring = "--performance-monitoring-long"
     case performanceComfort = "--performance-comfort-long"
     case profilesSleep = "--profiles-sleep-check"
@@ -79,7 +82,9 @@ enum HelperDiagnosticAction: String, CaseIterable {
             case .productionHeartbeat, .productionDisconnect, .productionQuit, .productionHold: return await ProductionRecoveryDiagnostics.run(action)
             case .sensorMenu: return await SensorMenuDiagnostics.run()
             case .automation: return await AutomationDiagnostics.run()
+            case .backgroundSteady, .backgroundChanging: return await BackgroundControlDiagnostics.run(changing: action == .backgroundChanging)
             case .performance: return await PerformanceDiagnostics.run()
+            case .backgroundMemory: return await BackgroundMemoryDiagnostics.run()
             case .performanceMonitoring, .performanceComfort: return await PerformanceDiagnostics.runLong(comfort: action == .performanceComfort)
             case .profilesSleep: return await SleepDiagnostics.run()
             case .profilesLive, .profilesCalibration, .schoolResponse: return await ProfileDiagnostics.run(action)

@@ -106,7 +106,9 @@ import Testing
     defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
     let menu = NSMenu(), presenter = StatusMenu(model: model, install: false); presenter.rebuild(menu)
-    let time = try #require(menu.items.first { $0.title == "Activate for/until" }?.submenu?.items.first { $0.title == "Other Time/Until" }?.submenu?.items.first?.view)
+    let submenu = try #require(menu.items.first { $0.title == "Activate for/until" }?.submenu?.items.first { $0.title == "Other Time/Until" }?.submenu)
+    presenter.menuWillOpen(submenu)
+    let time = try #require(submenu.items.first?.view)
     #expect(time.frame.width == 220 && time.frame.height < 210)
     let host = MenuControlHostingView(rootView: Text("For").frame(width: 220, height: 80))
     host.frame.size = host.fittingSize
@@ -164,4 +166,26 @@ import Testing
     #expect(!FileManager.default.fileExists(atPath: url.path))
     await model.prepareForTermination()
     #expect(ProfileStore(url: url).load().automation.preferences.defaultProfileID == "system")
+}
+
+@MainActor @Test func settingsWindowStartsUsableAndKeepsMinimumSizeAfterContentReplacement() {
+    let window = AppDelegate.makeSettingsWindow()
+    #expect(window.frame.width >= 500 && window.frame.height >= 640)
+    #expect(window.minSize.width >= 420 && window.minSize.height >= 400)
+    let lifecycle = WindowContentLifecycle(window: window) { NSViewController() }
+    lifecycle.prepare()
+    #expect(window.frame.width >= 500 && window.frame.height >= 640)
+    window.close()
+    lifecycle.prepare()
+    #expect(window.frame.width >= 500 && window.frame.height >= 640)
+}
+
+@MainActor @Test func settingsMinimumSurvivesHostingAndRejectsTinyInteractiveResize() {
+    let window = AppDelegate.makeSettingsWindow()
+    let lifecycle = WindowContentLifecycle(window: window) { ProfileHostingController(rootView: Text("Settings")) }
+    lifecycle.prepare()
+    let minimum = NSWindow.frameRect(forContentRect: NSRect(origin: .zero, size: NSSize(width: 420, height: 400)), styleMask: window.styleMask).size
+    let resized = lifecycle.windowWillResize(window, to: NSSize(width: 1, height: 1))
+    #expect(resized.width >= minimum.width && resized.height >= minimum.height)
+    #expect(window.contentMinSize.width >= 420 && window.contentMinSize.height >= 400)
 }

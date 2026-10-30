@@ -188,6 +188,7 @@ public final class RecoveryTrialCoordinator {
             return status!
         } catch { _ = release(reason: "activation failed", failure: error); throw error }
     }
+    public var requiresFrequentWatchdog: Bool { owner != nil || needsRestoration }
     public func watchdog() {
         if needsRestoration { _ = release(reason: status?.reason ?? "restoration retry"); return }
         guard owner != nil else { return }

@@ -101,8 +101,10 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     }
     func setControlRequirements(_ required: Set<SensorRole>) { controlRequirements = required }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] {
-        if interface?.locallyTested == true { return try SMCProfileWriter.normalizedTargets(targets, fans: enumerateFans()) }
-        let fans = try enumerateFans()
+        try normalizedTargets(targets, fans: enumerateFans())
+    }
+    func normalizedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> [FanTarget] {
+        if interface?.locallyTested == true { return try SMCProfileWriter.normalizedTargets(targets, fans: fans) }
         guard targets.count == fans.count, Set(targets.map(\.fanID)) == Set(fans.map(\.id)) else { throw ControlError.invalidFan }
         return try targets.map { target in
             guard let fan = fans.first(where: { $0.id == target.fanID }), target.rpm.isFinite,
@@ -129,12 +131,25 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         }
     }
     func applyValidatedTargets(_ targets: [FanTarget]) throws {
+        try applyValidatedTargets(targets, fans: enumerateFans())
+    }
+    func verifyUnchangedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> Bool {
+        guard device.capabilities.canControl, interface?.locallyTested == true else { return false }
+        transactionToken = admittedOperation ?? cancellation.token()
+        defer { transactionToken = nil }
+        let deadline = ProcessInfo.processInfo.systemUptime + 1
+        // The coordinator already performs a fresh process scan for every
+        // command and watchdog observation. This operation cannot write; retain
+        // its cancellation/deadline fences without repeating write admission.
+        return try DirectFanTransaction.verifyAcknowledged(targets, baseline: fans, read: reader.read,
+            fans: { [self] in try enumerateFans() }, check: { [self] in try requireReadbackDeadline(deadline) })
+    }
+    func applyValidatedTargets(_ targets: [FanTarget], fans baseline: [Fan]) throws {
         guard device.capabilities.canControl, let interface else { throw ControlError.hardwareUnqualified }
         if !interface.locallyTested { try applyReferenceTargets(targets, interface: interface); return }
         transactionToken = admittedOperation ?? cancellation.token()
         defer { transactionToken = nil }
         try RecoveryOwnershipProbe.requireNoKnownController()
-        let baseline = try enumerateFans()
         guard targets.count == baseline.count, Set(targets.map(\.fanID)) == Set(baseline.map(\.id)),
               targets.allSatisfy({ target in baseline.contains {
                   $0.id == target.fanID && target.rpm.isFinite && target.rpm >= $0.minimumRPM && target.rpm <= $0.maximumRPM &&
@@ -146,14 +161,17 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
             event: { [self] record in
                 transitions.append(record); transitions = Array(transitions.suffix(16))
                 commandLog.notice("Fan transition \(record.fanID): \(record.stage.rawValue, privacy: .public) at \(record.at), previous target \(record.previousTarget ?? -1), requested \(record.requestedTarget), actual \(record.actualRPM)")
-            })
+            }, preflightFans: baseline)
     }
 
     private func requireProfileDeadline(_ deadline: Double) throws {
+        try requireReadbackDeadline(deadline)
+        try RecoveryOwnershipProbe.requireNoKnownController()
+    }
+    private func requireReadbackDeadline(_ deadline: Double) throws {
         if let transactionToken { try cancellation.require(transactionToken) }
         guard device.capabilities.canControl,
               ProcessInfo.processInfo.systemUptime < deadline else { throw ControlError.staleSession }
-        try RecoveryOwnershipProbe.requireNoKnownController()
     }
     func prepareRecoveryTarget(_ target: FanTarget, deadline: Double) throws {
         try requireRecoveryDeadline(deadline)

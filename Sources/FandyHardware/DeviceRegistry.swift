@@ -40,10 +40,11 @@ public struct ResolvedDevice: Sendable {
     public let mappings: [SensorMapping]
     public let fanInterface: FanInterface?
     public let failure: HelperFailure?
+    public let acquisitionKeys: [String]
     public init(identity: DeviceIdentity, capabilities: HardwareCapabilities, mappings: [SensorMapping], fanInterface: FanInterface?, failure: HelperFailure? = nil) {
         self.identity = identity; self.capabilities = capabilities; self.mappings = mappings; self.fanInterface = fanInterface; self.failure = failure
+        self.acquisitionKeys = Set(mappings.flatMap(\.keys)).sorted()
     }
-    public var acquisitionKeys: [String] { Set(mappings.flatMap(\.keys)).sorted() }
 }
 
 /// Signed, source-backed registry. Neither configuration imports nor IPC can add recipes.

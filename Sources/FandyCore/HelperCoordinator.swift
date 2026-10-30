@@ -15,11 +15,16 @@ public final class HelperCoordinator: @unchecked Sendable {
     private var samples: [HardwareSnapshot] = []
     private var healthy = 0
     private var targets: [FanTarget] = []
+    private var lastRequestedTargets: [FanTarget] = []
     private var leaseFans: [Fan] = []
     private var qualificationFloors: [Int: Double] = [:]
     private var targetsStartedAt: Double?
     private var lastWatchdogObservationAt: Double?
-    /// Expiry/release decisions run every 100ms; full SMC acquisition is bounded to 2Hz.
+    private var lastAcquisition: HardwareSnapshot?
+    /// Serial-queue publication bookkeeping only; this never authorizes a command.
+    public var observationID: UUID? { lastAcquisition?.id }
+    public var requiresFrequentWatchdog: Bool { safety.lease != nil || safety.restoring }
+    /// Active expiry/release decisions run every 100ms; watchdog SMC acquisition is bounded to 2Hz.
     private let watchdogObservationInterval = 0.5
     public private(set) var powerSuspended = false
     private var fault: String?
@@ -47,7 +52,7 @@ public final class HelperCoordinator: @unchecked Sendable {
             safety.revoke(); fault = ControlError.hardwareUnqualified.localizedDescription
             return false
         }
-        event("Restoring automatic fan control"); safety.revoke(); targets = []; leaseFans = []; targetsStartedAt = nil; lastWatchdogObservationAt = nil; qualificationFloors = [:]; restoration = nil
+        event("Restoring automatic fan control"); safety.revoke(); targets = []; lastRequestedTargets = []; leaseFans = []; targetsStartedAt = nil; lastWatchdogObservationAt = nil; qualificationFloors = [:]; restoration = nil; lastAcquisition = nil
         do {
             restoration = try FanRestoration.report(using: io)
             if let report = restoration, let data = try? JSONEncoder().encode(report), let text = String(data: data, encoding: .utf8) { event("Restoration report: " + text) }
@@ -71,8 +76,9 @@ public final class HelperCoordinator: @unchecked Sendable {
         do {
         let snapshot = try read()
         try recordHealthy(snapshot)
+        lastAcquisition = snapshot
         return snapshot
-        } catch { healthy = 0; samples = []; throw error }
+        } catch { healthy = 0; samples = []; lastAcquisition = nil; throw error }
     }
     private func recordHealthy(_ snapshot: HardwareSnapshot) throws {
         samples.append(snapshot); samples = Array(samples.filter { clock() - $0.sampledAt <= 3 }.suffix(32))
@@ -86,18 +92,24 @@ public final class HelperCoordinator: @unchecked Sendable {
         try freshness.check(snapshot, required: safety.lease?.required ?? [], now: clock())
         healthy = min(5, healthy + 1)
     }
-    public func status() -> HelperStatus {
+    public func status(reuseObservation: Bool = false) -> HelperStatus {
         if powerSuspended { return HelperStatus(automaticVerified: restoration?.verified == true, fault: fault, capabilities: capabilities, restoration: restoration) }
         if !writesPermitted { return observationStatus() }
         // Status never renews a lease. It also detects a conflicting controller changing ownership.
         var observedSnapshot: HardwareSnapshot?
         do {
             let snapshot: HardwareSnapshot
-            if safety.lease == nil {
+            if reuseObservation, let recent = lastAcquisition,
+               clock() >= recent.sampledAt, clock() - recent.sampledAt <= 0.25 {
+                snapshot = recent
+                try snapshot.validateFans(now: clock())
+                if safety.lease != nil { try snapshot.validate(now: clock(), required: safety.lease?.required ?? []) }
+            } else if safety.lease == nil {
                 snapshot = try read()
                 observedSnapshot = snapshot
                 try snapshot.validateFans(now: clock())
-                do { try recordHealthy(snapshot) } catch { healthy = 0; samples = [] }
+                do { try recordHealthy(snapshot); lastAcquisition = snapshot }
+                catch { healthy = 0; samples = []; lastAcquisition = nil }
             } else { snapshot = try acquire() }
             if safety.lease != nil {
                 try safety.requireLiveLease(at: clock())
@@ -111,6 +123,7 @@ public final class HelperCoordinator: @unchecked Sendable {
             var status = HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, snapshot: snapshot, fault: fault, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
             status.transitions = io.transitions; return status
         } catch {
+            lastAcquisition = nil
             if safety.lease != nil { _ = restore() }
             else { safety.observationFailed() }
             // Keep independently readable temperatures, but never expose invalid/stale fan
@@ -142,7 +155,7 @@ public final class HelperCoordinator: @unchecked Sendable {
         let snapshot = try acquire()
         guard healthy >= (request.required.isEmpty ? 1 : 5) else { throw ControlError.invalidSnapshot }
         guard snapshot.appleOwnershipObserved else { throw ControlError.restorationUnverified }
-        targets = []
+        targets = []; lastRequestedTargets = []
         let qualifying = capabilities.stage == .curveQualification && !request.required.isEmpty
         if qualifying {
             guard try capabilities.chipPolicy.temperature(in: snapshot, now: clock()) < MeasurementSafety.ceilingC else { throw ControlError.thermalPressure }
@@ -164,7 +177,9 @@ public final class HelperCoordinator: @unchecked Sendable {
             try requireExclusive()
             guard qualified, request.version == Wire.version,
                   samples.contains(where: { $0.id == request.snapshotID && clock() - $0.sampledAt <= 3 }) else { throw ControlError.malformedMessage }
+            let observationStarted = clock()
             let snapshot = try acquire()
+            let alreadyHoldingTargets = !targets.isEmpty
             if !targets.isEmpty {
                 guard snapshot.fans.allSatisfy({ ownsTarget($0) }) else { throw ControlError.restorationUnverified }
             }
@@ -175,6 +190,18 @@ public final class HelperCoordinator: @unchecked Sendable {
             }
             let requested = try safety.validateAndRenew(owner: owner, leaseID: request.leaseID, generation: request.generation, targets: request.targets, snapshot: snapshot, now: clock())
             let validated = try normalized(requested, fans: snapshot.fans)
+            // An unchanged, previously acknowledged production request is a
+            // heartbeat, not another physical transaction. Inputs and ownership
+            // above were freshly acquired; the adapter independently verifies
+            // metadata/readback below. Qualification and reference paths retain
+            // their existing transaction sequence.
+            if capabilities.stage == .qualifiedControl, capabilities.compatibilityEvidence == .locallyTested,
+               !targets.isEmpty, requested == lastRequestedTargets, validated == targets,
+               try io.verifyUnchangedTargets(targets, fans: snapshot.fans) {
+                try validateHeldObservation(snapshot)
+                lastWatchdogObservationAt = max(lastWatchdogObservationAt ?? observationStarted, observationStarted)
+                return
+            }
             // Reserve the physical batch's two-second budget inside the nonrenewable trial.
             if let deadline = safety.lease?.expiresAt {
                 guard deadline - clock() >= 2 else { throw ControlError.staleSession }
@@ -183,10 +210,16 @@ public final class HelperCoordinator: @unchecked Sendable {
             io.setControlRequirements(safety.lease?.required ?? [])
             try FanRestoration.apply(validated, using: io)
             try safety.requireLiveLease(at: clock())
-            _ = try acquire() // Required sensors and bounds must still be healthy after I/O.
+            let completed = try acquire() // Required sensors and bounds must still be healthy after I/O.
             try safety.requireLiveLease(at: clock())
             if targets.isEmpty { targetsStartedAt = clock() }
             targets = validated
+            lastRequestedTargets = requested
+            if alreadyHoldingTargets, capabilities.stage == .qualifiedControl,
+               capabilities.compatibilityEvidence == .locallyTested {
+                try validateHeldObservation(completed)
+                lastWatchdogObservationAt = max(lastWatchdogObservationAt ?? observationStarted, observationStarted)
+            }
         } catch {
             if safety.lease?.owner == owner { _ = restore() }
             throw error
@@ -197,8 +230,19 @@ public final class HelperCoordinator: @unchecked Sendable {
               let requested = targets.first(where: { $0.fanID == fan.id }) else { return false }
         return abs(observed - requested.rpm) <= 0.5
     }
+    private func validateHeldObservation(_ snapshot: HardwareSnapshot) throws {
+        try safety.requireLiveLease(at: clock())
+        if targets.isEmpty {
+            guard snapshot.appleOwnershipObserved else { throw ControlError.restorationUnverified }
+            return
+        }
+        guard snapshot.fans.allSatisfy({ ownsTarget($0) }) else { throw ControlError.restorationUnverified }
+        if let started = targetsStartedAt, clock() - started >= 10 {
+            guard snapshot.fans.allSatisfy({ $0.actualRPM > 0 && $0.actualRPM >= $0.minimumRPM * 0.9 }) else { throw ControlError.invalidFan }
+        }
+    }
     private func normalized(_ requested: [FanTarget], fans: [Fan]) throws -> [FanTarget] {
-        let result = try io.normalizedTargets(requested)
+        let result = try io.normalizedTargets(requested, fans: fans)
         guard result.count == requested.count, Set(result.map(\.fanID)) == Set(requested.map(\.fanID)),
               Set(result.map(\.fanID)).count == result.count else { throw ControlError.invalidFan }
         for target in result {
@@ -226,15 +270,7 @@ public final class HelperCoordinator: @unchecked Sendable {
             lastWatchdogObservationAt = now
             try requireExclusive()
             let snapshot = try acquire()
-            try safety.requireLiveLease(at: clock())
-            if targets.isEmpty {
-                guard snapshot.appleOwnershipObserved else { throw ControlError.restorationUnverified }
-                return
-            }
-            guard snapshot.fans.allSatisfy({ ownsTarget($0) }) else { throw ControlError.restorationUnverified }
-            if let started = targetsStartedAt, clock() - started >= 10 {
-                guard snapshot.fans.allSatisfy({ $0.actualRPM > 0 && $0.actualRPM >= $0.minimumRPM * 0.9 }) else { throw ControlError.invalidFan }
-            }
+            try validateHeldObservation(snapshot)
             // acquire() checks full required sensor membership and thermal pressure.
             // The watchdog can revoke control, never raise a profile's fan demand.
 

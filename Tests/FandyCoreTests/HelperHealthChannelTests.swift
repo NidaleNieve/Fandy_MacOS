@@ -49,6 +49,10 @@ import Testing
             source: String(repeating: "provenance", count: 200), limitation: "unresolved", displayName: $0.rawValue)
     })
     value.diagnostic = .init(phase: "sensor_discovery", progressAt: 10, fans: (0..<2).map { FanMetadataReport(id: $0) })
+    value.diagnostic?.resources = try ProcessResourceSample.capture()
+    value.diagnostic?.work = BackgroundWorkPhase.allCases.map {
+        BackgroundWorkSample(phase: $0, calls: .max, cpuNanoseconds: .max)
+    }
     let cache = HelperStatusStore(); cache.publish(value, at: 10)
     #expect(try Wire.encode(cache.read(at: 10)).count <= Wire.maxBytes)
 }

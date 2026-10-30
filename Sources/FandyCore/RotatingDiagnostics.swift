@@ -20,7 +20,7 @@ public struct ControlDiagnostic: Codable, Sendable {
 }
 /// User-process diagnostics only. The root helper uses unified logging and accepts no paths.
 public final class RotatingDiagnostics: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "is.dsr.fandy.diagnostics", qos: .utility)
+    private let queue = DispatchQueue(label: "is.dsr.fandy.diagnostics", qos: .utility, autoreleaseFrequency: .workItem)
     private let admission = NSLock()
     private let writer = NSLock()
     private var pending = false

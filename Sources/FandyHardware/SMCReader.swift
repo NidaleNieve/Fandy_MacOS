@@ -103,14 +103,15 @@ public final class SMCReader: @unchecked Sendable {
         }
         return items
     }
-    public func fanModeKey(_ id: Int) throws -> String {
+    public func fanModeKey(_ id: Int) throws -> String { try fanModeReading(id).key }
+    private func fanModeReading(_ id: Int) throws -> DiscoveredSensor {
         guard (0..<8).contains(id) else { throw ControlError.invalidFan }
         let names = ["F\(id)md", "F\(id)Md"]
         for key in names {
             do {
                 let reading = try read(key)
                 guard reading.type == "ui8 ", reading.size == 1 else { throw HardwareError.invalidMetadata }
-                return key
+                return reading
             } catch where HardwareError.isMissingKey(error) { continue }
         }
         throw HardwareError.invalidMetadata
@@ -124,7 +125,7 @@ public final class SMCReader: @unchecked Sendable {
                 guard (reading.type == "flt " && reading.size == 4 || reading.type == "fpe2" && reading.size == 2), let value = reading.value else { throw HardwareError.invalidMetadata }
                 return value
             }
-            let mode = try read(fanModeKey(id))
+            let mode = try fanModeReading(id)
             guard let decodedMode = SMCDecoder.fanMode(type: mode.type, bytes: mode.bytes) else { throw HardwareError.invalidMetadata }
             let fan = Fan(id: id, min: try rpm("Mn"), max: try rpm("Mx"), actual: try rpm("Ac"), target: try rpm("Tg"), mode: decodedMode)
             try fan.validate(); return fan

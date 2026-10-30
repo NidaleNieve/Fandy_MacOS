@@ -3,17 +3,16 @@ import AppKit
 import FandyCore
 
 @main
-struct FandyApp: App {
-    @State private var model: AppModel
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    init() {
+enum FandyApp {
+    @MainActor static func main() {
+        let application = NSApplication.shared
         let diagnostic: HelperDiagnosticAction?
         do { diagnostic = try HelperDiagnosticAction.parse(CommandLine.arguments) }
         catch { FileHandle.standardError.write(Data("Conflicting helper diagnostic actions.\n".utf8)); exit(1) }
         let checking = CommandLine.arguments.contains("--functional-check")
         let model = AppModel(storeURL: checking || diagnostic != nil ? FileManager.default.temporaryDirectory.appendingPathComponent("FandyCheck-\(UUID().uuidString)/profiles.json") : nil, autoStart: diagnostic == nil, simulation: CommandLine.arguments.contains("--simulation"))
-        _model = State(initialValue: model)
-        delegate.model = model
+        let delegate = AppDelegate(); delegate.model = model
+        application.delegate = delegate
         if let diagnostic {
             Task { exit(await HelperDiagnostics.run(diagnostic)) }
         }
@@ -32,23 +31,22 @@ struct FandyApp: App {
                 model.quit()
             }
         }
-    }
-    var body: some Scene {
-        Settings { SettingsView(model: model) }
-
+        application.run()
+        withExtendedLifetime(delegate) {}
     }
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
     private var menu: StatusMenu?
-    private var profilesWindow: NSWindow?
-    private var settingsWindow: NSWindow?
+    private var profilesWindow: WindowContentLifecycle?
+    private var settingsWindow: WindowContentLifecycle?
     private var helperSetupWindow: HelperSetupWindowController?
     private var helperSetupTask: Task<Void, Never>?
     private var shortcuts: GlobalShortcuts?
     private var shortcutLoop: Task<Void, Never>?
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        NSApp.mainMenu = ApplicationMenu.make(target: self)
         guard let model else { return }
         let status = StatusMenu(model: model)
         status.openProfiles = { [weak self] in self?.showProfiles() }
@@ -85,39 +83,48 @@ struct FandyApp: App {
         shortcutLoop = Task { [weak model, weak shortcuts] in
             while !Task.isCancelled {
                 guard let model, let shortcuts else { return }
-                model.shortcutErrors = shortcuts.update(model.automation.preferences.shortcuts)
-                model.updates?.synchronize()
+                autoreleasepool {
+                    model.shortcutErrors = shortcuts.update(model.automation.preferences.shortcuts)
+                    model.updates?.synchronize()
+                }
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }
     }
-    private func window<V: View>(_ title: String, size: NSSize, view: V) -> NSWindow {
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = title; window.isReleasedWhenClosed = false
-        let controller = NSHostingController(rootView: view); controller.sizingOptions = []
-        window.contentViewController = controller; window.center(); return window
+    static func makeSettingsWindow() -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 640), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Fandy Settings"; window.isReleasedWhenClosed = false
+        window.contentMinSize = NSSize(width: 420, height: 400)
+        window.center(); return window
     }
     func showProfiles() {
         guard let model else { return }
         if profilesWindow == nil {
-            profilesWindow = ProfilesWindow.make(content: ProfileEditor(model: model))
+            let window = ProfilesWindow.make(content: EmptyView())
+            window.profileUndoManager = model.editorHistory
+            window.contentViewController = nil
+            profilesWindow = WindowContentLifecycle(window: window) { ProfileHostingController(rootView: ProfileEditor(model: model)) }
         }
-        if let profilesWindow { present(profilesWindow) }
+        if let profilesWindow { profilesWindow.prepare(); present(profilesWindow.window) }
     }
     private func showHelperSetup() {
         guard let model, !model.isQuitting, !model.helperSetupInitializing else { return }
         model.prepareHelperSetup()
         guard model.needsHelperSetup else { helperSetupWindow?.refreshApproval(); return }
-        if helperSetupWindow == nil { helperSetupWindow = HelperSetupWindowController(model: model) }
+        if helperSetupWindow?.window?.contentViewController == nil { helperSetupWindow = HelperSetupWindowController(model: model) }
         guard let controller = helperSetupWindow, let window = controller.window else { return }
         present(window); controller.monitorApproval()
         model.openHelperSetup()
     }
     func showSettings() {
         guard let model else { return }
-        if settingsWindow == nil { settingsWindow = window("Fandy Settings", size: NSSize(width: 500, height: 640), view: SettingsView(model: model)) }
-        if let settingsWindow { present(settingsWindow) }
+        if settingsWindow == nil {
+            let window = Self.makeSettingsWindow()
+            settingsWindow = WindowContentLifecycle(window: window) { ProfileHostingController(rootView: SettingsView(model: model)) }
+        }
+        if let settingsWindow { settingsWindow.prepare(); present(settingsWindow.window) }
     }
+    @objc func showSettingsWindow(_ sender: Any?) { showSettings() }
     private func present(_ window: NSWindow) {
         menu?.item?.menu?.cancelTracking()
         if window.isMiniaturized { window.deminiaturize(nil) }

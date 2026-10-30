@@ -60,6 +60,7 @@ import Testing
         // AppKit supplies its own submenu action; there is no chooser callback.
         #expect(row.target !== presenter && row.view == nil)
         #expect(child.items.count == 1)
+        presenter.menuWillOpen(child) // AppKit opens the hover submenu before using its controls.
         let controls = try #require(child.items.first?.view)
         #expect(controls.accessibilityIdentifier() == identifier)
         #expect(controls.frame.width <= 260 && controls.frame.height <= 320)

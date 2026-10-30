@@ -7,7 +7,7 @@ import os
 /// Listener lifetime is independent of hardware availability. Only ready backends admit leases.
 final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     let listener = NSXPCListener(machServiceName: FandyIdentity.helperIdentifier)
-    let queue = DispatchQueue(label: "is.dsr.fandy.helper.safety", qos: .userInitiated)
+    let queue = DispatchQueue(label: "is.dsr.fandy.helper.safety", qos: .userInitiated, autoreleaseFrequency: .workItem)
     let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "helper")
     let requests = HelperRequestGate()
     let cancellation = HardwareOperationFence()
@@ -24,11 +24,14 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     private var powerAvailable = true
     private var powerSuspended = false
     var timer: DispatchSourceTimer?
+    private(set) var pollingInterval: Double?
+    private let controllerPresence: ControllerPresenceObservation
     var power: PowerNotifications?
     private let hardwareFactory: (HardwareOperationFence) throws -> AppleFanHardware
     override convenience init() { self.init(hardwareFactory: { try AppleFanHardware(cancellation: $0) }) }
-    init(hardwareFactory: @escaping (HardwareOperationFence) throws -> AppleFanHardware) {
-        self.hardwareFactory = hardwareFactory; super.init(); listener.delegate = self
+    init(hardwareFactory: @escaping (HardwareOperationFence) throws -> AppleFanHardware,
+         controllerPresence: ControllerPresenceObservation = ControllerPresenceObservation()) {
+        self.hardwareFactory = hardwareFactory; self.controllerPresence = controllerPresence; super.init(); listener.delegate = self
     }
     func startBackend() { startedAt = ProcessInfo.processInfo.systemUptime; bootstrapAttempt() }
     func retryBackendAfterWake() {
@@ -44,7 +47,8 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         listener.activate()
         startedAt = ProcessInfo.processInfo.systemUptime
         let source = DispatchSource.makeTimerSource(queue: queue)
-        source.schedule(deadline: .now(), repeating: .milliseconds(100))
+        source.schedule(deadline: .now(), repeating: .seconds(1), leeway: .milliseconds(100))
+        pollingInterval = 1
         source.setEventHandler { [weak self] in self?.watchdog() }
         source.resume(); timer = source
         do {
@@ -57,12 +61,12 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
                         powerSuspended = true
                         _ = recovery?.release(reason: "System sleep")
                         releaseCoordinator?.systemWillSleep()
-                        timer?.schedule(deadline: .distantFuture)
+                        timer?.schedule(deadline: .distantFuture); pollingInterval = nil
                     case .didWake:
                         guard powerSuspended else { return }
                         releaseCoordinator?.systemDidWake(); powerSuspended = false
                         retryBackendAfterWake()
-                        timer?.schedule(deadline: .now(), repeating: .milliseconds(100))
+                        schedulePolling(force: true)
                     }
                     publishStatus()
                 }
@@ -87,7 +91,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
             let control = HelperCoordinator(io: hardware, capabilities: hardware.device.capabilities,
                 read: { guard let sampler else { throw ControlError.helperUnavailable }; return try sampler.snapshot() },
                 clock: { ProcessInfo.processInfo.systemUptime }, event: { events.notice("\($0, privacy: .public)") },
-                requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() })
+                requireExclusive: { [controllerPresence] in try controllerPresence.requireExclusive() })
             releaseCoordinator = control
             bootstrap.stage = .restoring
             publishBootstrap(phase: "restoring")
@@ -99,13 +103,13 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
             let readyControl = HelperCoordinator(io: hardware, capabilities: hardware.device.capabilities,
                 read: { guard let sampler else { throw ControlError.helperUnavailable }; return try sampler.snapshot() },
                 clock: { ProcessInfo.processInfo.systemUptime }, event: { events.notice("\($0, privacy: .public)") },
-                requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() }, startupRestoration: control.lastRestoration)
+                requireExclusive: { [controllerPresence] in try controllerPresence.requireExclusive() }, startupRestoration: control.lastRestoration)
             releaseCoordinator = readyControl
             let source = RecoverySampleSource(sampler: sampler!)
             let recovery = RecoveryTrialCoordinator(io: hardware, capabilities: hardware.device.capabilities,
                 read: { try source.read() }, clock: { ProcessInfo.processInfo.systemUptime },
                 restore: { _ = readyControl.restore(); return readyControl.lastRestoration },
-                requireExclusive: { try RecoveryOwnershipProbe.requireNoKnownController() })
+                requireExclusive: { [controllerPresence] in try controllerPresence.requireExclusive() })
             self.coordinator = readyControl; self.recovery = recovery
             bootstrap = .init(stage: .ready, attempt: retry.attempts)
             diagnostic.failure = hardware.device.failure
@@ -137,7 +141,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     }
     func status() -> HelperStatus {
         var status: HelperStatus
-        if let coordinator { status = coordinator.status(); status.recovery = recovery?.status }
+        if let coordinator { status = coordinator.status(reuseObservation: true); status.recovery = recovery?.status }
         else {
             status = HelperStatus(automaticVerified: false, observationOnly: true,
                 fault: "Fan helper could not start", capabilities: hardware?.device.capabilities,
@@ -151,7 +155,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         if let hardware { status.deviceReport = DeviceRegistry.report(device: hardware.device) }
         status.diagnostic = diagnostic
         if coordinator != nil && (status.capabilities?.canQualifyRecovery == true || status.capabilities?.canControl == true) {
-            do { try RecoveryOwnershipProbe.requireNoKnownController() } catch { status.recoveryBlocker = error.localizedDescription }
+            status.recoveryBlocker = controllerPresence.statusBlocker()
         }
         return status
     }
@@ -166,7 +170,20 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         let now = ProcessInfo.processInfo.systemUptime
         // Fan metadata is bounded and is collected once per bootstrap, never at XPC ingress.
         if diagnostic.fans.isEmpty { diagnostic.fans = hardware?.metadataReport() ?? [] }
+        diagnostic.resources = try? ProcessResourceSample.capture()
+        diagnostic.work = BackgroundWorkMetrics.shared.snapshot()
         statusCache.publish(status(), at: now); lastPublication = now
+        schedulePolling()
+    }
+    private func schedulePolling(force: Bool = false) {
+        guard !powerSuspended, let timer else { return }
+        let interval = HelperPollingPolicy.interval(activeLease: coordinator?.leaseOwner != nil,
+            recoveryActive: recovery?.requiresFrequentWatchdog == true,
+            restorationPending: coordinator?.requiresFrequentWatchdog == true)
+        guard force || pollingInterval != interval else { return }
+        pollingInterval = interval
+        timer.schedule(deadline: .now() + interval, repeating: interval,
+            leeway: .milliseconds(interval < 1 ? 0 : 100))
     }
     func requireCoordinator() throws -> HelperCoordinator {
         guard !powerSuspended, let coordinator, bootstrap.stage == .ready else { throw ControlError.helperUnavailable }; return coordinator
@@ -180,7 +197,17 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         return releaseCoordinator?.restore() ?? false
     }
     private func watchdog() {
-        defer { if !powerSuspended, ProcessInfo.processInfo.systemUptime - lastPublication >= 0.5 { publishStatus() } }
+        let previousObservation = coordinator?.observationID
+        defer {
+            if !powerSuspended, HelperPollingPolicy.publishesStatus(
+                elapsed: ProcessInfo.processInfo.systemUptime - lastPublication,
+                activeLease: coordinator?.leaseOwner != nil,
+                newObservation: coordinator?.observationID != previousObservation,
+                recoveryActive: recovery?.requiresFrequentWatchdog == true,
+                restorationPending: coordinator?.requiresFrequentWatchdog == true && coordinator?.leaseOwner == nil) {
+                publishStatus()
+            }
+        }
         guard !powerSuspended, let coordinator, let recovery, let hardware else { return }
         let owner = coordinator.leaseOwner ?? recovery.activeOwner
         do {
@@ -257,7 +284,9 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
             let ticket = try service.requests.admitStatus(owner: owner, now: ProcessInfo.processInfo.systemUptime)
             defer { service.requests.finish(ticket) }
             guard service.requests.isOpen(ticket) else { throw ControlError.staleSession }
-            reply(try Wire.encode(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime)), nil)
+            reply(try BackgroundWorkMetrics.shared.measure(.statusEncoding) {
+                try Wire.encode(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime))
+            }, nil)
         } catch { reply(nil, error.localizedDescription) }
     }
     func qualifyRecovery(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {

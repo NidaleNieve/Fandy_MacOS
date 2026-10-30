@@ -34,7 +34,7 @@ extension AppModel {
         helperConnectionFailureCode = "invalid_app_installation"
     }
     func refreshHelperSetup() {
-        let status = helperRegistrationStatus()
+        let status = autoreleasepool { helperRegistrationStatus() }
         if status != helperSetupStatus { helperSetupStatus = status }
     }
     func prepareHelperSetup() {

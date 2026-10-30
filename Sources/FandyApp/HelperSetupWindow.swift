@@ -33,8 +33,14 @@ import SwiftUI
             }
         }
     }
-    override func close() { monitor?.cancel(); monitor = nil; super.close() }
-    func windowWillClose(_ notification: Notification) { monitor?.cancel(); monitor = nil }
+    override func close() { discardContent(); super.close() }
+    func windowWillClose(_ notification: Notification) { discardContent() }
+    private func discardContent() {
+        monitor?.cancel(); monitor = nil
+        (window?.contentViewController as? any ReleasableHostingContent)?.discardContent()
+        window?.contentViewController = nil; window?.contentView = nil
+        BackgroundMemoryReclaimer.shared.schedule()
+    }
 }
 enum HelperSetupInstructions {
     static let steps = [
