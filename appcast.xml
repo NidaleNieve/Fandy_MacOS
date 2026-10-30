@@ -7,6 +7,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Fandy application updates</description>
     <language>en</language>
     <item>
+      <title>0.4.0</title>
+      <description>Massively improved performance.</description>
+      <pubDate>Fri, 30 Oct 2026 14:12:33 GMT</pubDate>
+      <sparkle:version>36</sparkle:version>
+      <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/NidaleNieve/Fandy_MacOS/releases/download/v0.4.0/Fandy-0.4.0-arm64.dmg" length="3503792" type="application/octet-stream" sparkle:edSignature="KNDmevPxHKQ/kXpO72lsYPIzydpqQH75geLqKfaYUJCbDyIIe0OxS//A0pvuFDdw8sKsWcHuYqZoNa+wadfmAw=="></enclosure>
+    </item>
+    <item>
       <title>0.3.3</title>
       <description>Improved fan helper startup and recovery on Apple Silicon Macs.</description>
       <pubDate>Wed, 14 Oct 2026 00:38:20 GMT</pubDate>
@@ -62,6 +71,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: uRizHqG8RiRRy0UtqjGhh6skOrqCWxLJBAl6Zl9glZ432rKLfIN2OPCchqDhpRDxq/h3Ziu+80KzOiySuhECAg==
-length: 4633
+edSignature: TmEnl8nXsSAQmi444nddZ8XJPLFU3Rchww+IFcv7oH6ekh/wHRxGAw5YcPeR3Qm2rIoiidsNN1gV3qQdp2svBA==
+length: 5274
 -->
