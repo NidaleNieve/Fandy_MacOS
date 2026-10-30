@@ -20,6 +20,9 @@ public final class NativeSMCTransport: SMCStructTransport {
     deinit { IOServiceClose(connection) }
     public func transact(_ input: [UInt8]) throws -> SMCStructResponse {
         guard input.count == 80, [5,8,9].contains(input[42]) || (input[42] == 6 && allowWrites && geteuid() == 0) else { throw ControlError.unauthorized }
+        return try BackgroundWorkMetrics.shared.measure(.smc) { try perform(input) }
+    }
+    private func perform(_ input: [UInt8]) throws -> SMCStructResponse {
         var output = [UInt8](repeating: 0, count: 80), size = 80
         let result = input.withUnsafeBytes { source in output.withUnsafeMutableBytes { destination in
             IOConnectCallStructMethod(connection, 2, source.baseAddress, 80, destination.baseAddress, &size)

@@ -83,8 +83,10 @@ enum FandyApp {
         shortcutLoop = Task { [weak model, weak shortcuts] in
             while !Task.isCancelled {
                 guard let model, let shortcuts else { return }
-                model.shortcutErrors = shortcuts.update(model.automation.preferences.shortcuts)
-                model.updates?.synchronize()
+                autoreleasepool {
+                    model.shortcutErrors = shortcuts.update(model.automation.preferences.shortcuts)
+                    model.updates?.synchronize()
+                }
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }

@@ -126,3 +126,23 @@ func actualHelperBootstrapRestoresBeforeSensorDiscovery(_ identity: DeviceIdenti
         }
     }
 }
+
+@Test func acknowledgedHeartbeatVerificationIsReadOnlyAndRetainsCancellation() throws {
+    let identity = DeviceIdentity(model: "Mac17,9", chip: "Apple M5 Pro", appleSilicon: true)
+    let packets = StartupPackets(identity), fence = HardwareOperationFence()
+    let hardware = try AppleFanHardware(cancellation: fence, reader: SMCReader(transport: packets), identity: identity)
+    _ = try hardware.resolveSensors()
+    for id in 0..<2 {
+        packets.values["F\(id)md"] = ("ui8 ",208,[1])
+        packets.values["F\(id)Tg"] = ("flt ",212,StartupPackets.bytes(2500))
+        packets.values["F\(id)Ac"] = ("flt ",212,StartupPackets.bytes(2500))
+    }
+    let fans = try hardware.enumerateFans(), targets = fans.map { FanTarget($0.id,2500) }
+    hardware.admittedOperation = fence.token()
+    packets.operations.removeAll()
+    #expect(try hardware.verifyUnchangedTargets(targets, fans: fans))
+    #expect(!packets.operations.contains { $0.1 == 6 })
+    fence.cancel()
+    #expect(throws: (any Error).self) { try hardware.verifyUnchangedTargets(targets, fans: fans) }
+    #expect(!packets.operations.contains { $0.1 == 6 })
+}

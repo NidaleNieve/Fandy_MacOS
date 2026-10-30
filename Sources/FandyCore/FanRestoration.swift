@@ -9,7 +9,9 @@ public protocol FanHardwareIO: Sendable {
     func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool
     func applyValidatedTargets(_ targets: [FanTarget]) throws
     func applyValidatedTargets(_ targets: [FanTarget], fans: [Fan]) throws
+    func verifyUnchangedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> Bool
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget]
+    func normalizedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> [FanTarget]
     func finishAutomaticRestoration() throws
     func acceptsAutomatic(_ mode: FanMode) -> Bool
     func setControlRequirements(_ required: Set<SensorRole>)
@@ -17,7 +19,9 @@ public protocol FanHardwareIO: Sendable {
 public extension FanHardwareIO {
     var transitions: [FanTransition] { [] }
     func applyValidatedTargets(_ targets: [FanTarget], fans: [Fan]) throws { try applyValidatedTargets(targets) }
+    func verifyUnchangedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> Bool { false }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { targets }
+    func normalizedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> [FanTarget] { try normalizedTargets(targets) }
     func fanIDsForRestoration() throws -> [Int] { try enumerateFans().map(\.id) }
     func finishAutomaticRestoration() throws {}
     func verifiedAutomaticMode(fanID: Int) throws -> FanMode { try readMode(fanID: fanID) }

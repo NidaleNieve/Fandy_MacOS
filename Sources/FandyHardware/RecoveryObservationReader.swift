@@ -37,7 +37,7 @@ public enum RecoveryOwnershipProbe {
     /// Helper-only callers also continuously verify fan ownership and target readback.
     public static func requireNoKnownController() throws {
         guard geteuid() == 0 else { throw ControlError.unauthorized }
-        switch fandy_tg_controller_present() {
+        switch BackgroundWorkMetrics.shared.measure(.controllerScan, operation: { fandy_tg_controller_present() }) {
         case 0: return
         case 1: throw ControlError.invalidProfile("TG Pro's privileged fan helper is running; exclusive fan testing is blocked.")
         default: throw ControlError.invalidProfile("Fan-controller process enumeration unavailable; exclusive testing is blocked.")

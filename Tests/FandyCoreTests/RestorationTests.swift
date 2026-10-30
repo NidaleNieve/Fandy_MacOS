@@ -3,7 +3,13 @@ import Testing
 @testable import FandyCore
 // Each test owns its spy. Production serializes I/O; unchecked Sendable supports that protocol boundary.
 final class FanSpy: FanHardwareIO, @unchecked Sendable {
+    var snapshotReads = 0
     var validatedInventories: [[Fan]] = []
+    func verifyUnchangedTargets(_ targets: [FanTarget], fans: [Fan]) throws -> Bool {
+        self.fans.count == fans.count && self.fans.allSatisfy { fan in
+            fan.mode == .manual && fan.targetRPM == targets.first(where: { $0.fanID == fan.id })?.rpm
+        }
+    }
     func applyValidatedTargets(_ targets: [FanTarget], fans: [Fan]) throws {
         validatedInventories.append(fans); try applyValidatedTargets(targets)
     }
@@ -34,6 +40,7 @@ final class FanSpy: FanHardwareIO, @unchecked Sendable {
         for target in targets where fans[target.fanID].targetRPM != target.rpm { try setTarget(fanID: target.fanID, rpm: target.rpm) }
     }
     func snapshot() -> HardwareSnapshot {
+        snapshotReads += 1
         let readings=SensorRole.allCases.map { SensorReading($0,invalid && $0 == .gpuPeak ? nil : hot ? 85 : 40,at:now,sequence:UInt64(now*10)) }
         return HardwareSnapshot(at:now,sensors:readings,fans:fans)
     }
@@ -247,4 +254,107 @@ private final class DeferredReleaseSpy: FanHardwareIO, @unchecked Sendable {
     try FanRestoration.apply([FanTarget(0,3000),FanTarget(1,3200)], using: io)
     #expect(io.validatedInventories.count == 1)
     #expect(io.validatedInventories.first?.map(\.id) == [0,1])
+}
+
+@Test func steadyAcknowledgedHeartbeatStillSamplesFreshInputsButDoesNotStartAnotherHardwareTransaction() throws {
+    let io = FanSpy()
+    let (coordinator, lease, owner) = try leasedCoordinator(io)
+    let snapshot = coordinator.status().snapshot!
+    let request = TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+                               targets: [FanTarget(0,3000),FanTarget(1,3100)])
+    try coordinator.apply(request, owner: owner)
+    io.validatedInventories.removeAll(); io.calls.removeAll()
+    io.now += 0.1
+    try coordinator.apply(request, owner: owner)
+    #expect(io.validatedInventories.isEmpty && io.calls.isEmpty)
+    io.invalid = true; io.now += 0.1
+    #expect(throws: (any Error).self) { try coordinator.apply(request, owner: owner) }
+    #expect(io.fans.allSatisfy { $0.mode == .automatic })
+}
+
+@Test func steadyHeartbeatDoesNotHideChangedOwnershipOrRenewAnotherOwnersLease() throws {
+    for corruptOwner in [false, true] {
+        let io = FanSpy()
+        let (coordinator, lease, owner) = try leasedCoordinator(io)
+        let snapshot = coordinator.status().snapshot!
+        let request = TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+                                   targets: [FanTarget(0,3000),FanTarget(1,3100)])
+        try coordinator.apply(request, owner: owner); io.now += 0.1
+        if !corruptOwner { io.fans[0].targetRPM = 4000 }
+        #expect(throws: (any Error).self) { try coordinator.apply(request, owner: corruptOwner ? UUID() : owner) }
+        if !corruptOwner { #expect(io.fans.allSatisfy { $0.mode == .automatic }) }
+        coordinator.disconnected(owner: owner)
+    }
+}
+
+@Test func steadyHeartbeatObservationAvoidsAnImmediateDuplicateWatchdogReadButNotItsDeadline() throws {
+    let io = FanSpy(); let (coordinator, lease, owner) = try leasedCoordinator(io)
+    let snapshot = coordinator.status().snapshot!
+    let request = TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+                               targets: [FanTarget(0,3000),FanTarget(1,3100)])
+    try coordinator.apply(request, owner: owner)
+    io.now += 0.1; try coordinator.apply(request, owner: owner)
+    let reads = io.snapshotReads
+    io.now += 0.2; coordinator.watchdog()
+    #expect(io.snapshotReads == reads)
+    io.now += 0.31; coordinator.watchdog()
+    #expect(io.snapshotReads > reads)
+    coordinator.disconnected(owner: owner)
+}
+
+@Test func repeatedHeartbeatsCannotPostponeStoppedFanRecovery() throws {
+    let io = FanSpy(); let (coordinator, lease, owner) = try leasedCoordinator(io)
+    var snapshot = coordinator.status().snapshot!
+    func request() -> TargetRequest { TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+                                                targets: [FanTarget(0,3000),FanTarget(1,3100)]) }
+    try coordinator.apply(request(), owner: owner)
+    for time in 11...19 {
+        io.now = Double(time); snapshot = coordinator.status().snapshot!
+        try coordinator.apply(request(), owner: owner)
+    }
+    io.fans[0].actualRPM = 0; io.now = 20.1; snapshot = coordinator.status().snapshot!
+    #expect(throws: (any Error).self) { try coordinator.apply(request(), owner: owner) }
+    #expect(io.fans.allSatisfy { $0.mode == .automatic })
+}
+
+@Test func changedTargetReadbackCanSatisfyPollingAfterAdmissionWithoutRemovingReadback() throws {
+    let io = FanSpy(); let (coordinator, lease, owner) = try leasedCoordinator(io)
+    let snapshot = coordinator.status().snapshot!
+    try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+                                       targets: [FanTarget(0,3000),FanTarget(1,3100)]), owner: owner)
+    io.now += 0.1; io.calls.removeAll()
+    try coordinator.apply(TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id,
+                                       targets: [FanTarget(0,3200),FanTarget(1,3300)]), owner: owner)
+    #expect(io.calls.contains("target0") && io.calls.contains("target1"))
+    let reads = io.snapshotReads
+    io.now += 0.2; coordinator.watchdog()
+    #expect(io.snapshotReads == reads)
+    io.now += 0.31; coordinator.watchdog()
+    #expect(io.snapshotReads > reads)
+    coordinator.disconnected(owner: owner)
+}
+
+@Test func freshInventoryNormalizationRetainsTheAdaptersRoundingPolicy() throws {
+    let spy = FanSpy(); var calls = 0
+    spy.normalize = { targets in calls += 1; return targets.map { FanTarget($0.fanID, ceil($0.rpm)) } }
+    let io: any FanHardwareIO = spy
+    let targets = try io.normalizedTargets([FanTarget(0,3000.2),FanTarget(1,3100.2)], fans: spy.fans)
+    #expect(calls == 1 && targets.map(\.rpm) == [3001,3101])
+}
+
+@Test func unchangedHeartbeatNeverReusesExclusiveControllerPermission() throws {
+    let io = FanSpy(); var conflict = false, scans = 0
+    let coordinator = HelperCoordinator(io: io, capabilities: qualifiedCapabilities(), read: { io.snapshot() }, clock: { io.now },
+        requireExclusive: { scans += 1; if conflict { throw ControlError.restorationUnverified } })
+    #expect(coordinator.startup()); for _ in 0..<5 { _ = coordinator.status() }
+    let owner = UUID(), lease = try coordinator.begin(LeaseRequest(generation: 1, required: SensorRole.safety), owner: owner)
+    let snapshot = coordinator.status().snapshot!
+    let request = TargetRequest(leaseID: lease.id, generation: 1, snapshotID: snapshot.id, targets: [FanTarget(0,3000),FanTarget(1,3100)])
+    try coordinator.apply(request, owner: owner)
+    let before = scans
+    io.now += 0.1; try coordinator.apply(request, owner: owner)
+    #expect(scans == before + 1)
+    conflict = true; io.now += 0.1
+    #expect(throws: ControlError.restorationUnverified) { try coordinator.apply(request, owner: owner) }
+    #expect(scans == before + 2 && io.fans.allSatisfy { $0.mode == .automatic })
 }

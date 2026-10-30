@@ -1,5 +1,9 @@
 # Background resource use — local build 34
 
+Subsequent closed-UI controller work is recorded in
+[the build 35 report](BACKGROUND_RESOURCES_35.md). The measurements below remain
+the historical build 34 results.
+
 ## Result and acceptance
 
 This pass reduces retained UI memory while preserving monitoring, profiles,

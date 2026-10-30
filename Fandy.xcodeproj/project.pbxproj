@@ -40,6 +40,12 @@
 			"path" = "Sources/FandyApp/AutomationModel.swift";
 			"sourceTree" = "<group>";
 		};
+		"F5CC51D7CB8D3D74EDAD9201" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/BackgroundControlDiagnostics.swift";
+			"sourceTree" = "<group>";
+		};
 		"0E51320DBEA6750DE5681652" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -310,6 +316,12 @@
 			"path" = "Sources/FandyCore/ActivationPreferences.swift";
 			"sourceTree" = "<group>";
 		};
+		"A459751549599A29C8954E53" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/BackgroundWorkMetrics.swift";
+			"sourceTree" = "<group>";
+		};
 		"925C545BBF5908A07D2A47AF" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -422,6 +434,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyCore/PowerLifecycle.swift";
+			"sourceTree" = "<group>";
+		};
+		"3E73DD79DC65217A4FB31CD4" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/ProcessResourceSample.swift";
 			"sourceTree" = "<group>";
 		};
 		"6A4855631F163370C30D97C9" = {
@@ -658,6 +676,7 @@
 				427C928759B1874E12530618,
 				00E82DE6D757878644A692D8,
 				01E056203FDFB85CDB4AC0DE,
+				F5CC51D7CB8D3D74EDAD9201,
 				0E51320DBEA6750DE5681652,
 				4DE846BA47726C3BC6AFB97E,
 				81A2B2EBDF0766F54192F464,
@@ -703,6 +722,7 @@
 				741B6893E7BAFB98ADF2F78C,
 				D6DEF19C197F147C455F6EB9,
 				D96A58088F00CD60907A1AF5,
+				A459751549599A29C8954E53,
 				925C545BBF5908A07D2A47AF,
 				D2CEB122BCF9ECDC6BB42176,
 				FE86A99A33849697E1E79465,
@@ -722,6 +742,7 @@
 				B097A9D6879D03AD75F9CCA0,
 				B477D544D3F52A227229E6B8,
 				7316948CCB8ABFA29F72CCE1,
+				3E73DD79DC65217A4FB31CD4,
 				6A4855631F163370C30D97C9,
 				956DB01B711EA0BA10B42D77,
 				1A1154160BA13DE6385FA574,
@@ -860,6 +881,10 @@
 		"7AD457A8D443D460F14F4681" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = 01E056203FDFB85CDB4AC0DE;
+		};
+		"36D3A70EBA3CE4CCA4BF2FA5" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = F5CC51D7CB8D3D74EDAD9201;
 		};
 		"AC2FF5057CAADCE647FCCE73" = {
 			"isa" = "PBXBuildFile";
@@ -1047,6 +1072,7 @@
 				9468A3B6049EA57AC9B93EB6,
 				8B498409790EB0DA406AB3A9,
 				7AD457A8D443D460F14F4681,
+				36D3A70EBA3CE4CCA4BF2FA5,
 				AC2FF5057CAADCE647FCCE73,
 				3B66A7C7476A9A43D8E67C59,
 				2BE551215C228EE865B5D160,

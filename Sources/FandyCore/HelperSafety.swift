@@ -92,17 +92,23 @@ public enum Wire {
     public static let maxBytes = 16_384
     public static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         guard !data.isEmpty, data.count <= maxBytes else { throw ControlError.malformedMessage }
-        do { return try JSONDecoder().decode(type, from: data) } catch { throw ControlError.malformedMessage }
+        do { return try autoreleasepool { try JSONDecoder().decode(type, from: data) } } catch { throw ControlError.malformedMessage }
     }
     /// Commands have a closed shape. Responses retain additive-field compatibility.
     public static func decodeCommand<T: HelperCommand>(_ type: T.Type, from data: Data) throws -> T {
-        guard !data.isEmpty, data.count <= maxBytes,
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              Set(object.keys) == T.fields else { throw ControlError.malformedMessage }
-        return try decode(type, from: data)
+        try autoreleasepool {
+            guard !data.isEmpty, data.count <= maxBytes,
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  Set(object.keys) == T.fields else { throw ControlError.malformedMessage }
+            return try decode(type, from: data)
+        }
     }
     public static func encode<T: Encodable>(_ value: T) throws -> Data {
-        let data = try JSONEncoder().encode(value); guard data.count <= maxBytes else { throw ControlError.malformedMessage }; return data
+        try autoreleasepool {
+            let data = try JSONEncoder().encode(value)
+            guard data.count <= maxBytes else { throw ControlError.malformedMessage }
+            return data
+        }
     }
 }
 public protocol HelperCommand: Decodable { static var fields: Set<String> { get } }
@@ -156,6 +162,13 @@ public protocol PrivilegedFanClient: FanController {
 /// Idle monitoring matches the one-second UI cadence. Control deadlines and
 /// failed-restoration retries retain the original 100 ms timer.
 public enum HelperPollingPolicy {
+    public static func publishesStatus(elapsed: Double, activeLease: Bool, newObservation: Bool,
+                                      recoveryActive: Bool, restorationPending: Bool) -> Bool {
+        guard elapsed.isFinite, elapsed >= 0 else { return true }
+        if newObservation { return true }
+        if activeLease && !recoveryActive { return false }
+        return elapsed >= (recoveryActive || restorationPending ? 0.5 : 1)
+    }
     public static func interval(activeLease: Bool, recoveryActive: Bool, restorationPending: Bool) -> Double {
         activeLease || recoveryActive || restorationPending ? 0.1 : 1
     }

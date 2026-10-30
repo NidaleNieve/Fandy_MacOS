@@ -4,6 +4,30 @@ import FandyCore
 /// Reviewed direct codec with all reads and writes injected. Preflight every fan;
 /// keep mode admission and that fan's target adjacent before admitting another fan.
 public enum DirectFanTransaction {
+    /// Read-only heartbeat verification. Never admits a mode or writes a target.
+    public static func verifyAcknowledged(_ targets: [FanTarget], baseline: [Fan],
+        read: (String) throws -> DiscoveredSensor, fans: () throws -> [Fan], check: () throws -> Void) throws -> Bool {
+        try check()
+        _ = try SMCProfileWriter.normalizedTargets(targets, fans: baseline)
+        for fan in baseline {
+            let mode = try read("F\(fan.id)md")
+            guard fan.mode == .manual, mode.type == "ui8 ", mode.size == 1, mode.attributes == 208,
+                  mode.bytes == [1], mode.value == 1, mode.error == nil else { throw HardwareError.invalidMetadata }
+            let target = try read("F\(fan.id)Tg")
+            try SMCProfileWriter.validateTargetMetadata(target, fan: fan)
+            guard let expected = targets.first(where: { $0.fanID == fan.id }), target.value == expected.rpm else { throw ControlError.restorationUnverified }
+        }
+        let observed = try fans()
+        guard observed.count == baseline.count, Set(observed.map(\.id)) == Set(baseline.map(\.id)) else { throw ControlError.invalidFan }
+        for fan in observed {
+            try fan.validate()
+            guard fan.mode == .manual, let old = baseline.first(where: { $0.id == fan.id }),
+                  fan.minimumRPM == old.minimumRPM, fan.maximumRPM == old.maximumRPM,
+                  fan.targetRPM == targets.first(where: { $0.fanID == fan.id })?.rpm else { throw ControlError.restorationUnverified }
+        }
+        try check()
+        return true
+    }
     public static func apply(_ targets: [FanTarget], transport: any SMCStructTransport,
         read: (String) throws -> DiscoveredSensor, fans: () throws -> [Fan],
         clock: () -> Double, check: () throws -> Void,
@@ -25,13 +49,17 @@ public enum DirectFanTransaction {
             try check(); guard clock().isFinite, clock() < deadline else { throw ControlError.staleSession }
         }
         for target in targets {
-            try requireLive()
             guard var fan = baseline.first(where: { $0.id == target.fanID }), let mode = modes[fan.id], let previous = metadata[fan.id] else { throw ControlError.invalidFan }
             let entering = fan.mode == .automatic
+            // No admission or target operation exists for an already acknowledged
+            // value. Complete metadata preflight above and independent batch
+            // ownership/readback below still run on every request.
+            if !entering && previous.value == target.rpm { continue }
             func record(_ stage: FanTransition.Stage) {
                 if entering { event(FanTransition(fanID: fan.id, stage: stage, at: clock(), actualRPM: fan.actualRPM, previousTarget: fan.targetRPM, requestedTarget: target.rpm)) }
             }
             if entering {
+                try requireLive()
                 try SMCProfileWriter.startAutomatic(fan: fan, mode: mode, previous: previous, transport: transport)
                 record(.modeWritten)
                 let observed = try read("F\(fan.id)md")

@@ -76,9 +76,11 @@ struct StatusItemPresentation: Equatable {
         // A selected item's represented object owns its action until delivery.
         Task { @MainActor [weak self, weak menu] in
             guard let self, let menu, !self.isOpen, self.menuGeneration == generation else { return }
-            self.profileRows.removeAll(); self.timingRow = nil; self.customSpeedRow = nil
-            self.deferredMenus.removeAll(); self.populatedMenus.removeAll()
-            menu.removeAllItems()
+            autoreleasepool {
+                self.profileRows.removeAll(); self.timingRow = nil; self.customSpeedRow = nil
+                self.deferredMenus.removeAll(); self.populatedMenus.removeAll()
+                menu.removeAllItems()
+            }
             BackgroundMemoryReclaimer.shared.schedule()
         }
     }

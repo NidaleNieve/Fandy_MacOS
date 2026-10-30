@@ -22,11 +22,13 @@ import FandyCore
         }
     }
     func windowWillClose(_ notification: Notification) {
-        splitPositions = splits(in: window.contentView).compactMap { $0.subviews.first?.frame.width }
-        (window.contentViewController as? any ReleasableHostingContent)?.discardContent()
-        window.contentViewController = nil
-        window.contentView = nil
-        window.toolbar = nil
+        autoreleasepool {
+            splitPositions = splits(in: window.contentView).compactMap { $0.subviews.first?.frame.width }
+            (window.contentViewController as? any ReleasableHostingContent)?.discardContent()
+            window.contentViewController = nil
+            window.contentView = nil
+            window.toolbar = nil
+        }
         BackgroundMemoryReclaimer.shared.schedule()
     }
     private func splits(in view: NSView?) -> [NSSplitView] {

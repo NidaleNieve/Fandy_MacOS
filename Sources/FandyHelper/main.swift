@@ -7,7 +7,7 @@ import os
 /// Listener lifetime is independent of hardware availability. Only ready backends admit leases.
 final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     let listener = NSXPCListener(machServiceName: FandyIdentity.helperIdentifier)
-    let queue = DispatchQueue(label: "is.dsr.fandy.helper.safety", qos: .userInitiated)
+    let queue = DispatchQueue(label: "is.dsr.fandy.helper.safety", qos: .userInitiated, autoreleaseFrequency: .workItem)
     let logger = Logger(subsystem: FandyIdentity.logSubsystem, category: "helper")
     let requests = HelperRequestGate()
     let cancellation = HardwareOperationFence()
@@ -170,6 +170,8 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         let now = ProcessInfo.processInfo.systemUptime
         // Fan metadata is bounded and is collected once per bootstrap, never at XPC ingress.
         if diagnostic.fans.isEmpty { diagnostic.fans = hardware?.metadataReport() ?? [] }
+        diagnostic.resources = try? ProcessResourceSample.capture()
+        diagnostic.work = BackgroundWorkMetrics.shared.snapshot()
         statusCache.publish(status(), at: now); lastPublication = now
         schedulePolling()
     }
@@ -195,7 +197,17 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
         return releaseCoordinator?.restore() ?? false
     }
     private func watchdog() {
-        defer { if !powerSuspended, ProcessInfo.processInfo.systemUptime - lastPublication >= 0.5 { publishStatus() } }
+        let previousObservation = coordinator?.observationID
+        defer {
+            if !powerSuspended, HelperPollingPolicy.publishesStatus(
+                elapsed: ProcessInfo.processInfo.systemUptime - lastPublication,
+                activeLease: coordinator?.leaseOwner != nil,
+                newObservation: coordinator?.observationID != previousObservation,
+                recoveryActive: recovery?.requiresFrequentWatchdog == true,
+                restorationPending: coordinator?.requiresFrequentWatchdog == true && coordinator?.leaseOwner == nil) {
+                publishStatus()
+            }
+        }
         guard !powerSuspended, let coordinator, let recovery, let hardware else { return }
         let owner = coordinator.leaseOwner ?? recovery.activeOwner
         do {
@@ -272,7 +284,9 @@ final class HelperConnection: NSObject, FanHelperXPC, @unchecked Sendable {
             let ticket = try service.requests.admitStatus(owner: owner, now: ProcessInfo.processInfo.systemUptime)
             defer { service.requests.finish(ticket) }
             guard service.requests.isOpen(ticket) else { throw ControlError.staleSession }
-            reply(try Wire.encode(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime)), nil)
+            reply(try BackgroundWorkMetrics.shared.measure(.statusEncoding) {
+                try Wire.encode(service.statusCache.read(at: ProcessInfo.processInfo.systemUptime))
+            }, nil)
         } catch { reply(nil, error.localizedDescription) }
     }
     func qualifyRecovery(_ data: Data, withReply reply: @escaping (Data?, String?) -> Void) {

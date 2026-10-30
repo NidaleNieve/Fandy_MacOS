@@ -766,3 +766,98 @@ func everyNotebookUsesProductionPacketDiscovery(_ model: String) throws {
     #expect(reads == 1)
     #expect(try io.fans().allSatisfy { $0.mode == .manual })
 }
+
+@Test func unchangedManualTargetsStillReadMetadataAndOwnershipWithoutRepeatingAdmissionChecks() throws {
+    let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    for (id, rpm) in [(0,2500.0),(1,2600.0)] { io.put("F\(id)md", 1, "ui8 "); io.put("F\(id)Tg", rpm, "flt ", attributes: 212) }
+    var checks = 0, inventories = 0
+    try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: io,
+        read: io.read, fans: { inventories += 1; return try io.fans() }, clock: { io.now }, check: { checks += 1 })
+    #expect(checks == 2 && inventories == 2 && io.writes.isEmpty)
+    io.values["F1Tg"]!.attributes = 0
+    #expect(throws: (any Error).self) {
+        try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: io,
+            read: io.read, fans: io.fans, clock: { io.now }, check: {})
+    }
+    #expect(io.writes.isEmpty)
+}
+
+@Test func unchangedTargetVerificationRejectsOwnershipChangesAndCancellation() throws {
+    for cancel in [false, true] {
+        let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+        for (id, rpm) in [(0,2500.0),(1,2600.0)] { io.put("F\(id)md", 1, "ui8 "); io.put("F\(id)Tg", rpm, "flt ", attributes: 212) }
+        var checks = 0
+        #expect(throws: (any Error).self) {
+            try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: io,
+                read: io.read, fans: io.fans, clock: { io.now }, check: {
+                    checks += 1
+                    if checks == 1 { if cancel { throw ControlError.staleSession }; io.put("F1md", 0, "ui8 ") }
+                })
+        }
+        #expect(io.writes.isEmpty)
+    }
+}
+
+@Test func backgroundAcquisitionReleasesNativeTemporariesAndRetainsOwnedReadings() throws {
+    struct WeakObject { weak var value: NSObject? }
+    var transient: [WeakObject] = []
+    let io = CompatibilitySMC(), reader = SMCReader(transport: io, clock: { io.now })
+    let device = DeviceRegistry.resolve(identity: io.identity, read: reader.read)
+    let sampler = try HardwareSnapshotReader(device: device, reader: reader, clock: {
+        let object = NSObject(); transient.append(.init(value: object))
+        _ = Unmanaged.passRetained(object).autorelease()
+        return io.now
+    })
+    var last: HardwareSnapshot?
+    for _ in 0..<60 { last = try sampler.snapshot(); io.now += 1 }
+    #expect(!transient.isEmpty && transient.allSatisfy { $0.value == nil })
+    #expect(last?.sensors.isEmpty == false && last?.fans.count == 2)
+}
+
+@Test func unchangedAcknowledgementVerificationNeverWritesAndRejectsUnknownWriteMetadata() throws {
+    let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    for (id, rpm) in [(0,2500.0),(1,2600.0)] { io.put("F\(id)md", 1, "ui8 "); io.put("F\(id)Tg", rpm, "flt ", attributes: 212) }
+    let fans = try io.fans(), targets = [FanTarget(0,2500),FanTarget(1,2600)]
+    #expect(try DirectFanTransaction.verifyAcknowledged(targets, baseline: fans, read: io.read, fans: io.fans, check: {}))
+    #expect(io.writes.isEmpty)
+    io.values["F1Tg"]!.attributes = 0
+    #expect(throws: (any Error).self) { try DirectFanTransaction.verifyAcknowledged(targets, baseline: fans, read: io.read, fans: io.fans, check: {}) }
+    #expect(io.writes.isEmpty)
+}
+
+@Test func unchangedAcknowledgementVerificationRejectsChangedLimitsAndTargetReadback() throws {
+    for bounds in [false, true] {
+        let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+        for (id, rpm) in [(0,2500.0),(1,2600.0)] { io.put("F\(id)md", 1, "ui8 "); io.put("F\(id)Tg", rpm, "flt ", attributes: 212) }
+        let baseline = try io.fans()
+        if bounds { io.put("F1Mx", 7000, "flt ", attributes: 212) }
+        else { io.put("F1Tg", 3000, "flt ", attributes: 212) }
+        #expect(throws: (any Error).self) {
+            try DirectFanTransaction.verifyAcknowledged([FanTarget(0,2500),FanTarget(1,2600)], baseline: baseline, read: io.read, fans: io.fans, check: {})
+        }
+        #expect(io.writes.isEmpty)
+    }
+}
+
+@Test func changingManualTargetsChecksEachWriteWithoutAdjacentDuplicateScans() throws {
+    final class Trace: @unchecked Sendable { var steps: [String] = [] }
+    struct Transport: SMCStructTransport {
+        let io: CompatibilitySMC
+        let trace: Trace
+        func transact(_ input: [UInt8]) throws -> SMCStructResponse {
+            trace.steps.append(input[42] == 6 ? "write" : "metadata")
+            return try io.transact(input)
+        }
+    }
+    let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false), trace = Trace()
+    for id in 0..<2 { io.put("F\(id)md", 1, "ui8 "); io.put("F\(id)Tg", 2400, "flt ", attributes: 212) }
+    try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: Transport(io: io, trace: trace),
+        read: { trace.steps.append("read"); return try io.read($0) },
+        fans: { trace.steps.append("inventory"); return try io.fans() }, clock: { io.now },
+        check: { trace.steps.append("check") })
+    #expect(!zip(trace.steps, trace.steps.dropFirst()).contains { $0 == "check" && $1 == "check" })
+    for index in trace.steps.indices where trace.steps[index] == "write" {
+        #expect(index > 1 && trace.steps[index - 1] == "metadata" && trace.steps[index - 2] == "check")
+    }
+    #expect(io.writes.count == 2)
+}

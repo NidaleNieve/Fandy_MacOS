@@ -75,7 +75,8 @@ import ServiceManagement
     private(set) var powerTransitionCount: UInt64 = 0
     private let mock = MockBackend()
     private let client: any PrivilegedFanClient
-    private let helperAvailable: @MainActor () -> Bool
+    private let helperAvailabilityProbe: (@MainActor () -> Bool)?
+    private func helperAvailable() -> Bool { helperAvailabilityProbe?() ?? (helperSetupStatus == .enabled) }
     private let clock: @Sendable () -> Double
     private var lifecycleToken = UUID()
     private var hardware: (any TemperatureSensorProvider)?
@@ -127,7 +128,7 @@ import ServiceManagement
          applicationCatalog: (@MainActor () -> [RunningProcess])? = nil,
          clock: @escaping @Sendable () -> Double = { ProcessInfo.processInfo.systemUptime }) {
         self.simulation = simulation; self.requestedSimulation = simulation; self.injectedProvider = provider; self.hardware = provider
-        self.client = client ?? FanXPCClient(); self.helperAvailable = helperAvailable ?? { HelperManager.installed }
+        self.client = client ?? FanXPCClient(); self.helperAvailabilityProbe = helperAvailable
         if let helperRegistrationStatus { self.helperRegistrationStatus = helperRegistrationStatus }
         else if let helperAvailable { self.helperRegistrationStatus = { helperAvailable() ? .enabled : .notRegistered } }
         else { self.helperRegistrationStatus = { HelperManager.service.status } }
@@ -143,7 +144,7 @@ import ServiceManagement
         diagnostics = try? RotatingDiagnostics(directory: (storeURL?.deletingLastPathComponent() ?? root.appendingPathComponent("Fandy")).appendingPathComponent("logs"))
         let loaded = store.load(); profiles = loaded.profiles; issues = loaded.issues; automation = loaded.automation
         defaultResumeBlocked = !issues.isEmpty
-        helperSetupStatus = self.helperRegistrationStatus()
+        helperSetupStatus = autoreleasepool { self.helperRegistrationStatus() }
         helperSetupInitializing = autoStart && !simulation
         // Lifecycle begins from System regardless of persisted selection.
         if autoStart { Task { [weak self] in self?.start() } }
@@ -265,7 +266,7 @@ import ServiceManagement
     }
     func start() {
         guard loop == nil, !quitting, powerLifecycle == .awake else { return }
-        observePower(); configureLogin()
+        refreshHelperSetup(); observePower(); configureLogin()
         helperSetupInitializing = !simulation
         loop = Task { [weak self] in
             if let self {
@@ -375,6 +376,7 @@ import ServiceManagement
         return draftError == nil && automation.preferences.customFanSpeedIndefinite == (seconds == nil)
     }
     func select(_ id: String, manual: Bool = true) {
+        if !simulation { refreshHelperSetup() }
         guard let profile = activationProfile(id) else { return }
         if !simulation && profile.kind != .system && needsHelperSetup { return }
         if !canActivate(profile) { hardwareError = eligibility(profile).reason; return }
@@ -401,7 +403,9 @@ import ServiceManagement
         let rules = configuration ?? automation
         guard force || (rules.activationDefaults.values.contains { $0.kind == .application || $0.launchWhenOpened } && clock() - applicationCatalogRefreshedAt >= 1) else { return }
         let needsProcesses = rules.activationDefaults.values.contains { $0.applications.contains { $0.kind == .process } } || watchedApplications.contains { $0.kind == .process }
-        let running = (applicationCatalog?() ?? ProcessCatalog.list(includeHelpers: needsProcesses, includeIcons: false)).filter { ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }
+        let running = autoreleasepool {
+            (applicationCatalog?() ?? ProcessCatalog.list(includeHelpers: needsProcesses, includeIcons: false)).filter { ProcessCatalog.isRunning(pid: $0.pid, launched: $0.launched) }
+        }
         let instances = Set(running.map { "\($0.pid):\($0.launched.timeIntervalSince1970)" })
         if let previous = observedApplicationInstances {
             for process in running where !previous.contains(process.id) { pendingApplicationLaunches.formUnion(process.activationIdentifiers) }
@@ -898,6 +902,7 @@ import ServiceManagement
     }
     /// Sparkle may replace the embedded service only after acknowledged handback.
     func prepareForUpdate() async throws {
+        refreshHelperSetup()
         guard powerLifecycle == .awake else { throw ControlError.helperUnavailable }
         if updatePrepared { return }
         preparingUpdate = true; lifecycleToken = UUID(); stop()

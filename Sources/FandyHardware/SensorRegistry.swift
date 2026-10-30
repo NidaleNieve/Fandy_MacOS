@@ -125,6 +125,9 @@ public final class HardwareSnapshotReader: @unchecked Sendable {
         self.device = resolved; self.verifiedRoles = resolved.capabilities.verifiedRoles
     }
     public func snapshot() throws -> HardwareSnapshot {
+        try BackgroundWorkMetrics.shared.measure(.sampling) { try autoreleasepool { try acquireSnapshot() } }
+    }
+    private func acquireSnapshot() throws -> HardwareSnapshot {
         lock.lock(); defer { lock.unlock() }
         sequence += 1
         let started = clock()

@@ -65,6 +65,8 @@ public struct HelperDiagnosticReport: Codable, Sendable, Equatable {
     public var failure: HelperFailure?
     public var fans: [FanMetadataReport]
     public var stalled: Bool? = nil
+    public var resources: ProcessResourceSample? = nil
+    public var work: [BackgroundWorkSample]? = nil
     public init(phase: String, progressAt: Double, failure: HelperFailure? = nil, fans: [FanMetadataReport] = []) {
         self.phase = phase; self.progressAt = progressAt; self.failure = failure; self.fans = fans
     }

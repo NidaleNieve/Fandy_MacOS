@@ -6,7 +6,7 @@ import FandyHardware
 
 @MainActor enum HelperManager {
     private static let lifecycle = HelperLifecycleCoordinator()
-    static var service:SMAppService { .daemon(plistName:FandyIdentity.launchDaemonPlist) }
+    static let service: SMAppService = .daemon(plistName: FandyIdentity.launchDaemonPlist)
     static var installed:Bool { service.status == .enabled }
     private static var legacyServices: [SMAppService] {
         [FandyIdentity.legacyLaunchDaemonPlist, FandyIdentity.previousLaunchDaemonPlist]
