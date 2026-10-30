@@ -129,12 +129,14 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         }
     }
     func applyValidatedTargets(_ targets: [FanTarget]) throws {
+        try applyValidatedTargets(targets, fans: enumerateFans())
+    }
+    func applyValidatedTargets(_ targets: [FanTarget], fans baseline: [Fan]) throws {
         guard device.capabilities.canControl, let interface else { throw ControlError.hardwareUnqualified }
         if !interface.locallyTested { try applyReferenceTargets(targets, interface: interface); return }
         transactionToken = admittedOperation ?? cancellation.token()
         defer { transactionToken = nil }
         try RecoveryOwnershipProbe.requireNoKnownController()
-        let baseline = try enumerateFans()
         guard targets.count == baseline.count, Set(targets.map(\.fanID)) == Set(baseline.map(\.id)),
               targets.allSatisfy({ target in baseline.contains {
                   $0.id == target.fanID && target.rpm.isFinite && target.rpm >= $0.minimumRPM && target.rpm <= $0.maximumRPM &&
@@ -146,7 +148,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
             event: { [self] record in
                 transitions.append(record); transitions = Array(transitions.suffix(16))
                 commandLog.notice("Fan transition \(record.fanID): \(record.stage.rawValue, privacy: .public) at \(record.at), previous target \(record.previousTarget ?? -1), requested \(record.requestedTarget), actual \(record.actualRPM)")
-            })
+            }, preflightFans: baseline)
     }
 
     private func requireProfileDeadline(_ deadline: Double) throws {

@@ -17,11 +17,13 @@ struct StatusItemPresentation: Equatable {
     var openHelperSetup: () -> Void = {}
     private var lastPresentation: StatusItemPresentation?
     private let onPresentation: ((StatusItemPresentation) -> Void)?
-    private var actions: [UUID: () -> Void] = [:]
     private var profileRows: [String: NSMenuItem] = [:]
     private var timingRow: NSMenuItem?
     private var customSpeedRow: NSMenuItem?
     private(set) var isOpen = false
+    private var menuGeneration: UInt64 = 0
+    private var deferredMenus: [ObjectIdentifier: (NSMenu) -> Void] = [:]
+    private var populatedMenus: Set<ObjectIdentifier> = []
     init(model: AppModel, install: Bool = true, onPresentation: ((StatusItemPresentation) -> Void)? = nil) {
         self.model = model; self.onPresentation = onPresentation; item = install ? NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength) : nil; super.init()
         let menu = NSMenu(); menu.delegate = self; item?.menu = menu
@@ -58,10 +60,32 @@ struct StatusItemPresentation: Equatable {
         item?.button?.setAccessibilityLabel(next.attention ? "Fandy — fan control unavailable" : "Fandy")
         item?.button?.toolTip = next.tooltip
     }
-    func menuWillOpen(_ menu: NSMenu) { isOpen = true; rebuild(menu) }
-    func menuDidClose(_ menu: NSMenu) { isOpen = false }
+    func menuWillOpen(_ menu: NSMenu) {
+        let id = ObjectIdentifier(menu)
+        if let populate = deferredMenus[id] {
+            if populatedMenus.insert(id).inserted { menu.removeAllItems(); populate(menu) }
+            return
+        }
+        isOpen = true; rebuild(menu)
+    }
+    func menuDidClose(_ menu: NSMenu) {
+        guard deferredMenus[ObjectIdentifier(menu)] == nil else { return }
+        isOpen = false
+        let generation = menuGeneration
+        // Leave AppKit's tracking stack before removing embedded hosting views.
+        // A selected item's represented object owns its action until delivery.
+        Task { @MainActor [weak self, weak menu] in
+            guard let self, let menu, !self.isOpen, self.menuGeneration == generation else { return }
+            self.profileRows.removeAll(); self.timingRow = nil; self.customSpeedRow = nil
+            self.deferredMenus.removeAll(); self.populatedMenus.removeAll()
+            menu.removeAllItems()
+            BackgroundMemoryReclaimer.shared.schedule()
+        }
+    }
     func rebuild(_ menu: NSMenu) {
-        actions.removeAll(); profileRows.removeAll(); customSpeedRow = nil; timingRow = nil; menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
+        menuGeneration &+= 1
+        deferredMenus.removeAll(); populatedMenus.removeAll()
+        profileRows.removeAll(); customSpeedRow = nil; timingRow = nil; menu.removeAllItems(); menu.autoenablesItems = false; menu.minimumWidth = MenuLayout.width
         for profile in model.profiles where profile.showInMenuBar {
             let row = add(profile.name, to: menu) { [weak model] in model?.select(profile.id) }
             if profile.kind != .system && model.needsHelperAttention { row.image = AppModel.approvalDot() }
@@ -112,9 +136,12 @@ struct StatusItemPresentation: Equatable {
             let time = submenu("Other Time/Until", in: timing)
             addTimePicker(to: time, root: menu, destination: .currentProfile, identifier: "activation.time")
             let applications = submenu("While App Is Running", in: timing)
-            let appControls = NSMenuItem()
-            appControls.view = embedded(ProcessPicker(model: model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.application")
-            applications.addItem(appControls)
+            deferContent(in: applications) { [weak self, weak menu] child in
+                guard let self else { return }
+                let controls = NSMenuItem()
+                controls.view = self.embedded(ProcessPicker(model: self.model, close: { [weak menu] in menu?.cancelTracking() }), identifier: "activation.application")
+                child.addItem(controls)
+            }
             timing.addItem(.separator())
             let forever = add("Until Changed", to: timing) { [weak model] in model?.activateForever() }
             if case .forever = model.manualIntent?.limit, model.awaitingApplicationID == nil, model.watchedApplications.isEmpty { forever.state = .on }
@@ -132,7 +159,7 @@ struct StatusItemPresentation: Equatable {
             }
         }
         menu.addItem(.separator())
-        let status = NSMenuItem(); status.view = fitted(FanMenuStatus(model: model)); menu.addItem(status)
+        let status = NSMenuItem(); status.view = NativeFanMenuStatus(model: model); menu.addItem(status)
         menu.addItem(.separator())
         if model.needsHelperAttention {
             let notice = NSMenuItem()
@@ -152,22 +179,32 @@ struct StatusItemPresentation: Equatable {
         let quit = add("Quit", to: menu) { [weak model] in model?.quit() }; quit.keyEquivalent = "q"
     }
     @discardableResult private func add(_ title: String, to menu: NSMenu, action: @escaping () -> Void) -> NSMenuItem {
-        let id = UUID(); actions[id] = action
+        let handler = MenuItemAction(action)
         let item = NSMenuItem(title: MenuLayout.compactTitle(title), action: #selector(invoke(_:)), keyEquivalent: "")
-        item.target = self; item.representedObject = id
+        item.target = self; item.representedObject = handler
         item.toolTip = title
         item.setAccessibilityLabel(title)
         menu.addItem(item); return item
     }
-    @objc private func invoke(_ item: NSMenuItem) { if let id = item.representedObject as? UUID { actions[id]?() } }
+    @objc private func invoke(_ item: NSMenuItem) { (item.representedObject as? MenuItemAction)?.perform() }
     private func submenu(_ title: String, in menu: NSMenu) -> NSMenu {
         let child = NSMenu(title: title); child.autoenablesItems = false
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.submenu = child; menu.addItem(item); return child
     }
     private func addTimePicker(to submenu: NSMenu, root: NSMenu, destination: CustomActivationPicker.Destination, identifier: String) {
-        let controls = NSMenuItem()
-        controls.view = embedded(CustomActivationPicker(model: model, destination: destination, close: { [weak root] in root?.cancelTracking() }), identifier: identifier)
-        submenu.addItem(controls)
+        deferContent(in: submenu) { [weak self, weak root] child in
+            guard let self else { return }
+            let controls = NSMenuItem()
+            controls.view = self.embedded(CustomActivationPicker(model: self.model, destination: destination, close: { [weak root] in root?.cancelTracking() }), identifier: identifier)
+            child.addItem(controls)
+        }
+    }
+    private func deferContent(in submenu: NSMenu, populate: @escaping (NSMenu) -> Void) {
+        deferredMenus[ObjectIdentifier(submenu)] = populate
+        submenu.delegate = self
+        // A native placeholder keeps the submenu hoverable before materialization.
+        let placeholder = NSMenuItem(title: " ", action: nil, keyEquivalent: "")
+        placeholder.isEnabled = false; submenu.addItem(placeholder)
     }
     private func embedded<V: View>(_ view: V, identifier: String) -> NSView {
         // NSMenuItem.view receives native mouse/keyboard events. Keep its controls
@@ -188,6 +225,11 @@ struct StatusItemPresentation: Equatable {
         return hosting
     }
 
+}
+
+@MainActor private final class MenuItemAction: NSObject {
+    let perform: () -> Void
+    init(_ perform: @escaping () -> Void) { self.perform = perform }
 }
 
 struct ActivationMenuSummary: View {

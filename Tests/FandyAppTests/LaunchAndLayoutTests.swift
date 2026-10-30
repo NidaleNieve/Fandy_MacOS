@@ -106,7 +106,9 @@ import Testing
     defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)
     let menu = NSMenu(), presenter = StatusMenu(model: model, install: false); presenter.rebuild(menu)
-    let time = try #require(menu.items.first { $0.title == "Activate for/until" }?.submenu?.items.first { $0.title == "Other Time/Until" }?.submenu?.items.first?.view)
+    let submenu = try #require(menu.items.first { $0.title == "Activate for/until" }?.submenu?.items.first { $0.title == "Other Time/Until" }?.submenu)
+    presenter.menuWillOpen(submenu)
+    let time = try #require(submenu.items.first?.view)
     #expect(time.frame.width == 220 && time.frame.height < 210)
     let host = MenuControlHostingView(rootView: Text("For").frame(width: 220, height: 80))
     host.frame.size = host.fittingSize

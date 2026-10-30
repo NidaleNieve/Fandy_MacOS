@@ -10,12 +10,14 @@ struct CurveEditor: View {
     let onBegin: () -> Void
     let onEnd: () -> Void
     let currentTemperature: Double?
+    let presentation: EditorPresentationState?
+    let draftKey: String
     @State private var editor: CurveDraft
     @State private var dragging: UUID?
     @State private var dragRange: ClosedRange<Double>?
-    init(curve: FanCurve, request: CurveRequestPreview = .init(), resetRevision: UInt64 = 0, currentTemperature: Double? = nil, onBegin: @escaping () -> Void = {}, onEnd: @escaping () -> Void = {}, onChange: @escaping (FanCurve) -> Void) {
+    init(curve: FanCurve, presentation: EditorPresentationState? = nil, draftKey: String = "", request: CurveRequestPreview = .init(), resetRevision: UInt64 = 0, currentTemperature: Double? = nil, onBegin: @escaping () -> Void = {}, onEnd: @escaping () -> Void = {}, onChange: @escaping (FanCurve) -> Void) {
         self.currentTemperature = currentTemperature; self.onBegin = onBegin; self.onEnd = onEnd;
-        self.request = request; self.curve = curve; self.resetRevision = resetRevision; self.onChange = onChange; _editor = State(initialValue: CurveDraft(curve))
+        self.presentation = presentation; self.draftKey = draftKey; self.request = request; self.curve = curve; self.resetRevision = resetRevision; self.onChange = onChange; _editor = State(initialValue: presentation?.draft(for: draftKey, curve: curve) ?? CurveDraft(curve))
     }
     var range: ClosedRange<Double> { dragRange ?? request.range(for: editor.curve) }
     var body: some View {
@@ -134,7 +136,7 @@ struct CurveEditor: View {
             }.textFieldStyle(.roundedBorder).buttonStyle(.bordered).controlSize(.small)
             if let validation = editor.validation { Text("Not applied: \(validation)").font(.caption).foregroundStyle(.red) }
         }
-        .onDisappear { if dragging != nil { onEnd() }; dragging = nil; dragRange = nil }
+        .onDisappear { presentation?.saveDraft(editor, for: draftKey, base: curve); if dragging != nil { onEnd() }; dragging = nil; dragRange = nil }
         .onChange(of: curve) { _, new in if dragging == nil { editor.replace(with: new) } }
         .onChange(of: resetRevision) { _, _ in
             dragging = nil; dragRange = nil; editor.replace(with: curve)

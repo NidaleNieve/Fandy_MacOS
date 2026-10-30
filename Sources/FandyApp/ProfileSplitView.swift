@@ -25,17 +25,20 @@ struct ProfileSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresenta
 /// The window and split view own layout, not the changing ideal width of a
 /// segmented picker, grid or graph. Intrinsic hosting constraints otherwise
 /// temporarily push the columns outside the window during SwiftUI updates.
-@MainActor final class ProfileHostingController<Content: View>: NSHostingController<Content> {
-    override init(rootView: Content) {
+@MainActor protocol ReleasableHostingContent { func discardContent() }
+
+@MainActor final class ProfileHostingController<Content: View>: NSHostingController<Content?>, ReleasableHostingContent {
+    init(rootView: Content) {
         super.init(rootView: rootView)
         sizingOptions = []
-        if let hosting = view as? NSHostingView<Content> { hosting.sizingOptions = [] }
+        if let hosting = view as? NSHostingView<Content?> { hosting.sizingOptions = [] }
     }
+    func discardContent() { rootView = nil; view.layoutSubtreeIfNeeded() }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     override func viewDidLoad() {
         super.viewDidLoad()
         sizingOptions = []
-        if let hosting = view as? NSHostingView<Content> { hosting.sizingOptions = [] }
+        if let hosting = view as? NSHostingView<Content?> { hosting.sizingOptions = [] }
     }
     override func viewDidLayout() {
         super.viewDidLayout()

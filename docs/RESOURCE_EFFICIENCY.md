@@ -1,5 +1,10 @@
 # Resource efficiency — local candidate 33
 
+The follow-up [background-resource report](BACKGROUND_RESOURCES.md) covers local
+build 34. Its controlled menu footprint improved, but the requested 2× memory and
+additional 2× active-control CPU targets remain unmet. The build-33 System result
+below must not be generalized to that newer workload.
+
 The target is at least 50% lower combined app/helper CPU cost during comparable
 ordinary-use monitoring. CPU, resident memory, wakeups and latency are separate
 metrics; a CPU reduction is not a claim of twice the battery life or half the memory.

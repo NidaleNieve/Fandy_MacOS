@@ -111,10 +111,15 @@ private struct ProfileWorkspace: View {
 }
 private struct ProfileDetail: View {
     @Bindable var model: AppModel
-    @State private var tab = EditorTab.curves
-    @State private var chipExpanded = true
-    @State private var chassisExpanded = true
-    enum EditorTab: String, CaseIterable { case curves = "Fan Curves", schedule = "Schedule", pauses = "Pause Schedule", activation = "When Activated" }
+    private var tab: EditorPresentationState.Tab { model.editorPresentation.tab }
+    private var chipExpanded: Bool {
+        get { model.editorPresentation.chipExpanded }
+        nonmutating set { model.editorPresentation.chipExpanded = newValue }
+    }
+    private var chassisExpanded: Bool {
+        get { model.editorPresentation.chassisExpanded }
+        nonmutating set { model.editorPresentation.chassisExpanded = newValue }
+    }
     var body: some View {
         if let profile = model.edited {
             VStack(alignment: .leading, spacing: 12) {
@@ -130,11 +135,11 @@ private struct ProfileDetail: View {
                     var next = profile; next.showInMenuBar = value; model.update(next)
                 })).accessibilityIdentifier("profile.menu-visibility")
                 ViewThatFits(in: .horizontal) {
-                    Picker("Profile section", selection: $tab) {
-                        ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    Picker("Profile section", selection: Binding(get: { tab }, set: { model.editorPresentation.tab = $0 })) {
+                        ForEach(EditorPresentationState.Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }.pickerStyle(.segmented).controlSize(.small).labelsHidden().fixedSize(horizontal: true, vertical: false)
-                    Picker("Profile section", selection: $tab) {
-                        ForEach(EditorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    Picker("Profile section", selection: Binding(get: { tab }, set: { model.editorPresentation.tab = $0 })) {
+                        ForEach(EditorPresentationState.Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }.pickerStyle(.menu).labelsHidden()
                 }
                 Divider()
@@ -174,11 +179,11 @@ private struct ProfileDetail: View {
         if profile.kind == .system { Text("Returns all fans to Apple automatic control.").foregroundStyle(.secondary) }
         else if profile.kind == .maximum { Text("Uses each fan’s reported maximum RPM.").foregroundStyle(.secondary) }
         else {
-            DisclosureGroup("Chip", isExpanded: $chipExpanded) {
+            DisclosureGroup("Chip", isExpanded: Binding(get: { chipExpanded }, set: { chipExpanded = $0 })) {
                 CurveSection(profile: profile, input: .chip, model: model)
             }
             Divider()
-            DisclosureGroup("Chassis", isExpanded: $chassisExpanded) {
+            DisclosureGroup("Chassis", isExpanded: Binding(get: { chassisExpanded }, set: { chassisExpanded = $0 })) {
                 Picker("Sensor", selection: $model.curveInput) {
                     Text("Trackpad").tag(CurveInput.trackpad)
                     Text("Actuator").tag(CurveInput.actuator)
@@ -261,7 +266,7 @@ struct CurveSection: View {
                 Spacer()
                 Button("Reset Curve") { resetCurve() }.font(.caption)
             }
-            CurveEditor(curve: curve, request: CurveRequestPreview(floor: profile.floor, target: profile.targetTemperature), resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve, profile: profile), onBegin: { model.beginEditGroup() }, onEnd: { model.endEditGroup() }, onChange: { commit($0) }).id(profile.id + input.rawValue).disabled(!curve.enabled)
+            CurveEditor(curve: curve, presentation: model.editorPresentation, draftKey: profile.id + ":" + input.rawValue, request: CurveRequestPreview(floor: profile.floor, target: profile.targetTemperature), resetRevision: resetRevision, currentTemperature: model.curveTemperature(curve, profile: profile), onBegin: { model.beginEditGroup() }, onEnd: { model.endEditGroup() }, onChange: { commit($0) }).id(profile.id + input.rawValue).disabled(!curve.enabled)
         }
     }
     func resetCurve() {

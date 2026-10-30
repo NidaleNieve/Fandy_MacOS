@@ -7,8 +7,8 @@ public enum DirectFanTransaction {
     public static func apply(_ targets: [FanTarget], transport: any SMCStructTransport,
         read: (String) throws -> DiscoveredSensor, fans: () throws -> [Fan],
         clock: () -> Double, check: () throws -> Void,
-        event: (FanTransition) -> Void = { _ in }) throws {
-        let baseline = try fans(), deadline = clock() + 2
+        event: (FanTransition) -> Void = { _ in }, preflightFans: [Fan]? = nil) throws {
+        let baseline = try preflightFans ?? fans(), deadline = clock() + 2
         guard deadline.isFinite else { throw ControlError.invalidNumber }
         _ = try SMCProfileWriter.normalizedTargets(targets, fans: baseline)
         var modes: [Int: DiscoveredSensor] = [:], metadata: [Int: DiscoveredSensor] = [:]
@@ -45,19 +45,41 @@ public enum DirectFanTransaction {
                 record(.targetWritten)
             }
         }
-        // No repeated fan enumeration between admissions: target every fan promptly,
-        // then perform full acknowledgement while all requested modes are established.
-        for target in targets {
-            guard var fan = baseline.first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
-            let entering = fan.mode == .automatic; fan.mode = .manual
-            try RecoveryTargetReadback.awaitTarget(target, baseline: fan, deadline: deadline, clock: clock,
-                read: { try requireLive(); guard let value = try fans().first(where: { $0.id == fan.id }) else { throw ControlError.invalidFan }; return value }, pause: { Thread.sleep(forTimeInterval: 0.01) })
-            if entering { event(FanTransition(fanID: fan.id, stage: .acknowledged, at: clock(), actualRPM: fan.actualRPM, previousTarget: fan.targetRPM, requestedTarget: target.rpm)) }
+        // One fresh inventory acknowledges the complete batch. Repeating a full
+        // inventory separately for each fan adds I/O without independent evidence.
+        let start = clock(), limit = min(deadline, start + 0.5)
+        guard start.isFinite, start < limit else { throw ControlError.staleSession }
+        var previous = start
+        while true {
+            try requireLive()
+            let before = clock(), observed = try fans(), now = clock()
+            guard now.isFinite, now >= before, now >= previous, now < deadline, now <= limit else { throw ControlError.staleSession }
+            previous = now
+            guard observed.count == baseline.count, Set(observed.map(\.id)) == Set(baseline.map(\.id)) else { throw ControlError.invalidFan }
+            var complete = true
+            for target in targets {
+                guard let old = baseline.first(where: { $0.id == target.fanID }),
+                      let fan = observed.first(where: { $0.id == target.fanID }) else { throw ControlError.invalidFan }
+                try fan.validate()
+                guard fan.mode == .manual, fan.minimumRPM == old.minimumRPM, fan.maximumRPM == old.maximumRPM,
+                      let actual = fan.targetRPM, actual.isFinite else { throw ControlError.invalidFan }
+                if abs(actual - target.rpm) > 0.5 {
+                    guard actual == 0 || actual == old.targetRPM, now < limit else {
+                        throw RecoveryTrialError.targetMismatch(fanID: fan.id, expected: target.rpm, observed: actual)
+                    }
+                    complete = false
+                }
+            }
+            if complete {
+                try requireLive()
+                for target in targets {
+                    if let fan = baseline.first(where: { $0.id == target.fanID }), fan.mode == .automatic {
+                        event(FanTransition(fanID: fan.id, stage: .acknowledged, at: clock(), actualRPM: fan.actualRPM, previousTarget: fan.targetRPM, requestedTarget: target.rpm))
+                    }
+                }
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.01)
         }
-        try requireLive()
-        let final = try fans()
-        guard final.count == baseline.count, final.allSatisfy({ fan in
-            fan.mode == .manual && baseline.contains { $0.id == fan.id && $0.minimumRPM == fan.minimumRPM && $0.maximumRPM == fan.maximumRPM }
-        }) else { throw ControlError.invalidFan }
     }
 }

@@ -8,6 +8,7 @@ public protocol FanHardwareIO: Sendable {
     func verifiedAutomaticMode(fanID: Int) throws -> FanMode
     func restorationNeedsWrite(fanID: Int, mode: FanMode) -> Bool
     func applyValidatedTargets(_ targets: [FanTarget]) throws
+    func applyValidatedTargets(_ targets: [FanTarget], fans: [Fan]) throws
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget]
     func finishAutomaticRestoration() throws
     func acceptsAutomatic(_ mode: FanMode) -> Bool
@@ -15,6 +16,7 @@ public protocol FanHardwareIO: Sendable {
 }
 public extension FanHardwareIO {
     var transitions: [FanTransition] { [] }
+    func applyValidatedTargets(_ targets: [FanTarget], fans: [Fan]) throws { try applyValidatedTargets(targets) }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { targets }
     func fanIDsForRestoration() throws -> [Int] { try enumerateFans().map(\.id) }
     func finishAutomaticRestoration() throws {}
@@ -71,7 +73,7 @@ public enum FanRestoration {
             guard let fan = fans.first(where: { $0.id == target.fanID }), target.rpm.isFinite, target.rpm >= fan.minimumRPM, target.rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
         }
         do {
-            try io.applyValidatedTargets(targets)
+            try io.applyValidatedTargets(targets, fans: fans)
         } catch {
             // A failed write can have applied. Never assume unchanged hardware.
             try? restore(using: io)

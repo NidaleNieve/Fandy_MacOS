@@ -34,6 +34,7 @@ import Testing
 }
 
 @MainActor @Test func profileContextActionsUseClickedIdentityAndKeepBuiltinsProtected() async throws {
+    _ = NSApplication.shared // Native launch creates this; executable-library tests must do so explicitly.
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }
     let model = AppModel(storeURL: dir.appendingPathComponent("profiles.json"), autoStart: false, simulation: true)

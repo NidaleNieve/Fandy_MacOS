@@ -4,6 +4,8 @@ import SwiftUI
 /// AppKit owns the window size. Hosting changes cannot collapse it to the
 /// split view's transient fitting height during initial layout or tab changes.
 @MainActor final class ProfilesWindow: NSWindow {
+    var profileUndoManager: UndoManager?
+    override var undoManager: UndoManager? { profileUndoManager ?? super.undoManager }
     static let initialContentSize = NSSize(width: 1040, height: 720)
     static let minimumContentSize = NSSize(width: 960, height: 560)
 

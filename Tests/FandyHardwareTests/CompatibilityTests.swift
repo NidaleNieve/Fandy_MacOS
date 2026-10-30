@@ -9,6 +9,7 @@ private final class CompatibilitySMC: SMCStructTransport {
     let identity: DeviceIdentity
     var values: [String: DiscoveredSensor] = [:]
     var writes: [(String, Double)] = []
+    var packets: [(String, UInt8)] = []
     var failKey: String?
     var failRead: String?
     var modeDelays: [String: Double] = [:]
@@ -56,6 +57,7 @@ private final class CompatibilitySMC: SMCStructTransport {
     }
     func transact(_ input: [UInt8]) throws -> SMCStructResponse {
         let key = String(bytes: input[0..<4].reversed(), encoding: .ascii)!
+        packets.append((key, input[42]))
         let old = try read(key)
         var output = [UInt8](repeating: 0, count: 80)
         if input[42] == 9 {
@@ -692,4 +694,75 @@ func everyNotebookUsesProductionPacketDiscovery(_ model: String) throws {
         try DirectFanTransaction.apply(targets, transport: io, read: io.read, fans: io.fans, clock: { io.now }, check: {})
     }
     #expect(io.writes.isEmpty)
+}
+
+@Test func directAcknowledgementReadsBothFansInOneFreshInventory() throws {
+    let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    var inventories = 0
+    try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: io,
+        read: io.read, fans: { inventories += 1; return try io.fans() }, clock: { io.now }, check: {})
+    #expect(inventories == 2) // Preflight, then fresh acknowledgement of the whole batch.
+    #expect(try io.fans().map(\.targetRPM) == [2500,2600])
+}
+
+@Test func directBatchAcknowledgementWaitsForUnequalTargetsAndRejectsChangedBounds() throws {
+    for corruptBounds in [false, true] {
+        let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+        var inventories = 0
+        let operation = {
+            try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: io,
+                read: io.read, fans: {
+                    inventories += 1; io.now += 0.05
+                    var fans = try io.fans()
+                    if inventories == 2 { fans[1].targetRPM = 2000 }
+                    if inventories >= 3 && corruptBounds { fans[0].maximumRPM -= 100 }
+                    return fans
+                }, clock: { io.now }, check: {})
+        }
+        if corruptBounds { #expect(throws: (any Error).self) { try operation() } }
+        else { try operation(); #expect(inventories == 3) }
+    }
+}
+
+@Test func productionFanInventoryReadsEachModeOnceWithoutCachingItsValueOrMetadata() throws {
+    let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    let reader = SMCReader(transport: io)
+    #expect(try reader.fans().allSatisfy { $0.mode == .automatic })
+    #expect(io.packets.filter { $0.0.hasSuffix("md") && $0.1 == 5 }.count == 2)
+    io.put("F0md", 1, "ui8 ")
+    #expect(try reader.fans().first?.mode == .manual)
+    io.put("F1md", 1, "flt ")
+    do { _ = try reader.fans(); Issue.record("Corrupt mode metadata must fail") }
+    catch HardwareError.invalidMetadata { }
+}
+
+@Test func capabilityValidationReusesOnlyAnIdenticalSuccessfulReportAndInvalidatesFailures() throws {
+    let io = CompatibilitySMC()
+    let device = DeviceRegistry.resolve(identity: io.identity, read: io.read)
+    let report = DeviceRegistry.report(device: device)
+    var validations = 0
+    var cache = RuntimeCapabilityCache(identity: io.identity) { report, capabilities, identity in
+        validations += 1
+        return try DeviceRegistry.validate(report: report, capabilities: capabilities, identity: identity)
+    }
+    for _ in 0..<60 { #expect(try cache.resolve(report: report, capabilities: device.capabilities) == device.capabilities) }
+    #expect(validations == 1)
+    let wrong = RuntimeDeviceReport(model: report.model, chip: report.chip, catalog: "untrusted", recipe: report.recipe)
+    #expect(throws: ControlError.hardwareUnqualified) { try cache.resolve(report: wrong, capabilities: device.capabilities) }
+    #expect(validations == 2)
+    _ = try cache.resolve(report: report, capabilities: device.capabilities)
+    #expect(validations == 3)
+    let corrupt = HardwareCapabilities(model: io.identity.model, stage: .observation,
+        sensors: [SensorEvidence(role: .cpuPeak, keys: ["BAD!"], source: "test", limitation: "")])
+    #expect(throws: ControlError.hardwareUnqualified) { try cache.resolve(report: report, capabilities: corrupt) }
+    #expect(validations == 4)
+}
+
+@Test func directTransactionReusesOnlyItsSynchronousPreflightAndStillReadsBackBothFans() throws {
+    let io = CompatibilitySMC(model: "Mac17,9", chip: "Apple M5 Pro", forceTest: false)
+    let preflight = try io.fans(); var reads = 0
+    try DirectFanTransaction.apply([FanTarget(0,2500),FanTarget(1,2600)], transport: io,
+        read: io.read, fans: { reads += 1; return try io.fans() }, clock: { io.now }, check: {}, preflightFans: preflight)
+    #expect(reads == 1)
+    #expect(try io.fans().allSatisfy { $0.mode == .manual })
 }

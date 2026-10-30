@@ -3,6 +3,10 @@ import Testing
 @testable import FandyCore
 // Each test owns its spy. Production serializes I/O; unchecked Sendable supports that protocol boundary.
 final class FanSpy: FanHardwareIO, @unchecked Sendable {
+    var validatedInventories: [[Fan]] = []
+    func applyValidatedTargets(_ targets: [FanTarget], fans: [Fan]) throws {
+        validatedInventories.append(fans); try applyValidatedTargets(targets)
+    }
     var normalize: ([FanTarget]) throws -> [FanTarget] = { $0 }
     func normalizedTargets(_ targets: [FanTarget]) throws -> [FanTarget] { try normalize(targets) }
     var fans=[Fan(id:0,min:2000,max:8000,actual:3000,mode:.manual),Fan(id:1,min:2200,max:7400,actual:3000,mode:.manual)]
@@ -236,4 +240,11 @@ private final class DeferredReleaseSpy: FanHardwareIO, @unchecked Sendable {
     let coordinator = HelperCoordinator(io: spy, capabilities: qualifiedCapabilities(), read: { spy.snapshot() }, clock: { spy.now }, startupRestoration: report)
     #expect(coordinator.status().automaticVerified && spy.calls == calls)
     #expect(coordinator.status().startupRestoration?.verified == true)
+}
+
+@Test func restorationPassesItsFreshCompletePreflightIntoTheSameTargetTransaction() throws {
+    let io = FanSpy()
+    try FanRestoration.apply([FanTarget(0,3000),FanTarget(1,3200)], using: io)
+    #expect(io.validatedInventories.count == 1)
+    #expect(io.validatedInventories.first?.map(\.id) == [0,1])
 }

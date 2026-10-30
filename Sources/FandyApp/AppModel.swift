@@ -48,6 +48,7 @@ import ServiceManagement
     let applicationCatalog: (@MainActor () -> [RunningProcess])?
     var isQuitting: Bool { quitting }
     func clockNow() -> Double { clock() }
+    let editorPresentation = EditorPresentationState()
     var editorSelection = "system-plus"
     var machine = ControlMachine()
     var snapshot: HardwareSnapshot?
@@ -59,6 +60,7 @@ import ServiceManagement
     private(set) var capabilities: HardwareCapabilities
     let deviceIdentity: DeviceIdentity
     private let usesRuntimeCapabilities: Bool
+    @ObservationIgnored private var capabilityCache: RuntimeCapabilityCache
     var helperFailure: HelperFailure?
     var helperDiagnostic: HelperDiagnosticReport?
     var observedHelperBuild: String?
@@ -130,6 +132,7 @@ import ServiceManagement
         else if let helperAvailable { self.helperRegistrationStatus = { helperAvailable() ? .enabled : .notRegistered } }
         else { self.helperRegistrationStatus = { HelperManager.service.status } }
         self.deviceIdentity = deviceIdentity; self.usesRuntimeCapabilities = capabilities == nil
+        self.capabilityCache = RuntimeCapabilityCache(identity: deviceIdentity)
         let initialCapabilities = capabilities ?? DeviceRegistry.declaredCapabilities(identity: deviceIdentity)
         self.capabilities = initialCapabilities
         self.machine = ControlMachine(chipPolicy: simulation ? .cpuGPU : initialCapabilities.chipPolicy)
@@ -451,7 +454,7 @@ import ServiceManagement
                     helperDiagnostic = status.diagnostic; helperFailure = status.diagnostic?.failure
                     observedHelperBuild = status.helperBuild
                     if usesRuntimeCapabilities, let report = status.deviceReport, let cap = status.capabilities {
-                        capabilities = try DeviceRegistry.validate(report: report, capabilities: cap, identity: deviceIdentity)
+                        capabilities = try capabilityCache.resolve(report: report, capabilities: cap)
                     }
                     helperConnectionFailureCode = helperFailure?.kind.rawValue
                     if status.bootstrap?.stage == .failed { if let helperFailure { throw helperFailure }; throw ControlError.helperUnavailable }
