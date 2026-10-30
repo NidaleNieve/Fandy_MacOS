@@ -167,3 +167,25 @@ import Testing
     await model.prepareForTermination()
     #expect(ProfileStore(url: url).load().automation.preferences.defaultProfileID == "system")
 }
+
+@MainActor @Test func settingsWindowStartsUsableAndKeepsMinimumSizeAfterContentReplacement() {
+    let window = AppDelegate.makeSettingsWindow()
+    #expect(window.frame.width >= 500 && window.frame.height >= 640)
+    #expect(window.minSize.width >= 420 && window.minSize.height >= 400)
+    let lifecycle = WindowContentLifecycle(window: window) { NSViewController() }
+    lifecycle.prepare()
+    #expect(window.frame.width >= 500 && window.frame.height >= 640)
+    window.close()
+    lifecycle.prepare()
+    #expect(window.frame.width >= 500 && window.frame.height >= 640)
+}
+
+@MainActor @Test func settingsMinimumSurvivesHostingAndRejectsTinyInteractiveResize() {
+    let window = AppDelegate.makeSettingsWindow()
+    let lifecycle = WindowContentLifecycle(window: window) { ProfileHostingController(rootView: Text("Settings")) }
+    lifecycle.prepare()
+    let minimum = NSWindow.frameRect(forContentRect: NSRect(origin: .zero, size: NSSize(width: 420, height: 400)), styleMask: window.styleMask).size
+    let resized = lifecycle.windowWillResize(window, to: NSSize(width: 1, height: 1))
+    #expect(resized.width >= minimum.width && resized.height >= minimum.height)
+    #expect(window.contentMinSize.width >= 420 && window.contentMinSize.height >= 400)
+}

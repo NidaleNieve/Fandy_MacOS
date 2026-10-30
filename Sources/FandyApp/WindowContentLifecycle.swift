@@ -6,22 +6,29 @@ import FandyCore
 @MainActor final class WindowContentLifecycle: NSObject, NSWindowDelegate {
     let window: NSWindow
     private let makeContent: () -> NSViewController
+    private let minimumContentSize: NSSize
     private var splitPositions: [CGFloat] = []
     init(window: NSWindow, makeContent: @escaping () -> NSViewController) {
-        self.window = window; self.makeContent = makeContent
+        self.window = window; self.makeContent = makeContent; self.minimumContentSize = window.contentMinSize
         super.init(); window.delegate = self
     }
     func prepare() {
         guard window.contentViewController == nil else { return }
         let frame = window.frame
         window.contentViewController = makeContent()
+        window.contentMinSize = minimumContentSize
         window.setFrame(frame, display: false)
         window.contentView?.layoutSubtreeIfNeeded()
         for (split, position) in zip(splits(in: window.contentView), splitPositions) {
             split.setPosition(position, ofDividerAt: 0)
         }
     }
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        let minimum = NSWindow.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize), styleMask: sender.styleMask).size
+        return NSSize(width: max(frameSize.width, minimum.width), height: max(frameSize.height, minimum.height))
+    }
     func windowWillClose(_ notification: Notification) {
+        let frame = window.frame
         autoreleasepool {
             splitPositions = splits(in: window.contentView).compactMap { $0.subviews.first?.frame.width }
             (window.contentViewController as? any ReleasableHostingContent)?.discardContent()
@@ -29,6 +36,7 @@ import FandyCore
             window.contentView = nil
             window.toolbar = nil
         }
+        window.setFrame(frame, display: false)
         BackgroundMemoryReclaimer.shared.schedule()
     }
     private func splits(in view: NSView?) -> [NSSplitView] {

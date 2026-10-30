@@ -91,11 +91,11 @@ enum FandyApp {
             }
         }
     }
-    private func window<V: View>(_ title: String, size: NSSize, view: V) -> NSWindow {
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = title; window.isReleasedWhenClosed = false
-        let controller = NSHostingController(rootView: view); controller.sizingOptions = []
-        window.contentViewController = controller; window.center(); return window
+    static func makeSettingsWindow() -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 640), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Fandy Settings"; window.isReleasedWhenClosed = false
+        window.contentMinSize = NSSize(width: 420, height: 400)
+        window.center(); return window
     }
     func showProfiles() {
         guard let model else { return }
@@ -119,8 +119,7 @@ enum FandyApp {
     func showSettings() {
         guard let model else { return }
         if settingsWindow == nil {
-            let window = window("Fandy Settings", size: NSSize(width: 500, height: 640), view: EmptyView())
-            window.contentViewController = nil
+            let window = Self.makeSettingsWindow()
             settingsWindow = WindowContentLifecycle(window: window) { ProfileHostingController(rootView: SettingsView(model: model)) }
         }
         if let settingsWindow { settingsWindow.prepare(); present(settingsWindow.window) }
