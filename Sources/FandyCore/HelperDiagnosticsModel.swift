@@ -15,6 +15,15 @@ public struct HelperFailure: Error, LocalizedError, Codable, Sendable, Equatable
         self.operation = ["status","restore","targets","lease","connect","fan_discovery","sensor_discovery","smc_open","read_info","read_value","enumerate","transport","signature","listener","power","startup"].contains(operation) ? operation : "unknown"
         self.key = key.flatMap { $0.utf8.count == 4 && $0.utf8.allSatisfy { (32...126).contains($0) } ? $0 : nil }
     }
+    private enum CodingKeys: String, CodingKey { case kind, domain, code, operation, key }
+    public init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(kind: try fields.decode(Kind.self, forKey: .kind),
+                  domain: try fields.decode(String.self, forKey: .domain),
+                  code: try fields.decode(Int.self, forKey: .code),
+                  operation: try fields.decode(String.self, forKey: .operation),
+                  key: try fields.decodeIfPresent(String.self, forKey: .key))
+    }
     public static func connection(_ error: NSError, operation: String) -> Self {
         let kind: Kind
         if error.domain == NSCocoaErrorDomain {

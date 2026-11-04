@@ -16,6 +16,14 @@ struct HelperApprovalPromptGate {
 }
 
 extension AppModel {
+    var helperRegistrationText: String {
+        switch helperSetupStatus {
+        case .enabled: capabilities.canRestore ? "Helper active" : "Read-only helper active"
+        case .requiresApproval: "Approval required in System Settings"
+        case .notRegistered, .notFound: "Helper not installed"
+        @unknown default: "Helper status unavailable"
+        }
+    }
     var needsHelperSetup: Bool { !simulation && helperInstallationSupported && !helperSetupInitializing && helperInstallationIssue == nil && helperSetupStatus == .requiresApproval }
     var needsHelperAttention: Bool {
         !simulation && helperInstallationSupported && !helperSetupInitializing &&

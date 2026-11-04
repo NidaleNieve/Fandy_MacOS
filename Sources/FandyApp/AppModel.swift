@@ -149,63 +149,6 @@ import ServiceManagement
         // Lifecycle begins from System regardless of persisted selection.
         if autoStart { Task { [weak self] in self?.start() } }
     }
-    var edited: Profile? { profiles.first { $0.id == editorSelection } }
-    var helperRegistrationText: String {
-        switch HelperManager.service.status {
-        case .enabled: capabilities.canRestore ? "Helper active" : "Read-only helper active"
-        case .requiresApproval: "Approval required in System Settings"
-        case .notRegistered, .notFound: "Helper not installed"
-        @unknown default: "Helper status unavailable"
-        }
-    }
-    var ownership: FanOwnership { FanOwnership.observe(snapshot, now: clock()) }
-    var preview: ProfilePreview? {
-        guard let edited, let snapshot, edited.kind != .system else { return nil }
-        return try? ShadowProfileEngine.evaluate(edited, snapshot: snapshot, now: simulation ? snapshot.sampledAt : clock(), chipPolicy: machine.chipPolicy)
-    }
-    func temperatureText(_ role: SensorRole) -> String {
-        let estimate = !simulation && capabilities.chipPolicy == .conservativeEnvelope && [.cpuAverage, .gpuAverage].contains(role)
-        return StatusPresentation.temperature(snapshot?.sensors.first { $0.role == role },
-            now: simulation ? snapshot?.sampledAt ?? clock() : clock(), estimate: estimate)
-    }
-    func curveTemperature(_ curve: FanCurve, profile: Profile) -> Double? {
-        guard let snapshot else { return nil }
-        return try? profile.temperature(for: curve.input, snapshot: snapshot, now: simulation ? snapshot.sampledAt : clock(), policy: machine.chipPolicy)
-    }
-    func sanitizedDiagnostics() throws -> Data {
-        // Allowlist-only export: no arbitrary messages, names, paths or signing identity.
-        var object: [String: Any] = [
-            "build": FandyBuild.identifier,
-            "macOS": ProcessInfo.processInfo.operatingSystemVersionString,
-            "registration": String(describing: helperSetupStatus),
-            "bootstrapStage": helperBootstrap?.stage.rawValue ?? "unreachable",
-            "bootstrapFailure": helperBootstrap?.failureCode ?? helperConnectionFailureCode ?? "none",
-            "bootstrapAttempt": helperBootstrap?.attempt ?? 0,
-            "modeKeys": helperInterface?.modeKeys ?? [],
-            "targetTypes": helperInterface?.targetTypes ?? [],
-            "forceTest": helperInterface?.forceTest ?? false,
-            "restorationVerified": helperRestoration?.verified ?? false,
-            "fanRestoration": helperRestoration?.fans.map { ["fanID": $0.fanID, "initialMode": $0.initialMode?.rawValue ?? -1, "observedMode": $0.observedMode?.rawValue ?? -1, "alreadyAutomatic": $0.alreadyAutomatic == true, "verified": $0.verified] as [String: Any] } ?? [],
-            "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",
-            "model": deviceIdentity.model, "chip": deviceIdentity.chip,
-            "observedHelperBuild": observedHelperBuild ?? "unreachable",
-            "connectionFailure": helperFailure.map { ["kind": $0.kind.rawValue, "domain": $0.domain, "code": $0.code, "operation": $0.operation] as [String: Any] } ?? [:],
-            "startupPhase": helperDiagnostic?.phase ?? "unreachable",
-            "sensorGroups": capabilities.sensors.map { ["role": $0.role.rawValue, "keys": $0.keys, "state": $0.state.rawValue] as [String: Any] },
-            "controllerState": machine.state.rawValue, "helperHealth": helperHealth.rawValue,
-            "hardwareStage": capabilities.stage.rawValue, "ownership": ownership.rawValue,
-            "compatibilityEvidence": capabilities.compatibilityEvidence.rawValue,
-            "simulation": simulation, "unsavedChanges": unsavedChanges,
-            "failureCodes": [hardwareError == nil ? nil : "monitoring_or_control_error", saveError == nil ? nil : "persistence_error"].compactMap { $0 }
-        ]
-        if let installationObservation {
-            object["installation"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(installationObservation))
-        }
-        if let helperDiagnostic {
-            object["helperDiagnostic"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(helperDiagnostic))
-        }
-        return try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
-    }
     func canMove(_ direction: Int) -> Bool {
         guard let index = profiles.firstIndex(where: { $0.id == editorSelection }), !profiles[index].bundled else { return false }
         let next = index + direction
@@ -221,39 +164,6 @@ import ServiceManagement
         if capabilities.permits(profile), !helperAvailable(), let snapshot,
            (try? snapshot.validate(now: clock(), required: profile.requiredSensors(chipPolicy: capabilities.chipPolicy))) != nil { return true }
         return eligibility(profile).allowed
-    }
-    var statusText: String {
-        if machine.state == .system, machine.fault == ControlError.thermalPressure.localizedDescription {
-            return simulation ? "Simulation · " + ControlError.thermalPressure.localizedDescription : ControlError.thermalPressure.localizedDescription
-        }
-        if !simulation {
-            if let hardwareError { return hardwareError }
-            if capabilities.canRestore && (machine.selected.kind != .system || machine.state != .system) { return controlStatus }
-            switch ownership {
-            case .appleObserved: return "Monitoring · Apple automatic observed"
-            case .manualObserved: return "Monitoring · external manual control observed"
-            case .unknown: return "Monitoring · fan ownership unavailable"
-            }
-        }
-        if machine.automaticAtIdle { return "Simulation · Apple auto at idle" }
-        return "Simulation · \(controlStatus)"
-    }
-    private var controlStatus: String {
-        if machine.automaticAtIdle && machine.state == .customActive { return "\(machine.selected.name) · Apple auto at idle" }
-        return switch machine.state {
-        case .system: "System"
-        case .initializingCustom: "Starting \(machine.selected.name)…"
-        case .customActive: machine.selected.name
-        case .restoringSystem: "Returning to System…"
-        case .fault: "Fan state unverified"
-        }
-    }
-    func isSelected(_ id: String) -> Bool {
-        if !simulation {
-            if id == "system" { return machine.selected.kind == .system && ownership == .appleObserved && (!capabilities.canRestore || machine.state == .system) }
-            guard capabilities.canControl, helperHealth == .controlReady else { return false }
-        }
-        return (machine.state == .system || machine.state == .customActive) && machine.selected.id == id
     }
     func observePower() {
         guard !quitting else { return }

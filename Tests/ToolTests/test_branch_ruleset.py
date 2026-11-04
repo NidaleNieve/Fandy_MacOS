@@ -8,6 +8,15 @@ ROOT = Path(__file__).parents[2]
 
 
 class BranchRulesetTests(unittest.TestCase):
+    def test_feature_branch_push_and_pull_request_do_not_run_duplicate_checks(self):
+        parsed = subprocess.check_output(['ruby', '-ryaml', '-rjson', '-e',
+            'puts JSON.generate(YAML.load_file(ARGV[0]))',
+            str(ROOT / '.github/workflows/verification.yml')], text=True)
+        workflow = json.loads(parsed)
+        events = workflow.get('on', workflow.get('true'))
+        self.assertIn('pull_request', events)
+        self.assertEqual(events['push']['branches'], ['main'])
+
     def test_main_requires_pull_requests_and_real_github_actions_checks(self):
         ruleset = json.loads((ROOT / '.github/main-ruleset.json').read_text())
         self.assertEqual(ruleset['target'], 'branch')

@@ -94,3 +94,26 @@ import FandyCore
             helperSignatureStatus: errSecSuccess, identitiesMatch: true, signingClassesMatch: false)
     }
 }
+
+@MainActor private final class RegistrationObservation {
+    var status = SMAppService.Status.requiresApproval
+}
+
+@MainActor @Test func helperRegistrationLabelUsesTheSameObservationAsSetup() {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let registration = RegistrationObservation()
+    let model = AppModel(storeURL: directory.appendingPathComponent("profiles.json"), autoStart: false,
+        capabilities: HardwareCapabilities(model: "Fixture", stage: .restorationQualification, topology: .verified),
+        helperRegistrationStatus: { registration.status })
+    #expect(model.helperRegistrationText == "Approval required in System Settings")
+    registration.status = .enabled
+    model.refreshHelperSetup()
+    #expect(model.helperRegistrationText == "Helper active")
+    registration.status = .notRegistered
+    model.refreshHelperSetup()
+    #expect(model.helperRegistrationText == "Helper not installed")
+    registration.status = .notFound
+    model.refreshHelperSetup()
+    #expect(model.helperRegistrationText == "Helper not installed")
+}

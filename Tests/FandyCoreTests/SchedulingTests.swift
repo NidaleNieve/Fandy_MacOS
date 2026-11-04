@@ -145,6 +145,16 @@ private func date(_ value: String) -> Date { ISO8601DateFormatter().date(from: v
     #expect(decoded.profiles.isEmpty); #expect(decoded.replacements == [BuiltInProfiles.maximum])
     #expect(decoded.periods[0].profileID == "max")
 }
+@Test func scheduledProfileImportRejectsInvalidCapacityWithoutChangingBuiltinReplacement() throws {
+    let builtin = try ScheduledProfileInterchange.encode(BuiltInProfiles.maximum, automation: .init())
+    for count in [-1, Int.min, 129, Int.max] {
+        #expect(throws: ScheduleError.self) { try ScheduledProfileInterchange.decode(builtin, existingCount: count) }
+    }
+    #expect(try ScheduledProfileInterchange.decode(builtin, existingCount: 128).replacements == [BuiltInProfiles.maximum])
+    let custom = try ScheduledProfileInterchange.encode(BuiltInProfiles.gaming.duplicated(), automation: .init())
+    #expect(try ScheduledProfileInterchange.decode(custom, existingCount: 127).profiles.count == 1)
+    #expect(throws: ScheduleError.self) { try ScheduledProfileInterchange.decode(custom, existingCount: 128) }
+}
 @Test func newPreferenceMetadataHasBackwardCompatibleDefaults() throws {
     let prefs = try JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8))
     #expect(prefs.launchAtLogin); #expect(prefs.use24HourTime); #expect(prefs.menuSensors.isEmpty)
