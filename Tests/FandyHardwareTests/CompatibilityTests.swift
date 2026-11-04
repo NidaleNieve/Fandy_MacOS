@@ -88,6 +88,16 @@ private final class CompatibilitySMC: SMCStructTransport {
     }
 }
 
+@Test func referenceSensorEvidenceDoesNotMisreportOwnerTestingOrPromoteTheAdapter() {
+    let fixture = CompatibilitySMC(model: "Mac14,9", chip: "Apple M2 Pro")
+    let device = DeviceRegistry.resolve(identity: fixture.identity, read: fixture.read)
+    #expect(!device.capabilities.sensors.isEmpty)
+    #expect(device.capabilities.sensors.allSatisfy { !$0.limitation.contains("not physically tested") })
+    #expect(device.capabilities.compatibilityEvidence == .referenceSupported)
+    #expect(DeviceRegistry.report(device: device).recipe != "m5-direct")
+    #expect(fixture.writes.isEmpty)
+}
+
 @Test(arguments: [("MacBookPro18,3", "Apple M1 Pro"), ("Mac14,9", "Apple M2 Pro"),
     ("Mac15,6", "Apple M3 Pro"), ("Mac16,8", "Apple M4 Pro"), ("Mac17,8", "Apple M5 Pro")])
 func referenceFamiliesSelectTheirOwnCompleteGroups(_ item: (String, String)) throws {

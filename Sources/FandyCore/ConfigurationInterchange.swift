@@ -69,7 +69,8 @@ public enum ScheduledProfileInterchange {
         try ImportValidation.pauses(root["pauses"])
         if let defaults = root["activationDefaults"] { try ImportValidation.defaults(defaults) }
         let archive = try JSONDecoder().decode(Archive.self, from: data)
-        guard archive.version == 2, !archive.profiles.isEmpty, archive.profiles.count <= 128, archive.profiles.filter({ !$0.bundled }).count <= 128 - min(max(existingCount, 0), 128),
+        guard archive.version == 2, (0...128).contains(existingCount), !archive.profiles.isEmpty,
+              archive.profiles.count <= 128, archive.profiles.filter({ !$0.bundled }).count <= 128 - existingCount,
               Set(archive.profiles.map(\.id)).count == archive.profiles.count else { throw ScheduleError("Invalid version, duplicate profiles or profile limit exceeded.") }
         try archive.profiles.forEach { profile in
             let builtin = BuiltInProfiles.all.contains(where: { $0.id == profile.id })

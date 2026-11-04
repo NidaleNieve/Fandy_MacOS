@@ -196,7 +196,7 @@ public enum DeviceRegistry {
             let eligible = identity.supportedNotebook && ((SensorRole.safety.contains(mapping.role) || [.cpuAverage,.gpuAverage].contains(mapping.role)) ? chipSupported : supportedComfort.contains(mapping.role))
             return SensorEvidence(role: mapping.role, keys: mapping.keys, state: eligible ? .referenceSupported : .pending,
                 source: "Stats " + statsRevision + "; historical VirtualSMC names; iSMC ambient-top descriptor fact; typed startup observations",
-                limitation: "Reference-supported region membership; not physically tested by Fandy on this model.",
+                limitation: "Reference-supported sensor membership; physical core and surface identities are not certified.",
                 displayName: mapping.role == .airflowTop ? "Top proximity" : nil)
         }
         let cap = HardwareCapabilities(model: identity.model, stage: interface == nil ? .observation : interface?.supportsTargets == true ? .qualifiedControl : .restorationQualification,

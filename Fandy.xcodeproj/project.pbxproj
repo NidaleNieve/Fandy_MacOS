@@ -94,6 +94,12 @@
 			"path" = "Sources/FandyApp/CustomFanSpeedPicker.swift";
 			"sourceTree" = "<group>";
 		};
+		"EA49C780CB26B33CCFF2D4A9" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyApp/DiagnosticExport.swift";
+			"sourceTree" = "<group>";
+		};
 		"0C4A4AA130769C5030D06911" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -322,6 +328,12 @@
 			"path" = "Sources/FandyCore/BackgroundWorkMetrics.swift";
 			"sourceTree" = "<group>";
 		};
+		"F85639ACC2D1CC73C722CDB0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/FandyCore/BuiltInProfiles.swift";
+			"sourceTree" = "<group>";
+		};
 		"925C545BBF5908A07D2A47AF" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -392,18 +404,6 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/FandyCore/HelperSafety.swift";
-			"sourceTree" = "<group>";
-		};
-		"380AABF370EB0AB44A1CCF6F" = {
-			"isa" = "PBXFileReference";
-			"lastKnownFileType" = "sourcecode.swift";
-			"path" = "Sources/FandyCore/ManualQualification.swift";
-			"sourceTree" = "<group>";
-		};
-		"C4062210B76AE05A3D3A2E50" = {
-			"isa" = "PBXFileReference";
-			"lastKnownFileType" = "sourcecode.swift";
-			"path" = "Sources/FandyCore/ManualQualificationActivation.swift";
 			"sourceTree" = "<group>";
 		};
 		"3B9DD1294571767A6BDCBE9D" = {
@@ -685,6 +685,7 @@
 				9A6ECCAA56620715A84F6DCC,
 				A48FB4F620EB6AE19767DD6E,
 				D9A111686F0799ABBD698205,
+				EA49C780CB26B33CCFF2D4A9,
 				0C4A4AA130769C5030D06911,
 				8E639CEF8DDAE615620B8426,
 				51D0B8FD680608BAF5020BFE,
@@ -723,6 +724,7 @@
 				D6DEF19C197F147C455F6EB9,
 				D96A58088F00CD60907A1AF5,
 				A459751549599A29C8954E53,
+				F85639ACC2D1CC73C722CDB0,
 				925C545BBF5908A07D2A47AF,
 				D2CEB122BCF9ECDC6BB42176,
 				FE86A99A33849697E1E79465,
@@ -735,8 +737,6 @@
 				F571BFE1DDA071C131B3035C,
 				D5171724E8DC95710602ADE6,
 				BFAB6D8C689DF42DBD689F6F,
-				380AABF370EB0AB44A1CCF6F,
-				C4062210B76AE05A3D3A2E50,
 				3B9DD1294571767A6BDCBE9D,
 				6004F86E59C8744938F1A36A,
 				B097A9D6879D03AD75F9CCA0,
@@ -918,6 +918,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = D9A111686F0799ABBD698205;
 		};
+		"695644008B709191DDB49428" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = EA49C780CB26B33CCFF2D4A9;
+		};
 		"3524A73E9615361C0E66A5A7" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = 0C4A4AA130769C5030D06911;
@@ -1081,6 +1085,7 @@
 				54E08E461525A4E404448A81,
 				DCF9586E3F57070E435433C3,
 				9D3F0A9584B3DB5D03C9E95E,
+				695644008B709191DDB49428,
 				3524A73E9615361C0E66A5A7,
 				59F320D3FCD95443EF12DCEE,
 				B542E6D429544F89E6775EC5,

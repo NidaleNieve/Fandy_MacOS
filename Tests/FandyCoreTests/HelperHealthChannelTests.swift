@@ -2,6 +2,17 @@ import Foundation
 import Testing
 @testable import FandyCore
 
+@Test func decodedHelperFailuresRetainTheSameAllowlistAsConstructedFailures() throws {
+    let data = Data(#"{"kind":"smc","domain":"private-diagnostic-domain","code":42,"operation":"/private/operator-details","key":"invalid-key"}"#.utf8)
+    let failure = try Wire.decode(HelperFailure.self, from: data)
+    #expect(failure.kind == .smc && failure.code == 42)
+    #expect(failure.domain == "Other" && failure.operation == "unknown" && failure.key == nil)
+    let exported = String(decoding: try Wire.encode(failure), as: UTF8.self)
+    #expect(!exported.contains("private-diagnostic-domain") && !exported.contains("operator-details"))
+    let valid = HelperFailure(kind: .smc, domain: "IOKit", code: 7, operation: "read_value", key: "Tp00")
+    #expect(try Wire.decode(HelperFailure.self, from: Wire.encode(valid)) == valid)
+}
+
 @Test func healthRepliesStayAvailableWhileHardwareQueueIsBlocked() throws {
     let cache = HelperStatusStore()
     cache.publish(HelperStatus(automaticVerified: false, bootstrap: .init()), at: 10)

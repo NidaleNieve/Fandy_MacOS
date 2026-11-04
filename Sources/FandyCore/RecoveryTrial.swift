@@ -87,7 +87,8 @@ public extension RecoveryFanHardwareIO {
     func startStoppedRecoveryFan(_ target: FanTarget, deadline: Double) throws { throw ControlError.hardwareUnqualified }
 }
 
-/// Serial helper-owned, finite mechanical trials. General profiles remain disabled.
+/// Finite mechanical trials admitted only by the recovery-qualification stage.
+/// The helper serializes trials; production leases use HelperCoordinator.
 /// A blocked/dead helper cannot execute its timer; checks run again whenever I/O returns.
 public final class RecoveryTrialCoordinator {
     private let io: any RecoveryFanHardwareIO

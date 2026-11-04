@@ -2,6 +2,22 @@ import Foundation
 import Testing
 @testable import FandyCore
 
+@Test func retiredManualQualificationStageCannotAdmitProductionLeases() throws {
+    let spy = FanSpy()
+    let capabilities = qualifiedCapabilities(stage: .manualQualification)
+    let coordinator = HelperCoordinator(io: spy, capabilities: capabilities,
+        read: { spy.snapshot() }, clock: { spy.now })
+    #expect(coordinator.startup())
+    #expect(spy.fans.allSatisfy { $0.mode == .automatic })
+    spy.calls = []
+    for required in [Set<SensorRole>(), SensorRole.safety, HardwareCapabilities.requiredRoles] {
+        #expect(throws: ControlError.hardwareUnqualified) {
+            try coordinator.begin(LeaseRequest(generation: 1, required: required), owner: UUID())
+        }
+    }
+    #expect(spy.calls.isEmpty && !coordinator.status().manualQualified)
+}
+
 @Test func capabilityStagesCannotSkipSensorAndRestorationGates() {
     let full = qualifiedCapabilities()
     #expect(full.canControl); #expect(full.canRestore)
