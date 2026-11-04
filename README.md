@@ -21,7 +21,7 @@ Fandy is a native macOS fan controller and temperature monitor built for Apple S
 
 Profiles can follow schedules, react to apps, run temporarily, or stay active for exactly as long as you need. Everything is designed to stay simple to use while giving you much deeper control than a basic fan utility.
 
-Vibecoded with Codex, but very polish.
+Vibecoded with Codex, but very polished.
 
 ## Get started
 
@@ -29,41 +29,46 @@ Vibecoded with Codex, but very polish.
 2. Open Fandy. Its setup window guides you to enable **Background App Activity** in System Settings.
 3. Click the fan icon in the menu bar and choose a profile.
 
-## Pick your cooling style
+## Cooling profiles
 
 | Profile | Best for |
 | :--- | :--- |
-| **System** | Letting macOS manage the fans. |
+| **System** | Lets macOS manage the fans. |
 | **System+** | Gentle, earlier airflow for everyday use. |
-| **Cool Chassis** | Keeping the typing area comfortable. |
-| **Gaming** | Earlier, stronger cooling during sustained loads. |
-| **Silent** | Quiet work and long typing sessions. |
-| **Max** | Running each fan at its reported maximum. |
-| **Custom Profiles** | Your own cooling curves and temperature targets. |
+| **Cool Chassis** | Keeps the typing area cool and comfortable. |
+| **Gaming** | Very early and stronger cooling during sustained loads. |
+| **Silent** | Keeps the fans slower for quiet environments. |
+| **Max** | Runs each fan at its maximum. |
+| **Custom Profiles** | Create your own cooling curves and temperature targets. |
 
-Create and edit custom profiles with intuitive graphs for chip and chassis temperatures. Drag curve points or set a target temperature in **Edit Profiles…**.
+You can create and edit custom profiles with intuitive graphs for chip and chassis temperatures in **Edit Profiles**.
 
-## Fit it around your day
+## Custom profiles features
 
-- **Temporary cooling:** activate a profile for minutes or hours, until a time, or until an application closes. Choose **Custom Fan Speed** to set a fixed speed with a slider, temporarily or indefinitely, without saving a profile.
-- **App triggers:** choose several programs for a profile. Activate when any opens and keep it active until all close.
-- **Schedules:** choose weekday periods, overnight schedules and vacation pauses.
-- **Customizable menu temperatures:** choose the sensor readings shown inside the menu, including CPU/GPU averages and chassis temperatures. Live readings are also available beside the profile editor.
-- **At a glance:** show fan speeds and assign keyboard shortcuts.
-- **Stay up to date:** daily automatic updates, or another preferred frequency, or check manually in Settings.
-- **Make it portable:** export individual profiles with their schedules, or move your whole configuration to another Mac.
+- **Fan speed graphs:** Configure how fast the fans should spin at any given temperature for the chip or chassis sensors with intuitive but very customizable graphs
+- **Schedules:** Set different profiles for specific days and times, with the option to pause schedules when needed.
+- **App triggers:** Choose a programs (or multiple) for a profile. Activates when any opens and keeps it active until all close.
+- **Target Temperature:** Set a target temperature for any part of the mac and let the app figure out the fan speed.
+- **Additonal profile configuration:** Set the fan response speed to be more gradual or instant. Set a minimum fan speed.
+
+## Additonal features
+- **Sensor Readings:** See temperature readings from all sensors and current fan speed.
+- **Temporary cooling:** Activate a profile for minutes or hours, until a time, or until an application closes. Additionally set a Custom Fan Speed to set a fixed speed with temporarily without saving a profile.
+- **Customizable Menubar menu:** Choose sensor readings shown inside the menu, including CPU/GPU averages and chassis temperatures. Additonally, hide other elements to make it even more clean.
+- **Shortcuts:** Assign keyboard shortcuts to functions and profiles.
+- **Export and Import:** Export individual profiles, or move your whole configuration to another Mac.
+- **Automatic updates:** Automatic updates and frequency, nothing special.
 
 ## Compatibility
 
-Supports **M1–M5 MacBook Pros** on **macOS 15+**. M5 Pro is physically tested; other models use reference-supported configurations and runtime checks. Intel Macs and fanless MacBook Airs are unsupported. See the [compatibility matrix](docs/COMPATIBILITY.md).
+Supports **M1–M5 MacBook Pros** on **macOS 15+**. 
+M5 Pro and M2 Pro have been physically tested but other models should work.
 
-## Your Mac, your data
+## Private and safe
 
-No accounts, analytics or telemetry. Your configuration stays on your Mac.
+There are no accounts, no analytics and no telemetry. Your configuration stays on your Mac. The app never connects to the internet except for the updater.
 
-**System** returns fan control to macOS. A watchdog and sensor checks protect custom control; see [safety details and limitations](SAFETY.md).
-
-[Privacy policy](docs/PRIVACY.md) · [Safety](SAFETY.md) · [Security](SECURITY.md)
+See [Safety](SAFETY.md) for information on how the app keeps the Mac safe from overheating.
 
 ## For developers
 
@@ -83,8 +88,6 @@ For live fan control, quit the installed copy, install the signed build as
 `/Applications/Fandy.app`, and open that copy. The helper uses this fixed path;
 running another copy remains suitable for simulation but cannot register fan control.
 
-[Architecture](ARCHITECTURE.md) · [Distribution](docs/DISTRIBUTION.md) · [App Store assessment](docs/APP_STORE_READINESS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+[Architecture](ARCHITECTURE.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Released under the [MIT license](LICENSE). Third-party notices retain their original licenses.
-
-Not currently available on the Mac App Store.
