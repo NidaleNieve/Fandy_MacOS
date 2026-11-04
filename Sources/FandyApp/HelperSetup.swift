@@ -4,8 +4,7 @@ import ServiceManagement
 import FandyCore
 import UniformTypeIdentifiers
 
-/// Presentation only: never grants helper or hardware authority. A transient
-/// approval status during replacement must not flash an unnecessary window.
+/// Debounce transient approval status during helper replacement.
 struct HelperApprovalPromptGate {
     private var requiredSince: Double?
     mutating func shouldPresent(approvalRequired: Bool, now: Double) -> Bool {
@@ -29,7 +28,6 @@ extension AppModel {
         !simulation && helperInstallationSupported && !helperSetupInitializing &&
         (helperInstallationIssue != nil || needsHelperSetup || helperSetupStatus != .enabled || (helperHealth == .unavailable && (helperDiagnostic?.stalled == true || (helperBootstrap?.stage != .initializing && helperBootstrap?.stage != .restoring))) || (helperHealth == .fault && helperConnectionFailureCode != nil) || helperBootstrap?.stage == .failed)
     }
-    /// Not registered yet is initialization, not evidence that permission was denied.
     var shouldPresentHelperApproval: Bool { needsHelperSetup && helperSetupStatus == .requiresApproval }
     var helperSetupMessage: String {
         helperSetupError ?? helperFailure?.localizedDescription ?? (helperDiagnostic?.stalled == true ? "Fan hardware work is taking longer than expected. Export diagnostics." : nil) ?? (shouldPresentHelperApproval
@@ -47,8 +45,7 @@ extension AppModel {
     }
     func prepareHelperSetup() {
         refreshHelperSetup()
-        // Tests/diagnostics never install a service. Distribution registration
-        // retains the Applications-location and signed-client requirements.
+        // Only the installed app registers a service; tests and diagnostics skip it.
         guard !simulation, helperInstallationSupported, helperSetupStatus != .enabled,
               Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
               !CommandLine.arguments.contains("--functional-check"),

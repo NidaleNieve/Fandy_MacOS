@@ -2,8 +2,7 @@ import Foundation
 import FandyCore
 import FandyHardware
 
-/// Fixed, quiet background workloads with all normal sensor and helper checks.
-/// No UI is opened; no caller can supply speed, duration or authority.
+/// Fixed background-control workloads using the normal helper and sensor checks.
 @MainActor enum BackgroundControlDiagnostics {
     nonisolated static func percent(changing: Bool, tick: Int) -> Double { changing && tick % 2 != 0 ? 4 : 3 }
     static func run(changing: Bool) async -> Int32 {
@@ -20,8 +19,7 @@ import FandyHardware
             for _ in 0..<6 { await model.tick(); try await Task.sleep(for: .seconds(1)) }
             guard generation == model.powerTransitionCount, model.hardwareError == nil,
                   model.activateCustomFanSpeed(percent: 3, seconds: changing ? 240 : 660) else { throw ControlError.helperUnavailable }
-            // A warmup excludes admission, startup and initial fan inertia from
-            // the steady-state window. The helper's own deadline stays bounded.
+            // Exclude admission and spin-up from the steady-state measurement.
             for _ in 0..<12 { await model.tick(); try await Task.sleep(for: .seconds(1)) }
             let began = ContinuousClock.now
             let deadline = began.advanced(by: .seconds(changing ? 180 : 600))

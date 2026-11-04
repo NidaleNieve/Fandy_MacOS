@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
-// Independently authored ABI adapter. No fan-write function is exposed here.
+// AppleSMC read/enumeration bridge.
 typedef struct FandySMC FandySMC;
 typedef struct { uint32_t size; char type[5]; uint8_t attributes; uint8_t bytes[32]; } FandySMCValue;
 FandySMC *fandy_smc_open(int32_t *error);
@@ -12,6 +12,6 @@ int32_t fandy_smc_key_at(FandySMC *connection, uint32_t index, char key[5]);
 #include <CoreFoundation/CoreFoundation.h>
 CFArrayRef fandy_hid_temperatures(void) CF_RETURNS_RETAINED;
 
-// Fixed known-controller check; no caller-supplied PID/path or process data is returned.
+// Detect the known TG Pro helper without returning process details.
 // 1 = TG Pro helper detected; 0 = not observed; -1 = enumeration unavailable.
 int32_t fandy_tg_controller_present(void);

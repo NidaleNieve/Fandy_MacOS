@@ -1,7 +1,7 @@
 // Sensor-key definitions adapted from exelban/stats, MIT.
 // Copyright (c) 2019 Serhiy Mytrovtsiy. Full notice: docs/licenses/stats.txt.
 // Pinned revision 9ceb6e3b20001c4102f473c5dc3e96b388a77da9, Modules/Sensors/values.swift.
-// These are published region candidates, not physical coverage measurements by Fandy.
+// Published sensor regions; physical membership varies by model.
 enum ReferenceSensorKeys {
     static let m1Efficiency = ["Tp09", "Tp0T"]
     static let m1Performance = ["Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"]

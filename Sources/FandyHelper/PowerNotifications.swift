@@ -5,7 +5,7 @@ import FandyCore
 
 // IOMessage.h: sys_iokit | sub_iokit_common | 0x280 / 0x300 / 0x270.
 // Swift cannot import these nested C macros.
-// Retained for the launch daemon's lifetime. No dependence on AppKit/user-session notifications.
+// Keep the IOKit registration alive for the daemon's lifetime.
 final class PowerNotifications: @unchecked Sendable {
     let transition: (NativePowerEvent) -> Void
     var port: IONotificationPortRef?

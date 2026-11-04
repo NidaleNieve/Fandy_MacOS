@@ -1,6 +1,6 @@
 import Foundation
 
-/// A hardware-build decision, not a profile preference or caller-selected XPC field.
+/// Chip input policy selected by the compiled hardware registry.
 public enum ChipControlPolicy: String, Codable, Sendable {
     case cpuGPU, conservativeEnvelope
     public var required: Set<SensorRole> { self == .cpuGPU ? SensorRole.safety : [.socPeak] }
@@ -109,8 +109,7 @@ public struct HardwareSnapshot: Codable, Sendable, Equatable {
         for role in required { _ = try value(role, now: now) }
         guard thermalPressure == .nominal || thermalPressure == .fair else { throw ControlError.thermalPressure }
     }
-    /// Fan ownership can be observed even when temperature identities are not yet qualified.
-    /// This does not make a snapshot eligible for a custom-control lease.
+    /// Validate fan ownership independently of temperature readings.
     public func validateFans(now: TimeInterval) throws {
         guard sampledAt.isFinite, now >= sampledAt, now - sampledAt <= 3,
               !fans.isEmpty, fans.count <= 8, Set(fans.map(\.id)).count == fans.count else { throw ControlError.invalidSnapshot }

@@ -46,6 +46,16 @@ class ChipCoverageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 module.load_model_samples(path)
 
+    def test_report_keeps_group_metrics_without_claiming_an_old_gpu_test_result(self):
+        raw = {key: 40 for key in module.CPU + module.GPU}
+        reference = {column: 45 for column in module.CPU_COLUMNS + module.GPU_COLUMNS}
+        text = module.render(module.audit([(10, raw)], [(10, reference)]))
+        self.assertIn('| Full published domain | 8 | 1 | 5.000 |', text)
+        self.assertIn('never select production control inputs', text)
+        self.assertNotIn('Current sensor capabilities remain pending', text)
+        self.assertNotIn('bounded GPU phase lacked', text)
+        self.assertNotIn('Consequences for the next measurement', text)
+
 
 if __name__ == '__main__':
     unittest.main()

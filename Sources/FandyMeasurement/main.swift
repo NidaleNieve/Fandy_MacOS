@@ -4,8 +4,8 @@ import CoreImage
 import FandyCore
 import FandyHardware
 
-// Read-only, finite diagnostic. No privileged API, fan writer, network, or configurable load.
-// Every workload stops if fresh automatic ownership / conservative thermal admission is lost.
+// Bounded temperature sampling with fixed workloads.
+// Stop the workload if fresh automatic ownership or temperature checks fail.
 final class Stimulus: @unchecked Sendable {
     private let lock = NSLock()
     private let startedAt: Double
@@ -105,8 +105,7 @@ let renderCycle = CommandLine.arguments == [CommandLine.arguments[0], "--gpu-ren
 guard renderCycle || CommandLine.arguments == [CommandLine.arguments[0], "--bounded-cycle"] else {
     FileHandle.standardError.write(Data("Usage: fandy-measure --bounded-cycle | --gpu-render-cycle\nFixed read-only cycles under verified automatic fan mode. GPU render: 30s baseline, 30s 4K image processing, 120s cooldown.\n".utf8)); exit(2)
 }
-/// A finite ordinary Core Image video-processing workload, not the earlier sine compute pulse.
-/// Each submitted frame must finish within 250ms; admission is rechecked every frame.
+/// Core Image workload: recheck admission each frame and require completion within 250 ms.
 func captureRenderCycle() throws {
     guard HardwareSnapshotReader.machineModel() == SensorRegistry.model,
           let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { throw ControlError.hardwareUnqualified }
@@ -154,8 +153,7 @@ do {
     if renderCycle { try captureRenderCycle(); exit(0) }
     guard HardwareSnapshotReader.machineModel() == SensorRegistry.model else { throw ControlError.hardwareUnqualified }
     let reader = try SMCReader(), sampler = try HardwareSnapshotReader()
-    // Enumerate once, before the timed baseline. This catalog is discovery evidence only;
-    // no prefix family is promoted into a production control mapping.
+    // Enumerate before the timed baseline; the catalog does not change production groups.
     let catalog = try reader.enumerate(prefix: "T")
     let selected = catalog.filter { sample in sample.type == "flt " && sample.size == 4 &&
         ["Tp", "Tm", "Tg"].contains { sample.key.hasPrefix($0) } }.map(\.key)

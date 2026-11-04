@@ -17,7 +17,7 @@ public struct ProfileApplication: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
-/// Portable user intent only. This never grants control authority or resumes a lease.
+/// Saved activation preferences, separate from runtime leases.
 public struct ProfileActivationDefault: Codable, Sendable, Equatable {
     public enum Kind: String, Codable, Sendable { case forever, duration, application }
     public var kind: Kind = .forever
@@ -34,7 +34,6 @@ public struct ProfileActivationDefault: Codable, Sendable, Equatable {
     }
     public var applicationNames: String { applications.map(\.name).joined(separator: " or ") }
     public var applicationIdentifiers: Set<String> { Set(applications.map(\.matchingIdentifier)) }
-    /// User automation only: runtime identity and fan authority are never stored.
     public var launchWhenOpened: Bool = false
     public init() {}
     private enum CodingKeys: String, CodingKey { case kind, seconds, applicationID, applicationName, applications, launchWhenOpened }

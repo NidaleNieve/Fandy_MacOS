@@ -10,8 +10,7 @@ enum MenuLayout {
     // AppKit reserves its own state/key-equivalent columns outside custom views.
     static let maximumMenuWidth: CGFloat = 256
     static func titleWidth(_ title: String) -> CGFloat { (title as NSString).size(withAttributes: [.font: NSFont.menuFont(ofSize: 0)]).width }
-    /// Native menu rows retain native highlighting. Long names are shortened,
-    /// with the complete action retained in the tooltip and accessibility label.
+    /// Truncate long native rows; keep the full title for accessibility and tooltips.
     static func compactTitle(_ title: String) -> String {
         guard titleWidth(title) > nativeTitleWidth else { return title }
         var result = title

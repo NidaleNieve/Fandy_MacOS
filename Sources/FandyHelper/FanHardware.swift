@@ -4,7 +4,7 @@ import FandyHardware
 import IOKit
 import os
 
-/// Private writer in the helper executable only. No arbitrary keys are accepted over IPC.
+/// Helper-owned fan I/O.
 final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     private let commandLog = Logger(subsystem: "is.dsr.fandy", category: "fan-transaction")
     private let reader: SMCReader
@@ -58,8 +58,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
     }
     func fanIDsForRestoration() throws -> [Int] {
         guard let interface else { throw ControlError.hardwareUnqualified }
-        // Model-scoped topology independently observed in discovery. Corrupt RPM/ranges/count
-        // must not prevent a release attempt. New models need their own qualified topology.
+        // Use known model topology for release even if RPM or count telemetry is corrupt.
         return interface.fanIDs
     }
     func readMode(fanID: Int) throws -> FanMode {
@@ -138,9 +137,7 @@ final class AppleFanHardware: FanHardwareIO, @unchecked Sendable {
         transactionToken = admittedOperation ?? cancellation.token()
         defer { transactionToken = nil }
         let deadline = ProcessInfo.processInfo.systemUptime + 1
-        // The coordinator already performs a fresh process scan for every
-        // command and watchdog observation. This operation cannot write; retain
-        // its cancellation/deadline fences without repeating write admission.
+        // The coordinator already checked controller presence; retain cancellation and deadline checks.
         return try DirectFanTransaction.verifyAcknowledged(targets, baseline: fans, read: reader.read,
             fans: { [self] in try enumerateFans() }, check: { [self] in try requireReadbackDeadline(deadline) })
     }

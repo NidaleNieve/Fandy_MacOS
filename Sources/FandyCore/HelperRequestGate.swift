@@ -1,7 +1,6 @@
 import Foundation
 
-/// Bounds work before it reaches the helper's serial hardware/watchdog queue.
-/// Tickets are internal process authority, never decoded from an XPC payload.
+/// Bound queued helper work. Tickets are process-local and cannot come from XPC.
 public final class HelperRequestGate: @unchecked Sendable {
     public struct Ticket: Sendable, Hashable {
         fileprivate let id: UUID

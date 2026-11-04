@@ -77,8 +77,7 @@ import FandyHardware
         connectionToken = UUID(); connection?.invalidate(); connection = nil
         lease = nil; latest = nil; generation = nil; operationToken = UUID()
     }
-    /// Fixed adversarial messages are sent only to a confirmed observation-only helper.
-    /// No caller chooses payloads, methods, fan targets or trust requirements.
+    /// Send fixed invalid requests to an observation-only helper.
     func checkObservationProtocol() async throws -> [String] {
         guard !DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl else { throw ControlError.unauthorized }
         return try await checkRestrictedProtocol(observationOnly: true)
@@ -89,7 +88,7 @@ import FandyHardware
               !DeviceRegistry.current.capabilities.canQualifyManual else { throw ControlError.unauthorized }
         return try await checkRestrictedProtocol(observationOnly: false)
     }
-    /// Production-safe negative checks: no valid lease or target request is transmitted.
+    /// Probe rejection paths without sending an admissible lease or target.
     func checkProductionProtocol() async throws -> [String] {
         let initial = try await status()
         guard DeviceRegistry.current.capabilities.stage == .qualifiedControl,
@@ -152,7 +151,7 @@ import FandyHardware
             do { try await restoreAutomatic(); throw ControlError.unauthorized }
             catch ControlError.restorationUnverified { checks.append("observationRestoreRejected") }
         }
-        // Test recovery using a fresh XPC connection, never a stale cached response.
+        // Reconnect to test the helper rather than its cached status.
         connectionToken = UUID(); connection?.invalidate(); connection = nil; latest = nil; lease = nil
         let reconnected = try await status()
         guard reconnected.observationOnly == observationOnly, !reconnected.manualQualified, reconnected.snapshot != nil else { throw ControlError.helperUnavailable }
@@ -196,8 +195,7 @@ import FandyHardware
             try requireCurrent(token)
             if runtimeCapabilities.stage == .qualifiedControl, let current = lease,
                LeaseContinuation.permits(current, status: status, required: required, now: ProcessInfo.processInfo.systemUptime) {
-                // Editing or changing a profile with the same required inputs keeps the
-                // valid hardware lease. UI generations still fence stale acknowledgements.
+                // Same-input edits keep the lease; UI generations still reject stale replies.
                 generation = requested
             } else {
                 lease = nil; generation = nil

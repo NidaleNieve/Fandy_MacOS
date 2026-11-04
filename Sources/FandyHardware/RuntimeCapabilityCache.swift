@@ -1,7 +1,6 @@
 import FandyCore
 
-/// Cache only successful validation of an identical authenticated report. This
-/// contains no readings, leases, preferences or failed-resolution authority.
+/// Cache successful validation of an unchanged authenticated capability report.
 public struct RuntimeCapabilityCache {
     private let identity: DeviceIdentity
     private let validate: (RuntimeDeviceReport, HardwareCapabilities, DeviceIdentity) throws -> HardwareCapabilities

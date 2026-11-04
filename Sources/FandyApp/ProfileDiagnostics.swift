@@ -2,7 +2,7 @@ import Foundation
 import FandyCore
 import FandyHardware
 
-/// Fixed native-model integration checks; never edits the user's profile store.
+/// Profile integration checks using a separate store.
 @MainActor enum ProfileDiagnostics {
     static func run(_ action: HelperDiagnosticAction) async -> Int32 {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyProfiles-\(UUID().uuidString)")
@@ -103,13 +103,12 @@ import FandyHardware
             return 1
         }
     }
-    /// Runtime qualification arrives through authenticated status, never a GUI SMC probe.
+    /// Wait for capabilities from the authenticated helper status.
     static func prepare(_ model: AppModel,
         pause: @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(500)) }) async throws {
         try await HelperDiagnostics.prepare(model, action: .profilesLive, pause: pause)
     }
-    /// Three fixed modest entries; independent 20-Hz reads can expose a visible
-    /// overshoot, but cannot rule out physical events shorter than 50 milliseconds.
+    /// Sample three modest entries at 20 Hz; events shorter than 50 ms may be missed.
     private static func transitions(_ model: AppModel, reader: SMCReader) async throws {
         guard let index = model.profiles.firstIndex(where: { $0.id == "school" }) else { throw ControlError.invalidSnapshot }
         let original = model.profiles[index]

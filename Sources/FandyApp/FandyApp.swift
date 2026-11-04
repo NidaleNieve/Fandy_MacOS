@@ -55,15 +55,13 @@ enum FandyApp {
         menu = status
         guard !CommandLine.arguments.contains("--functional-check"), (try? HelperDiagnosticAction.parse(CommandLine.arguments)) == nil else { return }
         helperSetupTask = Task { [weak self, weak model] in
-            // A fixed delay races update-time re-registration. Wait for actual
-            // startup completion, then ask only for explicit native approval.
+            // Wait for registration to finish before deciding whether approval is needed.
             while model?.helperSetupInitializing == true {
                 guard !Task.isCancelled, model?.isQuitting == false else { return }
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
             }
             var gate = HelperApprovalPromptGate()
-            // Native registration status can briefly lag a completed register.
-            // Observe explicit approval continuously; enabled exits immediately.
+            // Registration status can lag; wait for approval or enabled status.
             for _ in 0..<40 {
                 guard !Task.isCancelled, let model, !model.isQuitting,
                       !model.simulation, model.capabilities.canRestore else { return }

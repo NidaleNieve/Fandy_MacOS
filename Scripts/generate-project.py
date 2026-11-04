@@ -12,8 +12,7 @@ if project_path.exists():
  previous_objects=json.loads(converted.stdout)['objects']
 signing_keys={'DEVELOPMENT_TEAM','CODE_SIGN_IDENTITY','CODE_SIGN_STYLE','PROVISIONING_PROFILE','PROVISIONING_PROFILE_SPECIFIER','CODE_SIGN_ENTITLEMENTS'}
 def preserve_local_signing(name,kind,previous):
- # Migrate Xcode's inline selections to ignored, per-configuration includes.
- # Build configuration remains effective locally without publishing identity/profile values.
+ # Move Xcode signing choices into ignored per-configuration includes.
  folder=root/'Config/Signing';folder.mkdir(parents=True,exist_ok=True)
  defaults=root/'Config/Signing.xcconfig'
  if not defaults.exists():

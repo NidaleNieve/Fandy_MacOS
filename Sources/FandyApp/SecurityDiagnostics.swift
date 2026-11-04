@@ -1,7 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Fixed invalid inputs only; no command-line payload, key, RPM or trust-policy selection.
+/// Fixed invalid requests for helper rejection tests.
 enum ProductionSecurityProbe {
     enum Method { case begin, targets, recovery }
     struct Case { let name: String; let method: Method; let data: Data }

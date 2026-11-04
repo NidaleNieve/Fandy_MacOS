@@ -1,6 +1,6 @@
 import Foundation
 
-/// Stable allowlisted failures. Raw localized descriptions never cross the wire or export.
+/// Allowlisted failure fields for IPC and diagnostic exports.
 public struct HelperFailure: Error, LocalizedError, Codable, Sendable, Equatable {
     public enum Kind: String, Codable, Sendable { case authentication, serviceUnavailable, timeout, interrupted, smc, metadata, restoration, sensors, installation, power, unknown }
     public let kind: Kind
@@ -80,8 +80,7 @@ public struct HelperDiagnosticReport: Codable, Sendable, Equatable {
         self.phase = phase; self.progressAt = progressAt; self.failure = failure; self.fans = fans
     }
 }
-/// Health publication never calls hardware. The helper's sole hardware queue
-/// publishes value snapshots; authenticated ingress reads them under a short lock.
+/// Publish completed hardware snapshots; status readers hold only a short lock.
 public final class HelperStatusStore: @unchecked Sendable {
     private let lock = NSLock()
     private var status = HelperStatus(automaticVerified: false)

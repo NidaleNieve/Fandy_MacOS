@@ -11,8 +11,7 @@ enum LeaseAdmission {
     }
 }
 
-/// Reuse only an immediately issued observation; the helper still acquires and
-/// validates independent hardware readings before every write.
+/// Reuse only recent client observations; the helper still reads hardware before writes.
 enum TargetObservation {
     static func snapshot(_ status: HelperStatus?, now: Double, required: Set<SensorRole>) -> HardwareSnapshot? {
         guard let status, status.version == Wire.version, status.manualQualified, !status.observationOnly,

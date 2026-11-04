@@ -40,22 +40,17 @@ public struct SensorMapping: Sendable {
 }
 public enum SensorRegistry {
     public static let model = "Mac17,9"
-    // Observed physical topology for this model; these are not RPM or manual-state defaults.
+    // Fan IDs observed on Mac17,9.
     public static let observedFanIDs = [0, 1]
     public static let observedModeKeys = [0: "F0md", 1: "F1md"]
-    // Complete published M5 GPU domain. Tg1g was absent from the enumerated Mac17,9
-    // catalogs, including the 2026-10-01 automatic-mode recording; not excluded by core count.
+    // Tg1g is absent from Mac17,9 catalogs; keep the other published GPU members.
     public static let publishedGPUKeys = ["Tg0U","Tg0X","Tg0d","Tg0g","Tg0j","Tg1Y","Tg1c","Tg1g"]
-    // Explicit read-only candidate manifest from the Mac17,9 catalog. Never a runtime prefix rule.
-    // Both Tp and Tm responded during the separate CPU pulse. Individual physical identities
-    // remain unverified; the separately named control envelope includes the complete manifest.
+    // Fixed Mac17,9 CPU-region candidates. Tp/Tm physical identities remain unresolved.
     public static let cpuRegionCandidates = ["Tm00","Tm04","Tm08","Tm0C","Tm0G","Tm0K","Tm0O","Tm0R","Tm0U","Tm0X","Tm0a","Tm0d","Tm0g","Tm0j","Tm0m","Tm0p","Tm0u","Tm0y","Tm1E","Tm1I","Tm1M","Tm1Q","Tm1U","Tm1Y","Tm1c","Tm1g","Tm1k","Tm1o","Tm1s","Tm1x","Tm21","Tm25","Tm29","Tm2D","Tm2H","Tm2L","Tm2P","Tm2T","Tm2j","Tm2n","Tp00","Tp04","Tp08","Tp0C","Tp0G","Tp0K","Tp0O","Tp0R","Tp0U","Tp0X","Tp0a","Tp0d","Tp0g","Tp0j","Tp0m","Tp0p","Tp0u","Tp0y","Tp1E","Tp1I","Tp1Q","Tp1U","Tp1g"]
-    // Exact Mac17,9 catalog membership, including hotter regions outside the published subset.
-    // These are not core numbers. Missing Tg1g is model metadata, not a sampling-time omission.
+    // Fixed GPU-region candidates; indices do not identify physical cores.
     public static let gpuRegionCandidates = ["Tg08","Tg0C","Tg0O","Tg0R","Tg0U","Tg0X","Tg0a","Tg0d","Tg0g","Tg0j","Tg12","Tg16","Tg1I","Tg1M","Tg1Q","Tg1U","Tg1Y","Tg1c","Tg1k","Tg1o","Tg1x","Tg29","Tg2D","Tg2P","Tg2T","Tg2X","Tg2b","Tg2f","Tg2j","Tg2n","Tg2r","Tg3B","Tg3F","Tg3R","Tg3V","Tg3Z","Tg3d","Tg3h","Tg3l","Tg3t","Tg3x","Tg43"]
     public static let chipEnvelopeKeys = (cpuRegionCandidates + gpuRegionCandidates).sorted()
-    /// Fixed model membership; operational control inputs are reviewed separately
-    /// from the unresolved exact identities of informational CPU/GPU averages.
+    /// Fixed model-specific groups for display and control.
     public static let mappings: [SensorMapping] = [
         SensorMapping(role: .cpuAverage, keys: cpuRegionCandidates),
         SensorMapping(role: .gpuAverage, keys: ["Tg0U","Tg0X","Tg0d","Tg0g","Tg0j","Tg1Y","Tg1c"]),
@@ -76,15 +71,10 @@ public enum SensorRegistry {
     } + [SensorMapping(role: .socPeak, keys: chipEnvelopeKeys, reduction: .maximum),
          SensorMapping(role: .cpuRegion, keys: cpuRegionCandidates, reduction: .maximum),
          SensorMapping(role: .gpuRegion, keys: gpuRegionCandidates, reduction: .maximum)]
-    // Reviewed from independent published names, 1156 contemporaneous reference pairs,
-    // competing-candidate analysis and the separate chassis temperature response.
-    // Top is qualified as a proximity input, not certified as TG Pro's physical Airflow Top.
-    // Independent ambient-top provenance, typed model observations and paired thermal range
-    // support an operational proxy on the airflow scale; its UI name preserves that distinction.
+    // Chassis inputs use published names and paired Mac17,9 observations.
+    // TaTP is an ambient-top proximity proxy, not TG Pro's exact Airflow Top identity.
     public static let reviewedComfortRoles: Set<SensorRole> = [.trackpad, .actuator, .airflowLeft, .airflowTop, .airflowRight]
-    // Automatic handback passed on both fans on 2026-10-01: manual->0, three
-    // idempotent requests and 60 seconds independently observed. See HARDWARE_GATES.
-    // Evidence and authority are compiled into the signed build; no preference/XPC bypass exists.
+    // Mac17,9 control capabilities are compiled from the tested model policy.
     public static let capabilities = HardwareCapabilities(model: model, stage: .qualifiedControl, sensors: mappings.map { mapping in
         let source: String = switch mapping.role {
         case .cpuAverage, .cpuPeak: "Stats Tp anchors; Mac17,9 thermal Tp/Tm labels; typed candidate manifest and CPU pulse; earlier TG Pro recordings"
@@ -97,16 +87,16 @@ public enum SensorRegistry {
         case .powerSupply: "iSMC Power Supply Proximity candidate; TG Pro recordings"
         }
         let limitation: String = switch mapping.role {
-        case .airflowTop: "Operational top-proximity proxy on the airflow temperature scale. Exact TG Pro Airflow Top identity is not certified; TRDd/TRDc remain numerical competitors."
-        case .socPeak: "Reviewed operational envelope including disputed Tm regions; not a hottest-core identity certificate."
-        case .cpuRegion, .gpuRegion: "Operational regional maximum; not a physical core identity or complete CPU/GPU coverage certificate. Independent guard always retains the full chip envelope."
-        case .cpuAverage, .cpuPeak, .gpuAverage, .gpuPeak: "Individual identities, aggregation and peak coverage remain unproved on Mac17,9."
-        default: "Historical or broad-platform names plus rounded reference agreement need Mac17,9 identity review."
+        case .airflowTop: "Ambient-top proximity proxy. Exact TG Pro Airflow Top identity is unverified; TRDd/TRDc are competing candidates."
+        case .socPeak: "Chip envelope includes Tm regions with unresolved physical identity."
+        case .cpuRegion, .gpuRegion: "Regional control input; full chip-envelope validation remains mandatory. Physical core identity and CPU/GPU coverage remain unverified."
+        case .cpuAverage, .cpuPeak, .gpuAverage, .gpuPeak: "Physical identities, aggregation and peak coverage remain unverified on Mac17,9."
+        default: "Published names and rounded reference readings do not establish Mac17,9 physical identity."
         }
         let reviewed = reviewedComfortRoles.contains(mapping.role) || [.socPeak, .cpuRegion, .gpuRegion].contains(mapping.role)
         return SensorEvidence(role: mapping.role, keys: mapping.keys, state: reviewed ? .verified : .pending,
-                              source: source + (reviewed ? "; Mac17,9 operational review, CHIP_ENVELOPE / TEMPERATURE_PROFILE_STATUS" : ""),
-                              limitation: mapping.role == .airflowTop ? limitation : reviewedComfortRoles.contains(mapping.role) ? "Operational comfort mapping; not an independently measured physical surface temperature." : limitation,
+                              source: source + (reviewed ? "; Mac17,9 sensor policy; docs/COMPATIBILITY.md" : ""),
+                              limitation: mapping.role == .airflowTop ? limitation : reviewedComfortRoles.contains(mapping.role) ? "Chassis control input; physical surface temperature is not independently verified." : limitation,
                               displayName: mapping.role == .airflowTop ? "Top proximity" : nil)
     }, topology: .verified, automaticRestoration: .verified, manualTransaction: .verified, chipControl: .conservativeEnvelope)
 }

@@ -38,3 +38,11 @@ class TargetedReportTests(unittest.TestCase):
         for change in [lambda r: r['fans'][0].update(mode=1), lambda r: r['fans'][1].update(id=0)]:
             row = record('baseline'); change(row)
             with self.assertRaises(ValueError): report.analyze([row])
+
+    def test_report_states_variation_result_and_keeps_measurements(self):
+        for peak, observed in [(40.5, 'no'), (45, 'yes')]:
+            rows = [record(phase, peak if phase == 'gpu' else 40)
+                    for phase in ['baseline', 'gpu'] for _ in range(10)]
+            text = report.render(report.analyze(rows))
+            self.assertIn(f'| Tg candidates | 1 | 40.00 C | {peak:.2f} C | {peak - 40:.2f} C | {observed} |', text)
+            self.assertIn('does not change qualification', text)

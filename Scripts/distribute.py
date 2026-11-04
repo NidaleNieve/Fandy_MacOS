@@ -23,8 +23,8 @@ def notary_arguments(profile, keychain=None):
 
 
 def validate_credentials(profile, keychain=None):
-    # Use the same lookup as submission. An explicit login Keychain can hide a
-    # profile available through the default lookup; never silently replace it.
+    # Match submission's Keychain lookup; an explicit login Keychain can hide the saved profile.
+    # Failed lookup must not recreate credentials.
     try:
         result = subprocess.run(['xcrun', 'notarytool', 'history'] + notary_arguments(profile, keychain)
                                 + ['--output-format', 'json'], capture_output=True, timeout=60)
@@ -51,7 +51,7 @@ def developer_identity():
 def notarize(path, profile, keychain=None):
     result = subprocess.run(['xcrun', 'notarytool', 'submit', str(path)] + notary_arguments(profile, keychain)
                              + ['--wait', '--output-format', 'json'], capture_output=True, timeout=1800)
-    # Apple tool output may include private account information. Emit only reviewed status.
+    # Apple output can contain account details; print the status only.
     try:
         report = json.loads(result.stdout)
     except (ValueError, TypeError):
@@ -120,7 +120,7 @@ def distribute(app, output, profile=DEFAULT_PROFILE, keychain=None):
         PACKAGE.run(['codesign', '--verify', '--strict', candidate])
         PACKAGE.run(['spctl', '--assess', '--type', 'open', '--context', 'context:primary-signature', candidate])
         PACKAGE.run(['hdiutil', 'verify', candidate])
-        # Verify the final stapled image, not just its pre-notarization predecessor.
+        # Verify the final stapled image.
         import plistlib
         mounted = plistlib.loads(PACKAGE.run(['hdiutil', 'attach', '-readonly', '-nobrowse', '-plist', candidate]).stdout)
         entry = next(x for x in mounted['system-entities'] if 'mount-point' in x)

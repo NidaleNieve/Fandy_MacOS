@@ -3,8 +3,7 @@ import SwiftUI
 import Sparkle
 import FandyCore
 
-/// Sparkle owns scheduling, signature checks, downloads and its native update UI.
-/// The application owns the safety boundary before replacing its embedded helper.
+/// Sparkle handles updates; Fandy verifies handback before replacing the helper.
 @MainActor @Observable final class UpdateController: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate {
     private weak var model: AppModel?
     private var updater: SPUUpdater!

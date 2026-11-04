@@ -1,7 +1,6 @@
 import Foundation
 
-/// Called only on the helper's serial queue. Owns all leases and hardware effects.
-/// Injected I/O makes every failure path testable without physical fan writes.
+/// Own leases and hardware effects on the helper's serial queue; I/O is injected.
 public final class HelperCoordinator: @unchecked Sendable {
     private let io: any FanHardwareIO
     private let read: () throws -> HardwareSnapshot
@@ -21,7 +20,7 @@ public final class HelperCoordinator: @unchecked Sendable {
     private var targetsStartedAt: Double?
     private var lastWatchdogObservationAt: Double?
     private var lastAcquisition: HardwareSnapshot?
-    /// Serial-queue publication bookkeeping only; this never authorizes a command.
+    /// Last acquisition ID, used to avoid redundant status publication.
     public var observationID: UUID? { lastAcquisition?.id }
     public var requiresFrequentWatchdog: Bool { safety.lease != nil || safety.restoring }
     /// Active expiry/release decisions run every 100ms; watchdog SMC acquisition is bounded to 2Hz.
@@ -126,8 +125,7 @@ public final class HelperCoordinator: @unchecked Sendable {
             lastAcquisition = nil
             if safety.lease != nil { _ = restore() }
             else { safety.observationFailed() }
-            // Keep independently readable temperatures, but never expose invalid/stale fan
-            // telemetry as proof of ownership after the failed validation.
+            // Preserve temperature monitoring while discarding invalid ownership evidence.
             observedSnapshot?.fans = []
             return HelperStatus(automaticVerified: safety.systemVerified, manualQualified: qualified, snapshot: observedSnapshot, fault: error.localizedDescription, capabilities: capabilities, restoration: restoration, startupRestoration: startupRestoration)
         }
@@ -190,11 +188,8 @@ public final class HelperCoordinator: @unchecked Sendable {
             }
             let requested = try safety.validateAndRenew(owner: owner, leaseID: request.leaseID, generation: request.generation, targets: request.targets, snapshot: snapshot, now: clock())
             let validated = try normalized(requested, fans: snapshot.fans)
-            // An unchanged, previously acknowledged production request is a
-            // heartbeat, not another physical transaction. Inputs and ownership
-            // above were freshly acquired; the adapter independently verifies
-            // metadata/readback below. Qualification and reference paths retain
-            // their existing transaction sequence.
+            // Renew unchanged targets only on the M5 direct path after fresh sensor,
+            // ownership and metadata checks. Other adapters still run their transaction.
             if capabilities.stage == .qualifiedControl, capabilities.compatibilityEvidence == .locallyTested,
                !targets.isEmpty, requested == lastRequestedTargets, validated == targets,
                try io.verifyUnchangedTargets(targets, fans: snapshot.fans) {

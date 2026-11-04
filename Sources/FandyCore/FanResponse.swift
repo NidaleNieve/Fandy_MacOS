@@ -1,7 +1,6 @@
 import Foundation
 
-/// Integrates sample-held demand over elapsed time, not the number of callers.
-/// Missing history is filled with the first observed value, never invented zeros.
+/// Average demand by elapsed time, extending the first sample over missing history.
 public struct TimeWeightedDemand: Sendable {
     private struct Sample: Sendable { let time: Double; let value: Double }
     private var samples: [Sample] = []

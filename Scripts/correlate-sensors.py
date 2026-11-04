@@ -47,7 +47,7 @@ def load_samples(path):
         sample, offset = decoder.raw_decode(text, offset)
         values = {}
         for key in sample['keys']:
-            # Unqualified ioft interpretations cannot establish a mapping.
+            # Only the validated flt format enters comparison.
             value = temperature(key.get('value'))
             if key.get('type') == 'flt ' and key.get('size') == 4 and value is not None:
                 if key['key'] in values:
@@ -122,7 +122,7 @@ def analyze(samples, rows):
             elif margin is None or margin < 0.4 or ranked[0]['meanAbsoluteErrorC'] > 0.75:
                 evidence = 'ambiguous'
             else:
-                # Still requires independent identity and coverage review, including timing/rounding.
+                # A numeric match still needs independent identity and coverage checks.
                 evidence = 'candidateForReview'
         result['sensors'].append({'name': column, 'evidence': evidence, 'runnerUpMarginC': margin, 'candidates': ranked[:5]})
     return result

@@ -3,7 +3,7 @@ import AppKit
 import FandyCore
 import FandyHardware
 
-/// Real native power notifications; never simulates a sleep event or requests a power change.
+/// Observe real sleep/wake notifications without requesting a power change.
 @MainActor enum SleepDiagnostics {
     @MainActor private final class Observation {
         var slept = false

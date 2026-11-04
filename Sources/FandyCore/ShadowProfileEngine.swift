@@ -1,6 +1,6 @@
 import Foundation
 
-/// Informational result only: deliberately has no targets, lease or control effects.
+/// Display-only demand and input provenance.
 public struct ProfilePreview: Sendable, Equatable {
     public let profileID: String
     public let snapshotID: UUID
@@ -14,8 +14,7 @@ public enum ShadowProfileEngine {
     public static func evaluate(_ profile: Profile, snapshot: HardwareSnapshot, now: Double, chipPolicy: ChipControlPolicy = .cpuGPU) throws -> ProfilePreview {
         var informational = snapshot
         let candidates = snapshot.sensors.contains { profile.requiredSensors(chipPolicy: chipPolicy).contains($0.role) && $0.health == .unverified }
-        // Candidate values are admitted only into this private informational copy.
-        // ProfileEngine and HardwareSnapshot remain strict for every control caller.
+        // Promote candidates only in this preview copy, never in a control snapshot.
         for index in informational.sensors.indices where informational.sensors[index].health == .unverified {
             informational.sensors[index].health = .valid
         }

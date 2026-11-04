@@ -8,7 +8,7 @@ struct ShortcutIDSequence {
     mutating func next() -> UInt32? { guard value < UInt32.max else { return nil }; value += 1; return value }
 }
 
-/// Registers only explicit shortcuts; no event tap, global key monitor, or Accessibility permission.
+/// Register explicit Carbon hotkeys without an event tap or Accessibility access.
 @MainActor final class GlobalShortcuts {
     private static weak var active: GlobalShortcuts?
     static var recording = false { didSet { if recording != oldValue { active?.pauseRecording(recording) } } }

@@ -2,8 +2,7 @@ import Foundation
 import FandyCore
 import CSMC
 
-/// Wider raw-domain guard for finite mechanical testing, never production sensor selection.
-/// Prefixes do not establish identity; all candidate labels stay unverified.
+/// Wider candidate readings for mechanical trials, separate from production groups.
 public final class RecoveryObservationReader {
     private let sampler: HardwareSnapshotReader
     private let reader: SMCReader
@@ -33,8 +32,7 @@ public final class RecoveryObservationReader {
 }
 
 public enum RecoveryOwnershipProbe {
-    /// A known-controller conflict guard, not proof that every possible utility is absent.
-    /// Helper-only callers also continuously verify fan ownership and target readback.
+    /// Detect a known controller; callers must still verify fan modes and targets.
     public static func requireNoKnownController() throws {
         guard geteuid() == 0 else { throw ControlError.unauthorized }
         switch BackgroundWorkMetrics.shared.measure(.controllerScan, operation: { fandy_tg_controller_present() }) {

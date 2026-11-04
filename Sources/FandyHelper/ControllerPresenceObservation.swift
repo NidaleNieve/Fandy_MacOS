@@ -1,8 +1,7 @@
 import Foundation
 import FandyHardware
 
-/// Only presentation reuses this observation. Every command/admission and active
-/// watchdog still performs its original fresh exclusive-controller check.
+/// Cache controller presence for status only; commands and watchdog checks read it afresh.
 final class ControllerPresenceObservation {
     private let clock: () -> Double
     private let inspect: () throws -> Void

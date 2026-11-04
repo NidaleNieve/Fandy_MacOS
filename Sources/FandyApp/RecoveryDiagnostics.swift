@@ -2,7 +2,7 @@ import Foundation
 import FandyCore
 import FandyHardware
 
-/// Fixed signed-app diagnostics. No caller-selected RPM, fan key, duration or trust policy.
+/// Signed-app recovery diagnostics with fixed targets and deadlines.
 @MainActor enum RecoveryDiagnostics {
     static func run(_ action: HelperDiagnosticAction, client: FanXPCClient) async -> Int32 {
         do {

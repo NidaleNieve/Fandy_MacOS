@@ -9,8 +9,7 @@ public struct BackgroundWorkSample: Codable, Sendable, Equatable {
     public let calls: UInt64
     public let cpuNanoseconds: UInt64
 }
-/// Fixed, passive counters; no history, caller timing, keys or hardware authority.
-/// Phases may nest (SMC is included in sampling), so their totals are not additive.
+/// Work counters. Nested phases overlap, so their totals are not additive.
 public final class BackgroundWorkMetrics: @unchecked Sendable {
     public static let shared = BackgroundWorkMetrics()
     private let lock = NSLock()

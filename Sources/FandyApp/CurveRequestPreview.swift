@@ -1,8 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Per-input requested airflow before other sensors, minimum airflow and smoothing.
-/// Uses production interpolation/target math without changing editable nodes.
+/// Preview per-input demand with the production curve and target calculations.
 struct CurveRequestPreview {
     var floor: Double = 0
     var target: TemperatureTarget?

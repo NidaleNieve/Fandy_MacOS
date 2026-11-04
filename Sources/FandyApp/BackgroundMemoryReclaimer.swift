@@ -1,8 +1,7 @@
 import Foundation
 import Darwin
 
-/// A single deferred trim after closing UI returns already-freed allocator pages
-/// to macOS. It neither evicts live objects nor runs on a periodic idle timer.
+/// Return freed allocator pages once after closing UI, rather than on a timer.
 @MainActor final class BackgroundMemoryReclaimer {
     static let shared = BackgroundMemoryReclaimer()
     private let pause: () async -> Void

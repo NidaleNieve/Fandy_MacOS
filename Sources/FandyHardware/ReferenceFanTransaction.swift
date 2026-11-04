@@ -1,8 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Reference-supported transaction. Injected reads, transport, clock and cancellation
-/// exercise the production sequence in tests without changing physical hardware.
+/// Reference-adapter transaction with injected I/O, timing and cancellation.
 private enum ReferenceAdmissionError: Error { case protectedMode }
 public enum ReferenceFanTransaction {
     public static let acquisitionBudget = 7.0

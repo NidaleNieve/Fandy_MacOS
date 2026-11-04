@@ -1,7 +1,6 @@
 import Foundation
 
-/// An optional proportional cooling goal. It never reduces existing curve or
-/// minimum-airflow demand, and cannot promise an exact physical temperature.
+/// Proportional cooling demand added to curves and minimum airflow.
 public struct TemperatureTarget: Codable, Sendable, Equatable {
     public var input: CurveInput
     public var celsius: Double

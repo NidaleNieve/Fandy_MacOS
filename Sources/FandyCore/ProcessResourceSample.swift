@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-/// Read-only local diagnostics. These counters never authorize a lease or command.
+/// Process CPU and memory counters.
 public struct ProcessResourceSample: Codable, Sendable, Equatable {
     public let footprintBytes: UInt64
     public let residentBytes: UInt64

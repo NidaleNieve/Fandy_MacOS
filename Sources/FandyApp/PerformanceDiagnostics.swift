@@ -17,9 +17,9 @@ struct LatencySummary: Codable, Equatable {
     }
 }
 
-/// Read-only, paced performance measurements. No stimulus, profile change or lease request.
+/// Paced read-only latency measurements.
 @MainActor enum PerformanceDiagnostics {
-    /// Fixed thirty-minute ordinary-use session; no caller duration, target or stimulus.
+    /// Thirty-minute ordinary-use sample with fixed timing.
     static func runLong(comfort: Bool) async -> Int32 {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyPerformance-\(UUID().uuidString)")
         let model = AppModel(storeURL: root.appendingPathComponent("profiles.json"), autoStart: false)
@@ -88,8 +88,7 @@ struct LatencySummary: Codable, Equatable {
                         now: ProcessInfo.processInfo.systemUptime, chipPolicy: DeviceRegistry.current.capabilities.chipPolicy)
                 }
                 evaluation.append((ProcessInfo.processInfo.systemUptime - started) / 10)
-                // Sample dispatch delay during the real asynchronous GUI-model polling
-                // path. The synchronous read-only discovery measurement above is excluded.
+                // Measure main-actor dispatch during model polling, excluding synchronous discovery.
                 let probe = Task.detached { () -> [Double] in
                     var delays: [Double] = []
                     for _ in 0..<20 {

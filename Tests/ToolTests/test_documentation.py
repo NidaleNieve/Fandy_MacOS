@@ -43,6 +43,11 @@ class DocumentationTests(unittest.TestCase):
                     relative = absolute.resolve().relative_to(ROOT)
                     self.assertIn(relative.as_posix(), public)
 
+    def test_sensor_explanations_do_not_reference_retired_reports_or_fan_guard(self):
+        source = (ROOT / 'Sources/FandyHardware/SensorRegistry.swift').read_text()
+        self.assertNotIn('CHIP_ENVELOPE / TEMPERATURE_PROFILE_STATUS', source)
+        self.assertNotIn('Independent guard always', source)
+
 
 if __name__ == '__main__':
     unittest.main()

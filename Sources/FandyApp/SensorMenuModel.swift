@@ -59,7 +59,7 @@ actor DisplaySensorReader {
             choices += sensors.map { MenuSensor(id: "key:\($0.key)", name: "\($0.key) · raw temperature", keys: [$0.key], role: nil, estimate: false) }
             let names = Set(catalog.hid.map(\.name)).sorted()
             choices += names.map { MenuSensor(id: "hid:" + $0, name: $0 + " · HID", keys: ["HID:" + $0], role: nil, estimate: false) }
-            // Model manifests are display regions, not a claim about physical core numbering.
+            // Display-region IDs do not identify physical core numbers.
             if identity.model == SensorRegistry.model {
                 let keys = Set(sensors.map(\.key))
                 for (id, name, members) in [("cpu-region", "CPU region average · estimate", SensorRegistry.cpuRegionCandidates),

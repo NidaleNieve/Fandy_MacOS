@@ -2,8 +2,8 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
 #include <math.h>
-// Independently authored optional adapter for the reverse-engineered userspace HID temperature interface.
-// Filter only vendor temperature sensors (page 0xff00, usage 5); never request input-device events.
+// Optional adapter for userspace HID temperature events.
+// Read vendor temperature sensors only: page 0xff00, usage 5.
 CFArrayRef fandy_hid_temperatures(void) {
     typedef CFTypeRef (*Create)(CFAllocatorRef);
     typedef CFArrayRef (*Services)(CFTypeRef);

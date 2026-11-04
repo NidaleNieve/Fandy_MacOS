@@ -1,6 +1,6 @@
 import AppKit
 
-/// Standard responder-chain commands formerly supplied by SwiftUI's App scene.
+/// AppKit menu and text-editing commands.
 @MainActor enum ApplicationMenu {
     static func make(target: AppDelegate) -> NSMenu {
         let root = NSMenu()

@@ -40,8 +40,7 @@ public struct UpdatePolicy: Equatable, Sendable {
     }
 }
 
-/// A single verified preparation shared by relaunch and normal quit paths.
-/// A failure never authorizes installation; subsequent attempts may retry.
+/// Share one update-preparation task; failed preparation can be retried.
 @MainActor public final class UpdatePreparation {
     public private(set) var ready = false
     private var flight: Task<Void, Error>?

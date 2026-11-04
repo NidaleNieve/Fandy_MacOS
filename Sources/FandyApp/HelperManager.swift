@@ -15,11 +15,8 @@ import FandyHardware
     private static var hasLegacyRegistration: Bool {
         legacyServices.contains { $0.status != .notRegistered && $0.status != .notFound }
     }
-    /// Older development registrations retain validation category 3 after an
-    /// upgrade to Developer ID (category 6), even across unregister/register.
-    /// Remove both predecessors, including stale parent-container records, before
-    /// creating the fixed-path distribution service; the
-    /// XPC name, helper signing identity and caller authentication stay fixed.
+    /// Old development registrations can retain signing category 3 after a Developer ID upgrade.
+    /// Remove both predecessor services before registering the fixed-path daemon.
     static func migrateLegacyService(client: FanXPCClient) async throws {
         try await lifecycle.run { try await migrateLegacyNative(client: client) }
     }
@@ -43,9 +40,8 @@ import FandyHardware
         }
         if registered { client.disconnectForRecoveryTest() }
     }
-    /// A dead predecessor can be replaced; startup must independently restore.
-    /// Authentication needs independent automatic proof; timeout and failed
-    /// handback never authorize replacement.
+    /// A replacement service restores automatic mode at startup. Authentication failures require
+    /// independent automatic-mode evidence; timeout or failed handback blocks replacement.
     static func migrateLegacyRegistration(status: SMAppService.Status,
         restore: () async throws -> Void, unregister: () async throws -> Void,
         verifyAutomatic: () async throws -> Bool = { false }) async throws {
@@ -54,8 +50,7 @@ import FandyHardware
             do { try await restore() }
             catch let failure as HelperFailure where failure.kind == .serviceUnavailable { }
             catch let failure as HelperFailure where failure.kind == .authentication {
-                // A replaced inode can invalidate an old running helper. Never
-                // accept that connection; require independent automatic state.
+                // A replaced executable invalidates the old peer; verify ownership independently.
                 guard (try? await verifyAutomatic()) == true else { throw failure }
             }
             catch ControlError.helperUnavailable { }
@@ -77,7 +72,7 @@ import FandyHardware
         }
     }
     static func installObservation() throws {
-        // This path must stop working when a future build gains any physical write capability.
+        // Observation registration is restricted to builds without write capabilities.
         guard !DeviceRegistry.current.capabilities.canRestore, !DeviceRegistry.current.capabilities.canControl else { throw ControlError.unauthorized }
         try validateCurrentInstallation()
         guard !hasLegacyRegistration else { throw ControlError.helperUnavailable }
@@ -137,8 +132,7 @@ import FandyHardware
                 else { continuation.resume(returning: ()) }
             }
         }
-        // Completion can precede publication of the new status. Do not treat a
-        // stale enabled observation as a successfully registered replacement.
+        // Wait for the status transition; completion can arrive before it is published.
         for _ in 0..<50 {
             if service.status == .notRegistered || service.status == .notFound { return }
             try await Task.sleep(for: .milliseconds(100))
@@ -147,8 +141,7 @@ import FandyHardware
     }
     static func validateCurrentInstallation() throws {
         let url = Bundle.main.bundleURL.resolvingSymlinksInPath()
-        // Reject broken resource seals before touching either service registration.
-        // Both signing classes use the fixed installed helper path.
+        // Validate both bundle seals and the fixed path before changing registration.
         var code: SecStaticCode?, information: CFDictionary?
         guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code,
               SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess else { throw HelperInstallationError.invalidSignature }

@@ -63,7 +63,7 @@ def signature(path, expected_id):
 
 
 def check_payload(app):
-    # A signed bundle, not the working directory, is the only payload source.
+    # Package only the verified app bundle.
     forbidden = {'.csv', '.jsonl', '.log', '.p12', '.pfx', '.pem', '.key', '.xcconfig'}
     for path in app.rglob('*'):
         if path.is_symlink():
@@ -94,8 +94,7 @@ def verify_app(app):
 
 
 def compatibility_manifest():
-    # This is release metadata, never hardware authority. The signed Swift registry
-    # is the sole source of the notebook roster and reference revision.
+    # Read release metadata from the compiled model roster and reference revision.
     source = (ROOT / 'Sources/FandyHardware/DeviceRegistry.swift').read_text()
     families = dict((f'M{family}', re.findall(r'"(Mac[^" ]+)"', models))
                     for family, models in re.findall(r'\(\.m([1-5]), \[(.*?)\]\)', source))
