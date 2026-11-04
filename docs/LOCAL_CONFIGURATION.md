@@ -1,18 +1,32 @@
-# Local configuration and public-repository privacy
+# Building locally
 
-The public project contains no developer Team ID or personal provisioning profile. To sign locally, create ignored `Config/Signing.local.xcconfig` and set `DEVELOPMENT_TEAM` to your own Team ID. Public defaults use Automatic signing and Apple Development. App/helper identifiers remain `is.dsr.fandy` and `is.dsr.fandy.fan-helper`.
+Use Xcode with Swift 6 support on Apple Silicon and macOS 15 or later. The [README](../README.md) contains the build and test commands.
 
-The generator migrates Xcode signing selections into ignored per-configuration files under `Config/Signing/`. Existing selections remain effective, including conditional settings. Public wrappers include these files optionally. Run `Scripts/generate-project.py` before committing after changing signing in Xcode; the privacy check rejects inline developer identities.
+## Signing
 
-Ignored data includes build products/caches, Xcode user state, raw CSV/JSONL/log files, diagnostics, credentials/certificates, local signing and operator-specific evidence reports. Use `docs/local/` or `private/` for additional notes. Existing evidence remains locally available and is not deleted by publication. Analysis commands require explicit local paths; no user's document path is built into source.
+Set your development team in an ignored `Config/Signing.local.xcconfig`:
 
-Enable the staged-content check:
+```xcconfig
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+```
+
+Public settings use automatic Apple Development signing. The app and helper retain the identifiers `is.dsr.fandy` and `is.dsr.fandy.fan-helper`; the helper authenticates the matching signing team and app identity.
+
+`Scripts/generate-project.py` preserves Xcode signing selections in ignored per-configuration `*.local.xcconfig` files under `Config/Signing/`. Keep those files when regenerating the project or switching branches. Run the generator before committing changes to Xcode signing selections so personal settings stay out of the project file.
+
+For physical fan control, quit other copies and install the signed build as `/Applications/Fandy.app`. Approve Background App Activity through Fandy's setup window. An unsigned CI build checks compilation and cannot establish helper authentication or physical operation. Follow the [hardware testing requirements](HARDWARE_GATES.md) before live tests.
+
+## Local files and checks
+
+Build output, measurements, logs, credentials and local signing files are ignored. Keep private notes under `docs/local/` or `private/`. Local agent instructions can remain in the ignored root `AGENTS.md`.
+
+Enable the public-content check for commits:
 
 ```sh
 git config --local core.hooksPath .githooks
 python3 Scripts/check-public-content.py --staged
 ```
 
-The hook checks the complete Git index for private paths, local account/signing identifiers, home-directory paths, emails outside required third-party notices, common credential formats and binary/oversized artifacts. It reports categories and paths without sensitive matches. These checks supplement manual review; they cannot guarantee detection of every secret or personal detail.
+The check scans indexed contents for private paths, signing identifiers, common credentials and unreviewed binary artifacts. It complements manual review. Retain the project license, third-party notices and bundled license texts.
 
-Use a nonpersonal commit author/email if desired. This project does not change global Git identity or credentials. Required third-party copyright/license attribution is retained; those notices are not operator data.
+Pull requests remain required for main. Documentation and `.gitignore` changes get lightweight checks; changes to app code, tests, build resources or development tooling run the full verification suites.

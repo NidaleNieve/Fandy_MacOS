@@ -1,180 +1,64 @@
-> Current control behavior: [0.2.4 build 20](docs/FAN_RESPONSE_024.md). Curve-first demand supersedes the earlier independent fan guard described in historical sections. Full required-chip validation remains.
-
-> Version 0.2.0 compatibility update: the exact Mac17,9 backend remains locally tested. Other M1–M5 MacBook Pros use compiled reference-supported recipes after independent identity, fan metadata and required-sensor checks. Earlier Mac17,9-only qualification descriptions below are historical evidence for that recipe, not a restriction on the new registry. See [compatibility](docs/COMPATIBILITY.md) and [distribution](docs/DISTRIBUTION.md).
-
-> Current delivery: [real temperature profiles and measured recovery](docs/TEMPERATURE_PROFILE_STATUS.md). The signed production policy uses a fixed chip envelope and five operational chassis inputs; exact CPU/GPU averages remain estimates, and Top is explicitly proximity.
-
 # Architecture
 
-## Process boundaries
+Fandy is a native menu-bar app with a separate privileged fan helper. Profiles, schedules and preferences stay on the Mac. Sparkle handles signed updates from GitHub.
 
-`FandyApp` is an ordinary user process: SwiftUI MenuBarExtra, profile editor, model/persistence, controller loop and diagnostics. Views never access SMC. `FandyCore` contains Foundation-only curve, profile, sensor, fan, governor, state-machine and helper safety models. `FandyHardware` exposes read-only SMC, injected automatic/recovery/profile command codecs without a writable port, and optional HID temperature adapters behind `TemperatureSensorProvider`. `CSMC` independently describes the reverse-engineered 80-byte userspace AppleSMC ABI; it exports reads and enumeration only.
+## Project layout
 
-`FandyFanHelper` is a separate, minimal root launch daemon bundled under `Contents/Library/HelperTools`. It privately owns verified restoration and a validated batch writer. Independent manual-mode/target primitives reject. Production Max is enabled; curves require policy-specific sensor evidence. It exposes five fixed XPC methods, authenticates the app through a public code-signing requirement, serializes I/O with a watchdog and IOPM notifications, and maintains no on-disk lease or target. The GUI never runs as root.
+| Target | Responsibility |
+| --- | --- |
+| `FandyApp` | AppKit menu and windows, SwiftUI editors, automation, persistence coordination and updater. Runs as the logged-in user. |
+| `FandyCore` | Profiles, curves, schedules, persistence formats, controller state and helper safety rules. Hardware access is injected. |
+| `FandyHardware` | Model registry, sensor acquisition, fan metadata and validated transaction adapters. |
+| `CSMC` | C bridge for AppleSMC reads/enumeration and HID temperature events. |
+| `FandyHelper` | Authenticated XPC service, serialized hardware writes, automatic restoration and watchdog. Runs as root. |
+| `FandyDiscovery` / `FandyMeasurement` | Developer discovery and bounded measurement tools. Excluded from the app bundle. |
 
-The Xcode app target embeds the helper and its `Contents/Library/LaunchDaemons/is.dsr.fandy.fan-service.plist`. The app uses `SMAppService.daemon` for registration after qualification. User approval of background service registration follows macOS's native flow. Production System/Max and eligible temperature-profile registration are enabled; no legacy SMJobBless, custom kernel code or generic root operations are used.
+`Package.swift` defines the libraries, executables and tests. `Fandy.xcodeproj` builds the app bundle, embeds Sparkle and the helper, generates its icon, and includes license notices. `Scripts/generate-project.py` regenerates the project while preserving ignored local signing settings.
 
-## Hardware facts and limits
+## Installation and trust
 
-AppleSMC userspace transactions, temperature identities, mode semantics and fan target semantics are reverse engineered. They are not a stable supported Apple API. On this Mac17,9 we read FNum=2, flt4 RPM keys and lowercase `F0md` / `F1md` ui8 mode keys. Both fans reported minimum 2317 and maximum 7826 in the sampled session; the implementation reads them every time. Model-scoped physical IDs0/1 were independently observed and allow automatic-release attempts even when RPM/count telemetry is corrupt. Unexpected topology prevents custom activation. No Ftst key was enumerated. These are observations, not universal Apple Silicon constants.
+The supported installation is `/Applications/Fandy.app`. ServiceManagement registers the embedded `is.dsr.fandy.fan-control-v2` daemon from that fixed location. The app checks its resource signature, app/helper identifiers, signing teams and signing classes before registration. Background App Activity approval is separate from hardware readiness.
 
-Read-only discovery enumerates #KEY/key-at-index, retains type and raw bytes, decodes explicitly supported representations, and rejects non-finite temperatures. Unknown types remain unknown. ioft interpretation is exploratory and is not used for the active sensor registry. Friendly mappings are scoped to a machine model and individually carry qualification status. Missing keys never become zero. Other models can gain separate verified registries without changing views or the engine; they currently fail closed.
+Both processes authenticate their XPC peer against an Apple signing chain, matching team and exact bundle identifier. The interface carries bounded versioned JSON for status, leases and targets, plus automatic restoration and a qualification endpoint that production capabilities disable. It provides no general shell, file or arbitrary-SMC-key operation.
 
-CPU/GPU averages and peaks are informational estimates with separately recorded candidate membership. Production chip control uses the complete fixed 105-key model manifest described in [CHIP_ENVELOPE](docs/CHIP_ENVELOPE.md); runtime prefix matching never chooses membership. TG Pro reports four GPU regions here; the relationship to the candidate SMC GPU sensors has not been proved. HID supplies PMU-labelled readings, not a verified substitute for CPU/GPU peaks or the comfort sensors.
+The two predecessor daemon plists remain bundled so upgrades can unregister older services safely. Migration first restores a reachable helper; a stale unauthenticated predecessor requires independent proof of automatic ownership before removal. Registration status alone never proves that fan control is ready.
 
-## Policy and curves
+## Control flow
 
-A version-1 profile contains ID/name/kind, built-in identity/default revision, four possible enabled curves, a normalized floor and an automatic-at-idle setting. Each curve contains 2–32 UUID nodes with finite ordered temperatures (0–125°C) and nondecreasing percentages (0–100). Linear interpolation saturates at either endpoint. Invalid drafts are never activated.
+The app resolves manual selections, temporary overrides, application triggers and weekly schedules into a profile. `ControlMachine` validates fresh snapshots and profile eligibility, then `FanXPCClient` requests a connection-owned lease. The helper independently checks capabilities, required sensors, thermal pressure, fan bounds and ownership before admitting targets.
 
-On Mac17,9 CPU/GPU selection uses fixed operational regional maxima; both together reproduce the complete chip envelope without claiming physical core identities. Reference registries use model-specific peaks. Full required-chip validation remains independent of these checkboxes. Airflow uses max(Left, Top proximity, Right); Trackpad and Actuator use separate scales. Informational proximity readings do not drive cooling. Demand is max(enabled curves, floor, optional target). No hidden temperature curve raises that value.
+Temperature profiles require five healthy acquisitions before initial activation; Max requires a fresh valid fan snapshot and always requests each fan's reported maximum. A changed generation invalidates obsolete replies. Status calls do not renew a lease; accepted target requests do. The heartbeat expires after ten seconds.
 
-Built-in defaults remain in `BuiltInProfiles` and user edits are preserved. Comfort defaults use the measured comfortable and warmer observations as calibration inputs, with separate surface/airflow scales. This release does not retune existing curves or schedules.
+Hardware effects run on one helper queue. Direct activation admits, acknowledges and targets each fan before moving to the next. Reference adapters support reviewed protected-mode handover where available. Partial failure restores every fan and verifies final ownership. Requests cannot choose fallback keys or clear targets.
 
-Response uses a 15-to-0-second time-weighted window and a 2-to-10 percentage-point/s upward limit. Downward changes retain a five-second hold, 2% deadband, five-second smoothing constant and two-point/s limit. Serious/critical/unknown pressure hands back directly. Apple auto at idle releases after 15 seconds of zero demand and resumes after at least 5% for three seconds. Fresh actual fan speed seeds each admission; inherited output is clamped to the next profile's possible ceiling.
+Unchanged targets on the tested M5 direct path can renew a lease without rewriting the hardware, after fresh readings and independent target/metadata verification. Other adapters retain their own transaction paths. Idle helper polling is one second; active leases and pending restoration use a 100 ms decision timer, with full watchdog acquisitions paced separately. The responsive health channel publishes completed observations and rejects stale ownership evidence.
 
-## State and communication
+## Temperatures and profiles
 
-Controller states are system, initializingCustom, customActive, restoringSystem and fault. Five distinct healthy acquisitions are required before initial curve activation; Max requires one fresh valid fan acquisition. A generation rejects late acknowledgements after rapid profile switching. Restoration is reported complete only after confirmation. Sleep restores System and suspends control work; wake verifies ownership and fresh readings before resolving valid intent. Sensor invalidity and helper errors reset selection to System; restoration failure remains fault and is retried.
+The signed registry matches the notebook model and chip generation before resolving sensor groups and fan metadata. Selected sensor membership stays fixed for a resolved backend. Missing, stale, corrupt or incorrectly typed required readings block activation or cause handback.
 
-XPC uses bounded versioned JSON inside Data (16 KiB maximum), fixed value types and connection-owned UUID leases. The helper independently samples and validates required sensors, fan IDs, bounds, message generation, snapshot freshness and thermal pressure. It applies its immutable guard even if the GUI sends lower targets. Successful validated target transactions serve as the heartbeat; status requests cannot renew a lease. Every command is serialized with a100ms watchdog; lease lifetime is ten seconds. A stale lease ID never survives restart. Same-connection generation ordering is enforced; a newly authenticated connection can establish a new generation after release.
+Mac17,9 uses a fixed 105-key chip envelope and separate CPU/GPU regional selections. Other supported notebooks use explicit generation-specific CPU/GPU groups. CPU/GPU display averages are estimates; Top proximity is a chassis proxy. [Compatibility](docs/COMPATIBILITY.md) describes the tested models and remaining limits.
 
-Application diagnostics rotate at 1 MiB with three archives. The root helper uses unified logging only; no client-supplied file path exists. Startup verifies System before admitting an ordinary saved profile. Wake verifies System before admitting still-valid runtime intent; faults block automatic resumption. See SAFETY for the difference between software tests and physical qualification.
+Demand is the maximum of enabled curves, minimum airflow and an optional temperature target. Curves interpolate between ordered points. The target adds proportional demand: 50% at its selected temperature, with full response bands of 20°C for chip, 10°C for trackpad/actuator and 16°C for airflow. It cannot guarantee an attainable temperature.
 
-HelperRequestGate checks size, connection state, rate and outstanding-work limits before serial-queue dispatch. Ordinary traffic is capped at four queued/in-flight requests globally and two per connection. Restoration and rejection notifications each have a separate bounded allowance; disconnect invalidates tickets before queued work can execute. RestorationFlight shares overlapping app lifecycle releases through one RPC, propagates failures to every waiter and retries with a fresh RPC after completion. These controls cannot recover a dead or blocked helper by themselves.
+Fan response applies time-weighted averaging and rate limits. Apple auto at idle can release control while demand is zero. Serious, critical or unknown thermal pressure returns control directly to macOS; there is no separate temperature-triggered maximum-fan override. See [Safety](SAFETY.md).
 
-HardwareOperationFence owns typed global and connection cancellation epochs for at most eight connections. Rejection invalidates only that connection's work; disconnect removes its epoch immediately, including queued and active transaction tokens. Watchdog transactions carry the current lease owner. Explicit System restoration and power transitions revoke all work. Restoration itself remains available after cancellation.
+## Configuration and lifecycle
 
-## Production monitoring and qualification
+A revision-aware persistence actor saves profiles, automation and preferences without allowing older writes to replace newer state. Imports validate size, structure, identities and values before publication. Legacy migrations preserve edited profiles and stable built-in identifiers, including `school` for Silent. Runtime leases, RPM targets, process instances and countdowns are never restored from disk.
 
-Normal startup uses real read-only monitoring and selects System; simulation is an explicit option. AppModel injects the sensor provider, privileged client, clock and helper availability for deterministic testing. It separately exposes observed fan ownership, helper health, local signed capabilities and profile eligibility. A custom profile checkmark requires genuine acknowledged control; Apple ownership is determined from fresh fan readings, not the selected profile name.
+Startup verifies System ownership before resuming an eligible remembered profile or schedule. System sleep releases control and suspends monitoring, automation and periodic update work. Wake verifies automatic ownership and fresh readings before resuming still-valid intent; time limits keep their original deadlines. System, quit, faults and disconnection revoke in-flight work before restoration. A blocked or dead helper cannot execute its watchdog.
 
-HardwareCapabilities replaces global qualification booleans. Its immutable model, stage, per-role evidence, topology status and restoration/manual proof determine authority. The stages are observation, restorationQualification, recoveryQualification, manualQualification, maximumControl, curveQualification and qualifiedControl. Restoration authority requires the exact supported model and observed topology, independently of temperature health or qualification. Verified mechanical proof permits fixed maximum leases; temperature leases also require qualifiedControl and their actual chip/comfort roles. Proximity roles do not block unrelated policies. Unsupported models receive observation-only, empty capabilities. These values originate in signed code, not preferences, environment variables, files or XPC command payloads. Helper reports cannot grant local client authority.
+The app uses native menus and lazily hosted editors. Closing a window releases its content graph without stopping background monitoring or automation. Display-only sensors and previews do not grant hardware authority.
 
-ShadowProfileEngine creates a private informational copy of candidate readings, evaluates the existing engine and returns ProfilePreview. This type carries percentages and provenance, but no fan targets or control effects. Strict control evaluation continues to reject unverified readings. Missing, stale, corrupt and nonfinite inputs block previews too. Profile edits update preview demand without taking ownership.
+## Updates and local diagnostics
 
-The compiled stage is qualifiedControl. The helper can release automatic mode, accept fixed-Max leases, and accept temperature leases with their complete verified operational inputs. Finite qualification authority is disabled after recovery acceptance. Wire-version-2 status includes optional capability, restoration and retained startup-restoration reports. The registered bundle is preserved independently of build output.
+Sparkle fetches the fixed HTTPS GitHub appcast and verifies archives with the embedded public Ed25519 key. System profiling is disabled. Before installation, Fandy requires verified fan restoration, saved configuration and removal of the old helper registration. The next launch registers the replacement helper.
 
-`ManualQualificationPlan` and `ManualQualificationSession` are disconnected historical pure qualification models. They use separate `canQualifyManual` authority, fixed helper-derived +200 RPM targets, a five-second initial deadline, a fifteen-second recovery deadline and a ten-second heartbeat limit. They check all required roles, fresh acquisition, ownership and unchanged fan topology. No XPC endpoint or physical writer invokes them yet; revocation is a restoration decision, not a physical-success report.
+Configuration and bounded diagnostic logs remain under Application Support/Fandy. The helper uses macOS unified logging. User-requested diagnostic exports contain an allowlisted summary; configuration exports can contain custom names, schedules and application rules. There is no analytics or automatic log-upload service.
 
-Restoration reports contain each fan's readback and error, retain partial successes and fail overall if any attempt or confirmation fails. Restoration does not clear fan targets. The command codec permits only canonical lowercase F<n>md metadata and automatic mode 0; firmware mode 3 is rejected and left untouched. A separate helper-only transport checks root UID and compiled model authority before calling IOKit. Generic physical manual-mode/target methods still reject. Separate helper-only recovery methods implement fixed metadata-scoped commands. Lifecycle tokens protect the app against stale reads and replies; XPC operation tokens prevent late lease replies from restarting an obsolete transaction. Quit becomes termination-ready only after the cleanup attempt finishes.
+## Verification
 
-The development-only FandyMeasurement executable reads SMC independently and has no XPC or fan writer. A fixed phase schedule permits at most two 30-second low-duty stimuli, guarded by fresh automatic fan modes, complete candidate chip values and a75°C diagnostic ceiling. Core admission/schedule logic is tested; the tool is excluded from the bundled app/helper.
+`Scripts/verify.sh` runs Swift and Python tests. Its sanitizer and native-build modes cover concurrency/memory checks and unsigned Release compilation. Hardware tests use injected transports; software fixtures do not establish physical compatibility. M2 Pro and M5 Pro have been physically tested by the owner. Live hardware work follows the [hardware testing requirements](docs/HARDWARE_GATES.md).
 
-## Historical finite mechanical trial
-
-`RecoveryObservationReader` independently samples the candidate registry and discovered positive flt4 Tp/Tm/Tg keys; its diagnostic peak is used only during finite tests, never to qualify roles. `RecoveryTrialCoordinator` receives the root-only IO, clock, sampler and restoration delegate. It owns a single connection/session, one initial5-second trial, at most eight15-second recovery trials, a10-second heartbeat and a nonrenewable absolute deadline. It checks acquisitions before/after each operation and releases on partial writes, changed ownership/target/bounds, sensor faults, disconnection, malformed owned input or power events.
-
-The historical mechanical path required spinning trials to preload both targets under automatic mode before activation. Subsequent current-model curve measurements rejected that preload behavior; the production batch uses the reviewed mode-first sequence below. A distinct stopped path requires both speeds/targets0 and below60°C diagnostic admission, then mode1/target per fan. It cannot be entered as a fallback after preload failure. The exact codec queries and verifies metadata on the writing connection before command6. Transcripts retain operation times/readbacks and the first restoration report separately from later idempotent releases. Client connection/operation tokens reject late responses.
-
-The signed app's CLI diagnostics observe fan modes/RPM independently and require both-fan manual handback for acceptance. They accept no hardware parameters. Early zero target readbacks were stale. A bounded 500 ms observation, without another write or changed deadline, acknowledged the target and passed modest manual/recovery tests after exclusive ownership was established. GUI startup remains monitoring/System; no menu profile invokes the trial. Dead/blocked-helper timers remain ineffective and launchd startup handback has passed during a modest manual trial; blocked I/O recovery is not guaranteed.
-
-The current mechanical path enforces a helper-side check for TG Pro's known privileged executable before admission and during ownership. Status exposes only a fixed blocker message, never process identifiers or paths. Bounded kernel process metadata enumeration provides no generic process/filesystem API to a caller. This detects a known conflict, not universal exclusive-ownership proof; modes/targets still require continuous checking. Safe restoration remains available despite that blocker.
-
-## Production maximum integration
-
-The normal menu and fixed diagnostics share AppModel → ControlMachine → FanXPCClient → HelperCoordinator → AppleFanHardware. Empty required roles designate fixed maximum, never arbitrary sensor-free control. The helper independently validates actual fan limits, owns the lease and checks target ownership. Its batch writer validates each canonical mode/target metadata field, establishes and verifies both manual modes before targets, and restores both on partial failure. The pure SMCProfileWriter has injected transport tests for range, type, precision and byte construction; curve writes remain behind signed role qualification.
-
-Max needs one fresh fan acquisition; curves retain five. Post-I/O acquisition validates required inputs and unchanged limits. Heartbeat is ten seconds and status is not renewal. A ten-second spin-up grace detects persistent stopped fans without rejecting the observed initial tachometer delay. Quit, System, disconnection, sleep/wake and faults revoke before restoration; startup never resurrects a lease. The temporary helper-kill diagnostic is absent from production.
-
-## Production temperature integration
-
-The helper computes a fresh independent chip guard from the complete fixed 105-key envelope. Each required member must be typed, plausible and freshly acquired; no estimate/partial group substitutes on failure. Top proximity remains a mandatory airflow-group input with its uncertainty disclosed. Profile and helper escalation targets round upward to whole RPM within each fan's verified integral limits, and acknowledgement tracking uses normalized values. Invalid normalization restores both fans. Curves themselves retain continuous interpolation.
-
-The reviewed transaction admits each fan with its manual-mode command, bounded acknowledgement and validated target before admitting the next fan. It never clears automatic targets or tries alternate keys. Every admitted update refreshes the SMC target. Client-side reuse is limited to an immediately issued (250ms) observation; the helper independently reacquires before writes and retains its message limits. Normal startup/wake remains System-first. The former fifteen-second qualification authority is disabled in production; heartbeat and stall recovery remain active.
-
-Actual variable-speed heartbeat, disconnect, bounded deadline, controller SIGKILL and normal quit passed. Live profile activation, rapid switching and handback passed. Earlier helper-restart evidence remains applicable because startup restoration is unchanged. A dead or blocked helper cannot run its watchdog; active physical sleep/wake still needs an observed test.
-
-Profile edits with unchanged required inputs may retain an existing valid production lease, avoiding an unnecessary release/re-entry. A finite qualification lease can never be extended that way. UI generations fence acknowledgements separately from monotonically increasing helper generations; a simulation round trip cannot reuse an old connection generation. Every retained-lease target is still independently validated by the helper.
-
-## Editor and status presentation
-
-CurveDraft is editor-only value state, separate from both SwiftUI drawing and the control engine. It retains invalid local drafts and returns only validated FanCurve values. Explicit reset revisions clear drafts even when the accepted parent value has not changed. Drag axes stay fixed for the gesture; keyboard point selection and exact decimal input use the same draft boundary. StatusPresentation formats fresh readings and distinguishes acknowledged demand from previews. Its display-only candidate copy never qualifies an input for control.
-
-## Ownership and polling refinement
-
-Automatic observation, unverified ownership and a pending physical release are distinct states. Both process models invalidate failed idle observations without issuing unowned writes; real failed releases retain retries. Lease validity is checked after returning from blocking adapters. FanHardwareIO exposes the validated batch seam, with no misleading default individual-write order. Native polling stop/termination owns notification cleanup. The helper's 100-ms decision timer is separate from 2-Hz full SMC acquisitions; status/target transactions acquire independently. See [the architecture and test review](docs/ARCHITECTURE_SECURITY_PERFORMANCE_REVIEW.md).
-
-## Profile editing and persistence
-
-Collection operations commit through a serialized revision-aware persistence actor before publishing. Valid live edits update control independently of disk acknowledgement, with a visible unsaved state and debounced background persistence. UndoManager stores profile edits and full validated configuration snapshots across collection/schedule/preference changes, and groups direct-manipulation gestures; invalid local CurveDraft values never enter history/control. Native file panels use the profile-only interchange codec. Quit requests automatic restoration before waiting for persistence. Diagnostic file writes use a bounded utility queue; no storage work is added to the root IPC boundary.
-
-ProfilePersistence acknowledges unchanged profiles and automation without another disk transaction, while still advancing revision ordering. Only successful writes populate the acknowledgement; a failed write invalidates it so retries cannot assume unchanged storage. Previous selection remains legacy archive metadata and does not trigger writes by itself. Remembered defaults persist through the preference path, independently of scheduled/runtime selections. A synchronous filesystem adapter and an injected test adapter share the serial write interface.
-
-## Automation layer — 2026-10-03
-
-`Scheduling.swift` models half-open ISO-week ranges, pauses, interval subtraction and ephemeral activation intent. `AutomationModel` chooses manual intent before a scheduled occurrence; neither edits controller safety nor supplies helper authority. Expiry checks surround acquisition/dispatch, and transitions restore System before schedule handoff. Faulted occurrences are blocked until an explicit retry or later occurrence. Native `NSStatusItem`/`NSMenu` supports hierarchical menus, persistent mouse-action rows and anchored native duration/application popovers; the existing SwiftUI editor remains separate.
-
-Version-two `ProfileArchive` includes `AutomationConfiguration`. Revisioned actor saves and collection transactions persist complete configurations before publication. Strict bounded interchange separates portable configuration, scheduled profile bundles and human-readable schedule text. Runtime intent and hardware/signing authority are absent. `SensorMenuModel` uses independent, coalesced display acquisition, complete groups and explicit estimate labels; display keys never enter the profile engine. See [delivery](docs/SCHEDULING_DELIVERY.md).
-
-Legacy and current profile imports share the same bounded JSON scanner and nested field validation. Schedule lookahead intersects weekly periods with each calendar day before projecting dates, including overnight and Sunday spillover; pauses retain half-open semantics. Application activation checks reuse the polling catalog rather than enumerating it repeatedly, while exact PID/start-time checks still reject exited instances before renewing control.
-
-## Selection, defaults and global shortcuts
-
-Selection is rendered immediately without changing acknowledged engine state or helper eligibility. Startup handback runs before monitoring; verified recovery clears stale unverified-fault presentation. NSSplitViewController enforces non-collapsible sidebar constraints. ProfileActivationDefault is portable configuration separate from an ephemeral duration/PID-start-time condition. Defaults apply only to manual/shortcut selections. Carbon registrations route fixed menu/profile actions; focused recording suspends registrations and does not monitor unrelated key events. See [menu/profile delivery](docs/MENU_POLISH_DELIVERY.md).
-
-
-## Compact native UI
-
-Ordinary menu actions use NSMenuItem; only readouts and exceptional long titles need bounded views. Profile editing retains its NSSplitViewController/hosting roots and uses NSTableView selection/doubleAction. Independent SwiftUI roots observe the same model, preserving interaction state without recreating the editor per sensor tick. Availability display uses a throttled application cache; activation checks fresh process identity. Undo captures profile/schedule/default edits and preserves current global preferences. See [current UI verification](docs/NATIVE_UI_DELIVERY.md).
-
-
-Optional TemperatureTarget metadata contributes a bounded proportional request to ProfileEngine's maximum-demand composition. Target input membership extends requiredSensors and uses the same qualified CurveInput temperature selector. Targets never bypass chip guard or helper admission. Name-only edits use a validated metadata update that preserves controller generation and policy; general edits retain the existing control update path.
-
-## Compiled compatibility layer
-
-DeviceIdentity verifies arm64, notebook roster and chip family/variant separately. DeviceRegistry resolves generation-specific source tables once, freezing selected members/types and separating display averages from control maxima. Readable temperatures survive fan metadata failure. FanInterface discovers count, independent keys, bounds/target encodings and global handover metadata. ReferenceFanTransaction implements bounded direct/force-test sequences through an injected transport, clock, safety check and cancellation fence; AppleFanHardware retains the tested Mac17,9 writer and selects the reference adapter only for other reviewed models. FanRestoration owns per-fan attempts, global release and independent readback. Raw discovery and extra display-only sensors remain outside control authority.
-
-## Everyday defaults and temporary automation
-
-AppPreferences.defaultProfileID records an ordinary selection independently of the controller's current profile. ScheduleEngine picks an eligible active occurrence, otherwise AppModel resumes the default after verified System and fresh eligibility. Explicit Until Changed pins a runtime override until toggled off; timed and process overrides also take precedence. Scheduled selections never modify the default, and cancelled occurrences retain their identifier until their range ends. Faults and uncertain wake recovery block automatic default resumption. Successful sleep/wake preserves deadlines and reevaluates current schedules before resuming the previous ordinary profile. Portable decoding defaults older archives to System.
-
-HelperSetup caches native SMAppService status separately from helper health and hardware capability. Native registration occurs only in the genuine app; menu/editor/settings recover missing approval via Login Items. A dedicated native window explains Background App Activity approval and closes automatically when granted. Imported preferences cannot manufacture permission or eligibility.
-
-## Application updates
-
-Sparkle 2.10.0 is pinned in SwiftPM and embedded only in the unprivileged app. The signed bundle fixes the HTTPS GitHub feed and Ed25519 public key; configuration imports cannot change either. Sparkle manages checks, downloads, signature validation and replacement. Automatic checks and downloads follow the selected Daily/Weekly/Monthly frequency; switching automatic updates off disables both. Manual checking is always available outside an active update session. The native offer asks for consent once; an accepted download proceeds directly to safe relaunch. Settings can install a staged background update immediately. Automatic mode uses Sparkle’s two-week impatient reminder.
-
-Before an update quit or relaunch, a shared preparation task stops controller work, invalidates pending lifecycle replies, requests sensor-independent automatic restoration, verifies the helper restoration report, saves configuration, and unregisters the service. Failure blocks normal installation. Startup checks the compiled helper build before admitting control; an old helper is released and replaced once, with native approval if needed. An enabled but unreachable service is rebound once through ServiceManagement after a best-effort release; only an independently acknowledged startup restoration authorizes control. Disabled services and authentication failures never trigger this repair.
-
-The old `is.dsr.fandy.fan-helper.plist` remains embedded only for ServiceManagement removal during migration from cached development-signing launch constraints. The distribution launchd label is `is.dsr.fandy.fan-service`; the authenticated Mach service and helper signing identity remain unchanged.
-
-## Curve-first control and observable bootstrap — 0.2.4 build 20
-
-The profile engine computes the maximum of explicit enabled inputs only. The response governor starts from fresh observed fan speed and clamps inherited output to the next profile's possible ceiling. Profile changes and idle reacquisition never reuse a stale hardware target as initial demand. The helper validates targets and complete sensor membership without increasing RPM; watchdog and reference-acquisition checks use the same nominal/fair versus handback pressure policy.
-
-`DirectFanTransaction` shares the production mode/readback/target order with an injected transport. Full batch preflight precedes all writes; each fan receives its target before the next mode is admitted. Reference transactions preserve their bounded global handover, cancellation and final release while shortening untargeted manual time. A partial transaction restores every fan.
-
-`HelperService` publishes its authenticated listener before hardware bootstrap. It owns separate unavailable and ready states: failures remain queryable through the existing status method, while leases require a ready coordinator after verified startup restoration. Fixed transient retries run at one and three seconds. Native approval, XPC reachability and hardware eligibility are independent in the GUI; an approved failed backend exposes Retry/Export Diagnostics, never an approval guide solely because it failed to start.
-
-## System-sleep suspension (0.3.1)
-
-GUI lifecycle is `awake → suspending → suspended → resuming → awake`.
-Native system-sleep notifications invalidate the generation, revoke pending work,
-restore System and stop polling. Display-sleep notifications are deliberately
-ignored. UpdatePolicy disables periodic checks without changing saved preferences.
-The helper receives independent IOKit notifications, cancels in-flight operations,
-restores every fan before acknowledging the sleep event and suspends its timer;
-status/restoration remain available, but lease admission is blocked. Wake never
-resurrects a helper lease by itself.
-
-GUI wake starts with restoration and waits at most three seconds for a revoked
-read to unwind. A fresh acquisition and verified ownership precede manual-intent,
-current-schedule and previous-profile precedence. Five healthy acquisitions still
-precede a curve command. Closed watched applications and elapsed timer deadlines
-expire; time spent sleeping never extends an activation. Prior faults cannot be
-cleared merely by sleeping. If another app keeps the Mac awake with its display
-off, Fandy continues the selected profile under this system-sleep-only policy.
-
-Active samples feed a serialized local surge recorder. Sample-held integration
-uses monotonic acquisition time; event wall timestamps are for inspection only.
-A commanded or observed ten-point rise within ten seconds starts one nonrenewable
-60-second capture with up to 30 seconds of preceding context. Data includes
-logical inputs, per-curve demand, governed demand, requested targets, observed
-modes/targets/RPM and transition reason. Observed telemetry precedes the tick's
-command, so it is not a claim of simultaneous command acknowledgement. Storage
-is bounded to 32 events, 8 MiB and seven days; writes have backpressure and run
-off the main actor. Imported preferences cannot change these limits.
-
-## Temporary fixed-speed selection (0.3.2)
-
-The menu creates a runtime-only custom profile with no temperature curves and a fixed percentage floor. It shares the existing profile engine, full required-chip validation, response governor, authenticated lease and batch writer. It adds no XPC method or hardware operation. A manual activation deadline overrides automation until expiry; then normal schedule/default evaluation resumes. The temporary definition is never appended to the saved collection, never becomes the startup default, and is excluded from previous-selection metadata and configuration exports. Wake resumes it only while its original deadline and readiness checks remain valid.
+GitHub retains pull requests and four required checks for main. Documentation and `.gitignore` changes use lightweight Linux checks; source, tests, build resources, signing, tooling and workflow changes run the full macOS suites. Unknown change types and failed change classification cannot select the lightweight path.
