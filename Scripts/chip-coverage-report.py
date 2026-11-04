@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit chip candidates offline. Prefix families are exploratory, never a control mapping."""
+"""Compare recorded chip-sensor groups with reference temperatures."""
 import argparse
 import collections
 import importlib.util
@@ -48,8 +48,7 @@ def audit(samples, rows):
         if len(prefixes) > 1:
             groups.append(('Exploratory family union', sorted(set().union(*map(set, families.values())))))
         comparisons = [{'name': label, 'keys': keys, **compare_group(pairs, keys, columns)} for label, keys in groups]
-        # List omissions that can exceed the current informational peak. They may be aggregates,
-        # memory or another domain; neither their prefix nor higher value establishes CPU/GPU identity.
+        # Find hotter omitted keys for review; a prefix does not identify their physical role.
         omitted = sorted(set().union(*map(set, families.values())) - set(present))
         higher = []
         for key in omitted:
@@ -75,13 +74,11 @@ def number(value):
 
 
 def render(result):
-    lines = ['# Mac17,9 chip coverage audit', '',
-             f'{result["sourceSamples"]} raw samples; {result["matchedSamples"]} temperature-only TG Pro pairs within two seconds. '
-             '**No sensor identity, coverage or write authority is granted by this analysis.**', '',
-             'Published Stats M5 groups are compared with the wider enumerated families. Prefixes are used only '
-             'to reveal possible omissions in this offline audit; they never select production control inputs. '
-             'A higher unselected reading may be memory, an aggregate or another domain. All group members and '
-             'reference columns must exist in a pair; missing members do not become zero or disappear from averages.', '']
+    lines = ['# Mac17,9 chip coverage', '',
+             f'{result["sourceSamples"]} samples; {result["matchedSamples"]} TG Pro pairs within two seconds.', '',
+             'Stats M5 candidate groups are compared with the wider recorded sensor families. '
+             'Prefix groups are exploratory and never select production control inputs. '
+             'Only complete groups and references enter each comparison.', '']
     for domain in result['domains']:
         lines += [f'## {domain["name"]}', '',
                   'Absent published keys: ' + (', '.join(domain['absentPublished']) or 'none') + '.', '',
@@ -90,26 +87,20 @@ def render(result):
         for group in domain['comparisons']:
             lines.append(f'| {group["name"]} | {len(group["keys"])} | {group["pairs"]} | {number(group["mae"])} | '
                          f'{number(group["underRead"])} | {number(group["overRead"])} |')
-        lines += ['', 'Unselected keys exceeding the present published peak by more than 0.5°C '
-                  '(exploratory rounding margin, not a qualification threshold):', '',
+        lines += ['', 'Unselected keys above the candidate peak by more than 0.5°C:', '',
                   '| Key | Complete comparisons | Above margin | Maximum difference °C |', '| --- | ---: | ---: | ---: |']
         for omission in domain['higherOmissions'][:12]:
             lines.append(f'| {omission["key"]} | {omission["pairs"]} | {omission["aboveRoundedMargin"]} | {number(omission["maximumDelta"])} |')
         if not domain['higherOmissions']:
             lines.append('| None in this recording | — | — | — |')
-        lines += ['', 'Keys with exactly equal numeric traces in every raw acquisition: '
-                  + ('; '.join('/'.join(keys) for keys in domain['exactValueAliases']) or 'none') + '. '
-                  'Equality is evidence of redundancy in this recording, not proof of physical identity.', '']
-    lines += ['## Consequences for the next measurement', '',
-              'Resolve the provenance and membership of the unselected domains before assuming the published subset covers '
-              'the hottest active core or GPU region. The firmware temp-sensor property exposes internal Tp/Tm labels '
-              'but does not establish their four-character SMC-key mapping. Current sensor capabilities remain pending.', '',
-              'Sequential SMC acquisition, integer CSV rounding, different averaging semantics and up to two seconds pairing '
-              'lag can explain transient differences. Max-of-every-prefix is not an accepted safety sensor, and a closer '
-              'numeric match cannot replace independent identity evidence. The bounded GPU phase lacked adequate variation; '
-              'do not infer GPU peak coverage from this idle agreement.', '',
-              'Source: [Stats M5 sensor definitions](https://github.com/exelban/stats/blob/d85c26351cb16335d6af2219f19e543016d4d416/Modules/Sensors/values.swift). '
-              'Analysis is independently authored. No proprietary mapping database or firmware binary is included.', '']
+        lines += ['', 'Identical traces: '
+                  + ('; '.join('/'.join(keys) for keys in domain['exactValueAliases']) or 'none') + '.', '']
+    lines += ['A hotter unselected key may belong to memory or another domain. Identical traces can show '
+              'redundancy in a recording without establishing physical sensor identity. '
+              'Rounding, acquisition lag and different group definitions also affect comparisons. '
+              'The 0.5°C reporting margin is not a thermal limit.', '',
+              'This offline report does not change qualification.', '',
+              'Candidate source: [Stats M5 sensor definitions](https://github.com/exelban/stats/blob/d85c26351cb16335d6af2219f19e543016d4d416/Modules/Sensors/values.swift).', '']
     return '\n'.join(lines)
 
 

@@ -1,8 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// AppKit owns the window size. Hosting changes cannot collapse it to the
-/// split view's transient fitting height during initial layout or tab changes.
+/// Keep the AppKit window size stable while hosted content changes.
 @MainActor final class ProfilesWindow: NSWindow {
     var profileUndoManager: UndoManager?
     override var undoManager: UndoManager? { profileUndoManager ?? super.undoManager }
@@ -15,8 +14,7 @@ import SwiftUI
         window.title = "Fandy Profiles"; window.isReleasedWhenClosed = false
         window.contentViewController = ProfileHostingController(rootView: content)
         window.contentMinSize = minimumContentSize
-        // Attaching a hosting controller can change the frame. Apply the intended
-        // launch size after attachment, not just to the initializer's content rect.
+        // Apply launch size after attaching the host, which may change the frame.
         window.setContentSize(initialContentSize); window.center()
         return window
     }

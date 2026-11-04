@@ -25,7 +25,7 @@ class SensorEvidenceTests(unittest.TestCase):
             self.assertEqual(analysis['matchedSamples'], 1)
             self.assertFalse(analysis['qualificationChanged'])
             text = module.render(analysis, pairs, sessions)
-            self.assertIn('All identities remain pending', text)
+            self.assertIn('does not change qualification', text)
             self.assertIn('Ts0P', text)
             self.assertIn('insufficientVariation', text)
 
@@ -49,6 +49,15 @@ class SensorEvidenceTests(unittest.TestCase):
         text = module.render({'sourceSamples': 0, 'matchedSamples': 0, 'sensors': []}, [], [])
         self.assertNotIn('[RESEARCH.md](RESEARCH.md)', text)
         self.assertIn('THIRD_PARTY_NOTICES.md', text)
+
+    def test_report_is_an_offline_comparison_without_runtime_or_missing_diary_claims(self):
+        text = module.render({'sourceSamples': 7, 'matchedSamples': 3, 'sensors': []}, [], [])
+        self.assertIn('7', text)
+        self.assertIn('3', text)
+        self.assertIn('does not change qualification', text)
+        for stale in ['All identities remain pending', 'all-sensors-first', 'before any control lease',
+                      'SENSOR_DISCOVERY.md', 'CHIP_COVERAGE.md', 'remaining blockers']:
+            self.assertNotIn(stale, text)
 
 
 if __name__ == '__main__':

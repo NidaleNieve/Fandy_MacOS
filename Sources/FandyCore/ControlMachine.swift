@@ -32,8 +32,7 @@ public struct ControlMachine: Sendable {
         guard renamed == profile else { throw ControlError.invalidProfile("Only the selected profile presentation may change here.") }
         selected = profile
     }
-    /// A fixed-demand edit preserves sensor admission, the governor and the current
-    /// lease. The next ordinary control tick transmits the newly governed demand.
+    /// Fixed-speed edits retain the lease and governor; the next tick sends demand.
     public mutating func updateFixedSpeed(_ value: Double) throws {
         guard value.isFinite, (0...100).contains(value), selected.kind == .custom,
               selected.curves.isEmpty, selected.targetTemperature == nil, selected.chipSources.isEmpty,
@@ -64,8 +63,7 @@ public struct ControlMachine: Sendable {
         transitionReason = "Failure: " + error.localizedDescription
         return .restore(generation: generation)
     }
-    /// Idle monitoring does not own fans. Only active control or a failed release
-    /// transaction warrants a hardware handback when a read fails.
+    /// A failed read triggers handback only for active control or a pending release.
     public mutating func observationFailed(_ error: Error, restoration: RestorationReport? = nil) -> ControlEffect {
         if selected.kind == .system && state == .system && restoration?.verified != false {
             return .none

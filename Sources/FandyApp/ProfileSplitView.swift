@@ -17,14 +17,11 @@ struct ProfileSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresenta
         controller.splitView.setPosition(240, ofDividerAt: 0)
         return controller
     }
-    // Both roots retain the same observable model. Replacing them on each sensor
-    // tick discards native sizing/interaction state and invalidates the editor.
+    // Retain both roots across sensor ticks to preserve layout and interaction state.
     func updateNSViewController(_ controller: NSSplitViewController, context: Context) {}
 }
 
-/// The window and split view own layout, not the changing ideal width of a
-/// segmented picker, grid or graph. Intrinsic hosting constraints otherwise
-/// temporarily push the columns outside the window during SwiftUI updates.
+/// Let the window and split view size hosted content; intrinsic widths can overflow columns.
 @MainActor protocol ReleasableHostingContent { func discardContent() }
 
 @MainActor final class ProfileHostingController<Content: View>: NSHostingController<Content?>, ReleasableHostingContent {

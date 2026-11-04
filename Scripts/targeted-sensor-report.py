@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report finite selected-key measurements; never changes mapping or control authority."""
+"""Summarize a recording of selected temperature keys."""
 import argparse
 import collections
 import json
@@ -64,11 +64,10 @@ def render(result):
              '| --- | ---: | ---: | ---: | ---: | --- |']
     for name, domain in result['domains'].items():
         def number(value): return 'unavailable' if value is None else f'{value:.2f} C'
-        lines.append(f'| {name} | {len(domain["members"])} | {number(domain["baselinePeakMedianC"])} | {number(domain["pulsePeakMaxC"])} | {number(domain["pulseRiseC"])} | {domain["independentVariationObserved"]} |')
-    lines += ['', 'The GPU pulse must show independent variation before it can resolve regional coverage. '
-              'Low-duty success or common heat movement alone does not prove that coverage. No qualification was changed.', '',
-              'Reference matching must be reported separately using contemporaneous CSV rows. '
-              'Named PMU temperature events are supplementary die readings, not substitutes for identified CPU/GPU groups.', '',
+        lines.append(f'| {name} | {len(domain["members"])} | {number(domain["baselinePeakMedianC"])} | {number(domain["pulsePeakMaxC"])} | {number(domain["pulseRiseC"])} | {"yes" if domain["independentVariationObserved"] else "no"} |')
+    lines += ['', 'Variation requires at least 10 baseline and 10 active samples with a rise of 3°C. '
+              'This is a comparison filter, not a thermal limit or a sensor-identity test. '
+              'This offline report does not change qualification.', '',
               '| Comfort candidate | Key | Minimum | Maximum |', '| --- | --- | ---: | ---: |']
     for name, reading in result['comfort'].items():
         lines.append(f'| {name} | {reading["key"]} | {reading["minimumC"]:.2f} C | {reading["maximumC"]:.2f} C |')

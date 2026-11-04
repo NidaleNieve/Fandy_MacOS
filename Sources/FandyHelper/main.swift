@@ -4,7 +4,7 @@ import FandyHardware
 import Security
 import os
 
-/// Listener lifetime is independent of hardware availability. Only ready backends admit leases.
+/// Keep status reachable during hardware startup and failure.
 final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     let listener = NSXPCListener(machServiceName: FandyIdentity.helperIdentifier)
     let queue = DispatchQueue(label: "is.dsr.fandy.helper.safety", qos: .userInitiated, autoreleaseFrequency: .workItem)
@@ -42,7 +42,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, @unchecked Sendable 
     func run() throws {
         guard geteuid() == 0 else { throw ControlError.unauthorized }
         listener.setConnectionCodeSigningRequirement(try PeerRequirement.make(team: ownSigningTeam(), identifier: FandyIdentity.appIdentifier))
-        // Authentication is established before listener publication; SMC failure cannot kill status.
+        // Authenticate peers before publishing the listener.
         publishBootstrap(phase: "listener")
         listener.activate()
         startedAt = ProcessInfo.processInfo.systemUptime
@@ -325,7 +325,7 @@ private final class RecoverySampleSource {
     var reader: RecoveryObservationReader?
     init(sampler: HardwareSnapshotReader) { self.sampler = sampler }
     func read() throws -> RecoveryObservation {
-        // No temperature enumeration precedes helper startup restoration.
+        // Restore fan ownership before enumerating temperatures.
         if reader == nil { reader = try RecoveryObservationReader(sampler: sampler) }
         guard let reader else { throw ControlError.invalidSnapshot }
         return try reader.observation()

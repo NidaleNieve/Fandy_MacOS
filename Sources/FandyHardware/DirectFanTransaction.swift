@@ -1,8 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Reviewed direct codec with all reads and writes injected. Preflight every fan;
-/// keep mode admission and that fan's target adjacent before admitting another fan.
+/// Preflight every fan, then admit and target each in order. I/O is injected.
 public enum DirectFanTransaction {
     /// Read-only heartbeat verification. Never admits a mode or writes a target.
     public static func verifyAcknowledged(_ targets: [FanTarget], baseline: [Fan],
@@ -51,9 +50,7 @@ public enum DirectFanTransaction {
         for target in targets {
             guard var fan = baseline.first(where: { $0.id == target.fanID }), let mode = modes[fan.id], let previous = metadata[fan.id] else { throw ControlError.invalidFan }
             let entering = fan.mode == .automatic
-            // No admission or target operation exists for an already acknowledged
-            // value. Complete metadata preflight above and independent batch
-            // ownership/readback below still run on every request.
+            // Unchanged values skip writes, but still require metadata and final batch readback.
             if !entering && previous.value == target.rpm { continue }
             func record(_ stage: FanTransition.Stage) {
                 if entering { event(FanTransition(fanID: fan.id, stage: stage, at: clock(), actualRPM: fan.actualRPM, previousTarget: fan.targetRPM, requestedTarget: target.rpm)) }

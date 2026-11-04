@@ -30,8 +30,7 @@ public struct FanInterface: Sendable {
             guard !matches.isEmpty else { throw HardwareError.invalidMetadata }
             for match in matches { try validateMode(match, id: id, locallyTested: local) }
             guard Set(matches.map(\.value)).count == 1 else { throw HardwareError.invalidMetadata }
-            // Reviewed source prefers lowercase when both aliases agree. A
-            // contradictory alias blocks writes rather than guessing ownership.
+            // Prefer lowercase only when aliases agree; conflicting aliases block writes.
             let metadata = matches.first { $0.key == "F\(id)md" } ?? matches[0]
             keys[id] = metadata.key; protectedMode = protectedMode || metadata.value == 3
             do {
@@ -45,8 +44,7 @@ public struct FanInterface: Sendable {
                     code: failure.code, operation: failure.operation, key: "F\(id)Tg")
             }
         }
-        // Absence is specifically the SMC not-found result. A corrupt/unreadable
-        // global handover flag must not be silently treated as a direct interface.
+        // Only SMC not-found means absent; an unreadable Ftst flag blocks discovery.
         var forceTest = false
         do {
             let flag = try read("Ftst")
@@ -128,8 +126,8 @@ public struct FanInterface: Sendable {
     }
 }
 
-/// Cancellation arrives from the XPC ingress thread even while handover is waiting.
-/// The hardware queue remains the sole writer; cancellation only revokes admission.
+/// XPC ingress can revoke work while handover waits.
+/// The hardware queue remains the only writer.
 public final class HardwareOperationFence: @unchecked Sendable {
     public struct Token: Sendable, Equatable {
         fileprivate let generation: UUID
@@ -176,9 +174,8 @@ public final class HardwareOperationFence: @unchecked Sendable {
 
 /// Bounded handover polling, independent of transport and wall time in tests.
 public enum FanHandover {
-    /// An accepted automatic-mode write may remain manual briefly in readback.
-    /// Wait for acknowledgement without issuing another command or accepting
-    /// unknown ownership; the caller still attempts every fan on failure.
+    /// Wait for automatic-mode acknowledgement without reissuing the command.
+    /// The caller still attempts every fan on failure.
     public static func awaitRelease(deadline: Double, clock: () -> Double,
         read: () throws -> FanMode, pause: () -> Void) throws {
         guard deadline.isFinite else { throw ControlError.invalidNumber }
@@ -215,8 +212,7 @@ public enum FanHandover {
     }
 }
 
-/// Read-only evidence for retiring an authenticated predecessor whose executable
-/// was replaced. This permits native registration cleanup, never an XPC lease.
+/// Read-only ownership check before removing a stale predecessor registration.
 public enum AutomaticOwnershipObservation {
     public static func verify(identity: DeviceIdentity,
         read: (String) throws -> DiscoveredSensor, clock: () -> Double) throws {

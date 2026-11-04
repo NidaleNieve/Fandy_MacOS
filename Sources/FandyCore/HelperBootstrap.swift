@@ -10,7 +10,7 @@ public struct HelperBootstrapStatus: Codable, Sendable, Equatable {
     }
 }
 
-/// Fixed retry policy; no caller supplies timing or can create a restart loop.
+/// Bounded startup retries with fixed delays.
 public struct HelperBootstrapRetry: Sendable {
     private(set) public var attempts = 0
     public init() {}

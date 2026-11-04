@@ -3,7 +3,7 @@ import AppKit
 import FandyCore
 import FandyHardware
 
-/// Fixed, bounded real-controller check. No user-supplied profile, RPM, PID or duration.
+/// Bounded controller check with a fixed profile and duration.
 @MainActor enum AutomationDiagnostics {
     static func run() async -> Int32 {
         let client = FanXPCClient()

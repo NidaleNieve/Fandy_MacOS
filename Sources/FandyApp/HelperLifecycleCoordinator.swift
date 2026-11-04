@@ -1,8 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Main-actor service operations retain exclusivity across suspension points.
-/// Different operations queue independently; none coalesce with an unrelated release.
+/// Serialize service operations across awaits; queue different operations separately.
 @MainActor final class HelperLifecycleCoordinator {
     private(set) var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []

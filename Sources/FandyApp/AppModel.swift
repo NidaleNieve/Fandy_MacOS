@@ -146,7 +146,7 @@ import ServiceManagement
         defaultResumeBlocked = !issues.isEmpty
         helperSetupStatus = autoreleasepool { self.helperRegistrationStatus() }
         helperSetupInitializing = autoStart && !simulation
-        // Lifecycle begins from System regardless of persisted selection.
+        // Start in System before resolving saved preferences.
         if autoStart { Task { [weak self] in self?.start() } }
     }
     func canMove(_ direction: Int) -> Bool {
@@ -205,7 +205,7 @@ import ServiceManagement
             do { try await Task.sleep(for: .seconds(1)) } catch { break }
         }
     }
-    /// A runtime-only selection shares the normal engine/lease without becoming a saved profile.
+    /// Temporary speed uses the normal controller but is never saved as a profile.
     var isCustomFanSpeedActive: Bool {
         temporaryFanSpeedProfile?.id == machine.selected.id && machine.state != .fault
     }
@@ -246,8 +246,7 @@ import ServiceManagement
             return true
         } catch { draftError = error.localizedDescription; return false }
     }
-    /// Slider changes keep the original expiry; only an explicit duration edit
-    /// renews it. The ordinary controller still governs and validates every target.
+    /// Slider edits preserve expiry. Only a completed duration edit restarts it.
     @discardableResult func updateCustomFanSpeed(percent: Double, initialSeconds: Double? = nil) -> Bool {
         guard percent.isFinite, (0...100).contains(percent) else { draftError = "Enter a speed from 0–100%."; return false }
         guard isCustomFanSpeedActive else {
@@ -261,14 +260,12 @@ import ServiceManagement
             return true
         } catch { draftError = error.localizedDescription; return false }
     }
-    /// Remember the completed choice without activating cooling. A running
-    /// temporary selection is retimed through the same ordinary activation path.
+    /// Save the duration choice; retime an active temporary selection.
     @discardableResult func setCustomFanSpeedDuration(minutes: Int) -> Bool {
         guard (1...44_640).contains(minutes) else { draftError = "Enter a positive duration up to 31 days."; return false }
         return setCustomFanSpeedLimit(seconds: Double(minutes) * 60)
     }
-    /// Nil is an indefinite choice, not an unbounded helper lease. The normal
-    /// heartbeat, sensor checks and macOS handback remain independently active.
+    /// Nil means until changed; helper leases still require heartbeats.
     @discardableResult func setCustomFanSpeedLimit(seconds: Double?) -> Bool {
         guard seconds.map({ $0.isFinite && $0 > 0 && $0 <= 31 * 86400 }) ?? true else {
             draftError = "Enter a positive duration up to 31 days."; return false
@@ -378,9 +375,8 @@ import ServiceManagement
                     restorationReport = status.restoration
                     monitoringReading = status.snapshot
                     monitoringReading?.fans = []
-                    // Automatic-looking telemetry cannot erase a failed release transaction.
-                    // An idle external manual mode is a separate ownership conflict; it does
-                    // not automatically request another release merely because status was read.
+                    // Keep failed restoration visible even if telemetry looks automatic.
+                    // Observing external manual control while idle must not start a release loop.
                     if capabilities.canRestore && status.restoration?.verified == false {
                         throw ControlError.restorationUnverified
                     }
@@ -429,18 +425,15 @@ import ServiceManagement
             }
         }
     }
-    /// SMAppService can remain enabled while launchd retains a bundle reference
-    /// invalidated by app replacement. Rebind once; startup in the new helper
-    /// restores automatic control before accepting leases. No retry loop fights
-    /// a disabled service, authentication failure or another controller.
+    /// App replacement can leave an enabled service pointing at the old bundle.
+    /// Rebind once after confirmed service absence; the new helper restores on startup.
     private func connectedHelperStatus(token: UUID) async throws -> HelperStatus {
         do { return try await client.status() }
         catch let failure as HelperFailure where failure.kind == .serviceUnavailable {
             guard let native = client as? FanXPCClient, Bundle.main.bundleIdentifier == FandyIdentity.appIdentifier,
                   HelperManager.service.status == .enabled, !helperReconnectAttempted,
                   token == lifecycleToken, !quitting, !preparingUpdate else { throw failure }
-            // Confirm a missing service twice more; timeout/authentication/progress
-            // never trigger registration churn.
+            // Confirm absence twice; timeout, authentication and startup delays do not permit rebind.
             for delay in [100, 300] {
                 try await Task.sleep(for: .milliseconds(delay))
                 do { return try await native.status() }
@@ -496,8 +489,8 @@ import ServiceManagement
                     do { try await client.restoreAutomatic(); guard token == lifecycleToken else { return }; machine.restored(generation:generation,verified:true); hardwareError = nil }
                     catch { guard token == lifecycleToken else { return }; machine.restored(generation:generation,verified:false); hardwareError=error.localizedDescription }
                 } else {
-                    // An observation-only build never acquired a lease and cannot release an
-                    // external controller. Only fresh independent evidence can show Apple ownership.
+                    // Observation-only mode must leave other controllers alone.
+                    // Fresh fan readings are required to confirm automatic ownership.
                     do {
                         if hardware == nil { hardware = try await Task.detached { try AppleSiliconSensorProvider() }.value }
                         guard let reading = try await hardware?.snapshot() else { throw ControlError.invalidSnapshot }
@@ -581,7 +574,6 @@ import ServiceManagement
             guard profiles[index] != profile else { return }
             failedCollection = nil; failedConfiguration = nil
             if groupedOriginal == nil { registerUndo(profiles[index]) }
-            // The existing validated profile is retained if a draft is invalid.
             if machine.selected.id == profile.id {
                 var renamed = machine.selected; renamed.name = profile.name; renamed.showInMenuBar = profile.showInMenuBar
                 if renamed == profile { try machine.updateSelectedName(from: profile) }
@@ -669,8 +661,7 @@ import ServiceManagement
                     clearActivation(); select("system")
                 }
                 else if let replacement = next.first(where: { $0.id == machine.selected.id }), replacement != machine.selected {
-                    // Definition replacement follows the existing live-edit path. Scheduling
-                    // must not cancel a manual duration/process watch for the same profile.
+                    // Replacing a definition must preserve its active duration or process watch.
                     lifecycleToken = UUID()
                     do { let effect = try machine.select(replacement); Task { await execute(effect) } }
                     catch { automationFailed(); await execute(machine.fail(error)) }
@@ -734,14 +725,12 @@ import ServiceManagement
         observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
         if let effect = try? machine.select(BuiltInProfiles.system) { await execute(effect) }
         guard token == lifecycleToken else { return }
-        // A revoked pre-sleep read may still be unwinding. Wait only within a
-        // fixed bound; stale replies cannot supply wake readiness or prolong it.
+        // Bound the wait for a pre-sleep read to unwind; its reply cannot establish wake readiness.
         let readinessDeadline = ContinuousClock.now.advanced(by: .seconds(3))
         while busy && ContinuousClock.now < readinessDeadline {
             try? await Task.sleep(for: .milliseconds(10))
             guard token == lifecycleToken, !quitting else { return }
         }
-        // Fresh status is acquired before resolving any saved cooling intent.
         await tick()
         guard token == lifecycleToken else { return }
         refreshApplicationAvailability(force: true)
@@ -769,8 +758,7 @@ import ServiceManagement
         if sleepPollingWasRunning && !quitting && loop == nil { loop = Task { [weak self] in await self?.pollUntilCancelled() } }
         sleepPollingWasRunning = false
     }
-    // Retained for deterministic reset diagnostics. Native notifications use the
-    // explicit async sleep/wake lifecycle above.
+    // Reset hook for diagnostics; native notifications use the async sleep/wake methods.
     func powerTransition() {
         observedApplicationInstances = nil; pendingApplicationLaunches.removeAll()
         defaultResumeBlocked = true
@@ -807,7 +795,7 @@ import ServiceManagement
         if !updatePrepared && (simulation || capabilities.canRestore) { await execute(machine.fail(ControlError.invalidProfile("App quit"))) }
         await waitForCollection()
         await saveLatest()
-        // Observation never owned a lease; control failures still rely on the helper watchdog.
+        // The watchdog handles any control lease left after a failed quit-time release.
         terminationReady = true
     }
     /// Sparkle may replace the embedded service only after acknowledged handback.

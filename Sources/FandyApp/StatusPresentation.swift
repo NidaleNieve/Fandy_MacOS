@@ -2,8 +2,7 @@ import Foundation
 import FandyCore
 
 enum StatusPresentation {
-    /// Observed RPM on the same minimum-to-maximum scale as curves and floors.
-    /// This remains an observation, not the engine's requested level.
+    /// Actual RPM on the same minimum-to-maximum scale as curves and floors.
     static func observedFanPercent(_ fans: [Fan]) -> Double {
         fans.compactMap { try? $0.percent(rpm: $0.actualRPM) }.max() ?? 0
     }

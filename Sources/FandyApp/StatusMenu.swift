@@ -8,7 +8,7 @@ struct StatusItemPresentation: Equatable {
     let tooltip: String
 }
 
-/// AppKit provides actual hierarchical menus with embedded controls; the editor remains SwiftUI.
+/// Native menu hierarchy with hosted controls.
 @MainActor final class StatusMenu: NSObject, NSMenuDelegate {
     let model: AppModel
     let item: NSStatusItem?
@@ -72,8 +72,7 @@ struct StatusItemPresentation: Equatable {
         guard deferredMenus[ObjectIdentifier(menu)] == nil else { return }
         isOpen = false
         let generation = menuGeneration
-        // Leave AppKit's tracking stack before removing embedded hosting views.
-        // A selected item's represented object owns its action until delivery.
+        // Defer teardown until tracking ends and the selected action has been delivered.
         Task { @MainActor [weak self, weak menu] in
             guard let self, let menu, !self.isOpen, self.menuGeneration == generation else { return }
             autoreleasepool {
@@ -209,8 +208,7 @@ struct StatusItemPresentation: Equatable {
         placeholder.isEnabled = false; submenu.addItem(placeholder)
     }
     private func embedded<V: View>(_ view: V, identifier: String) -> NSView {
-        // NSMenuItem.view receives native mouse/keyboard events. Keep its controls
-        // in the submenu's own window; never activate a separate panel/popover.
+        // Keep embedded controls in the submenu window so native tracking owns input.
         let hosting = MenuControlHostingView(rootView: view)
         hosting.frame.size = hosting.fittingSize
         hosting.setAccessibilityIdentifier(identifier)
@@ -221,8 +219,7 @@ struct StatusItemPresentation: Equatable {
         let height = hosting.fittingSize.height
         hosting.sizingOptions = []
         hosting.frame.size = NSSize(width: MenuLayout.width, height: height)
-        // AppKit expands this view to the menu width, including the space used by
-        // native checkmarks/shortcuts. The readout centers in that actual width.
+        // Center in AppKit's final menu width, including checkmark and shortcut columns.
         hosting.autoresizingMask = [.width]
         return hosting
     }
@@ -260,8 +257,7 @@ struct CustomActivationPicker: View {
         if m == 0 { return hour }
         return hour + " " + minute
     }
-    /// Both For and Until use this validation/dispatch; only the destination
-    /// differs, keeping the clock, fields and presentation in one shared view.
+    /// Shared validation and dispatch for For and Until.
     @discardableResult func applyInterval(_ seconds: Double) -> Bool {
         guard seconds.isFinite, seconds > 0, seconds <= 31 * 86400 else { return false }
         if destination == .customFanSpeed { return model.setCustomFanSpeedLimit(seconds: seconds) }
@@ -368,8 +364,7 @@ struct ProcessPicker: View {
     private func refresh() { processes = ProcessCatalog.list(includeHelpers: helpers) }
 }
 
-/// Embedded pickers change height as their mode changes. Unlike passive status
-/// rows, they keep an intrinsic size, but only their height can resize the menu.
+/// Picker modes may change the menu height, but never its width.
 @MainActor final class MenuControlHostingView<Content: View>: NSHostingView<Content> {
     private var resizing = false
     override func layout() {

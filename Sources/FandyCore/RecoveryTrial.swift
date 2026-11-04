@@ -14,8 +14,7 @@ public struct RecoveryObservation: Sendable {
               diagnosticKeyCount > 0, diagnosticPeak.isFinite, diagnosticPeak > 0, diagnosticPeak < 75 else {
             throw ControlError.invalidSnapshot
         }
-        // Candidate identities remain unverified. Read health is checked without promoting
-        // labels or granting profile authority. The wider raw-domain ceiling is diagnostic only.
+        // Check candidate readings for diagnostic admission without promoting their identity.
         for role in HardwareCapabilities.requiredRoles {
             let matches = snapshot.sensors.filter { $0.role == role }
             guard matches.count == 1, let reading = matches.first,
@@ -77,7 +76,7 @@ public struct RecoveryTrialStatus: Codable, Sendable {
     public var firstRestoration: RestorationReport?
 }
 
-/// The implementation is helper-private. These methods are never arbitrary XPC commands.
+/// Helper-only I/O for the fixed recovery trials.
 public protocol RecoveryFanHardwareIO: FanHardwareIO {
     func prepareRecoveryTarget(_ target: FanTarget, deadline: Double) throws
     func activateRecoveryFan(_ target: FanTarget, deadline: Double) throws
@@ -132,8 +131,7 @@ public final class RecoveryTrialCoordinator {
         let snapshot = observation.snapshot
         guard snapshot.fans.allSatisfy({ $0.mode == .automatic }) else { throw ControlError.restorationUnverified }
         let targets = try snapshot.fans.map { fan -> FanTarget in
-            // Starting a naturally stopped fan is an explicitly labelled mechanical trial,
-            // not an invented 200 RPM command or a production minimum-floor claim.
+            // A stopped-fan trial uses the reported minimum plus the diagnostic margin.
             let rpm = max(fan.actualRPM, fan.minimumRPM) + 200
             guard rpm.isFinite, rpm > fan.actualRPM, rpm >= fan.minimumRPM, rpm <= fan.maximumRPM else { throw ControlError.invalidFan }
             return FanTarget(fan.id, rpm)
@@ -147,8 +145,7 @@ public final class RecoveryTrialCoordinator {
         do {
             let stopped = snapshot.fans.allSatisfy { $0.actualRPM == 0 && $0.targetRPM == 0 }
             if stopped {
-                // This is an explicit baseline-specific sequence, never a fallback after
-                // failed preloading. Require a stricter diagnostic ceiling for first startup.
+                // Stopped-fan admission has its own sequence and stricter temperature ceiling.
                 guard observation.diagnosticPeak < 60 else { throw ControlError.invalidSnapshot }
                 status?.activationPath = "stopped-zero-target mode-first"
                 for target in targets {

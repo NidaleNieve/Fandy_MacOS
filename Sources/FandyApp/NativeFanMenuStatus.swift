@@ -2,8 +2,7 @@ import AppKit
 import Observation
 import FandyCore
 
-/// The frequently opened menu does not need to initialize SwiftUI's scene graph.
-/// Editor readouts keep their existing SwiftUI presentation.
+/// Draw menu readings in AppKit to avoid creating a SwiftUI graph on menu open.
 @MainActor final class NativeFanMenuStatus: NSView {
     private let model: AppModel
     private let stack = NSStackView()

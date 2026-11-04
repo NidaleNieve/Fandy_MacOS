@@ -28,7 +28,7 @@ class MeasurementReportTests(unittest.TestCase):
         phases = m.summarize(records, [(time, {'Performance Core 1 (C)': 45, 'GPU Region 1 (C)': 37})])
         self.assertEqual(phases['cpu']['cpuUnder'], [5])
         self.assertEqual(phases['gpu']['gpuUnder'], [2])
-        self.assertIn('Every sensor capability remains pending', m.render(records, phases))
+        self.assertIn('does not change qualification', m.render(records, phases))
         phases = m.summarize(records, [(time+3, {'Performance Core 1 (C)': 45})])
         self.assertEqual(phases['cpu']['pairs'], 0)
 
@@ -37,3 +37,18 @@ class MeasurementReportTests(unittest.TestCase):
         records[0]['keys'].pop()
         with self.assertRaises(ValueError):
             m.summarize(records, [])
+
+    def test_report_describes_the_input_recording_without_old_release_claims(self):
+        records = self.records()
+        for record in records:
+            record['timestamp'] = '2026-11-04T12:00:00Z'
+        rows = [(m.c.timestamp(records[0]['timestamp']),
+                 {'Performance Core 1 (C)': 45, 'GPU Region 1 (C)': 37})]
+        text = m.render(records, m.summarize(records, rows))
+        self.assertIn('2026-11-04T12:00:00Z', text)
+        self.assertIn('5.00 / 2.00', text)
+        self.assertNotIn('2026-10-01', text)
+        self.assertNotIn('real profiles stay disabled', text)
+        self.assertNotIn('Native compilation overlapped', text)
+        self.assertNotIn('build/bounded-sensors', text)
+        self.assertIn('does not change qualification', text)

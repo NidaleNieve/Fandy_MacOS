@@ -3,7 +3,7 @@ import ServiceManagement
 import FandyCore
 import FandyHardware
 
-/// Fixed-purpose diagnostics in the genuinely signed GUI executable. No RPM/mode arguments.
+/// Signed-app diagnostics with fixed commands and no RPM or mode arguments.
 enum HelperDiagnosticAction: String, CaseIterable {
     case register = "--helper-observation-register"
     case status = "--helper-observation-status"
@@ -141,16 +141,14 @@ enum HelperDiagnosticAction: String, CaseIterable {
             return 1
         }
     }
-    /// Fixed curve trial in the signed qualification build; the root lease owns its 15s deadline.
-    /// No caller-provided keys, RPM, duration, profile or authority are accepted.
+    /// Fixed curve trial with a helper-owned 15-second deadline.
     private static func checkCurve(_ action: HelperDiagnosticAction) async -> Int32 {
         let client = FanXPCClient()
         var writeAdmitted = false
         do {
             guard DeviceRegistry.current.capabilities.canQualifyCurves, HelperManager.installed else { throw ControlError.hardwareUnqualified }
             let reader = try SMCReader()
-            // Distinct completed acquisitions; an artificial delay here can let a spinning
-            // automatic baseline stop before the transaction we intend to qualify.
+            // Keep acquisitions consecutive so a spinning baseline does not stop before admission.
             for _ in 0..<5 { _ = try await client.status() }
             let status = try await client.status()
             guard status.capabilities?.canQualifyCurves == true, status.automaticVerified,
@@ -227,8 +225,7 @@ enum HelperDiagnosticAction: String, CaseIterable {
             return 1
         }
     }
-    /// Same authenticated connection throughout, so disconnect cleanup cannot erase the
-    /// spinning automatic baseline between release and the next bounded admission.
+    /// Keep one connection so disconnect cleanup cannot erase the spinning baseline.
     private static func checkSpinningCurve() async -> Int32 {
         let client = FanXPCClient()
         do {

@@ -1,32 +1,32 @@
 # Building locally
 
-Use Xcode with Swift 6 support on Apple Silicon and macOS 15 or later. The [README](../README.md) contains the build and test commands.
+Use Xcode with Swift 6 support on Apple Silicon and macOS 15 or later. Build and test commands are in the [README](../README.md).
 
 ## Signing
 
-Set your development team in an ignored `Config/Signing.local.xcconfig`:
+Set your team in the ignored `Config/Signing.local.xcconfig`:
 
 ```xcconfig
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 ```
 
-Public settings use automatic Apple Development signing. The app and helper retain the identifiers `is.dsr.fandy` and `is.dsr.fandy.fan-helper`; the helper authenticates the matching signing team and app identity.
+Defaults use automatic Apple Development signing. Keep the app/helper identifiers `is.dsr.fandy` and `is.dsr.fandy.fan-helper`; they authenticate the matching team and peer identity.
 
-`Scripts/generate-project.py` preserves Xcode signing selections in ignored per-configuration `*.local.xcconfig` files under `Config/Signing/`. Keep those files when regenerating the project or switching branches. Run the generator before committing changes to Xcode signing selections so personal settings stay out of the project file.
+`Scripts/generate-project.py` preserves Xcode signing selections in ignored per-configuration `*.local.xcconfig` files under `Config/Signing/`. Keep these when switching branches. Regenerate the project before committing Xcode signing edits.
 
-For physical fan control, quit other copies and install the signed build as `/Applications/Fandy.app`. Approve Background App Activity through Fandy's setup window. An unsigned CI build checks compilation and cannot establish helper authentication or physical operation. Follow the [hardware testing requirements](HARDWARE_GATES.md) before live tests.
+For live control, quit other copies, install the signed build at `/Applications/Fandy.app`, and approve Background App Activity. Follow [Hardware testing](HARDWARE_GATES.md) before physical writes. Unsigned builds check compilation only.
 
-## Local files and checks
+## Repository checks
 
-Build output, measurements, logs, credentials and local signing files are ignored. Keep private notes under `docs/local/` or `private/`. Local agent instructions can remain in the ignored root `AGENTS.md`.
+Builds, logs, measurements, credentials and local signing files are ignored. Keep private notes in `docs/local/` or `private/`; root `AGENTS.md` is local too.
 
-Enable the public-content check for commits:
+Enable the staged-content check:
 
 ```sh
 git config --local core.hooksPath .githooks
 python3 Scripts/check-public-content.py --staged
 ```
 
-The check scans indexed contents for private paths, signing identifiers, common credentials and unreviewed binary artifacts. It complements manual review. Retain the project license, third-party notices and bundled license texts.
+It checks for private paths, signing details, common credentials and unreviewed binaries. Review staged content as well.
 
-Pull requests remain required for main. Documentation and `.gitignore` changes get lightweight checks; changes to app code, tests, build resources or development tooling run the full verification suites.
+Pull requests target `main`. Documentation and `.gitignore` changes use lightweight checks. Code, tests, build resources, signing, tools and workflow changes run the full macOS verification suites.

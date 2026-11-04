@@ -104,7 +104,7 @@ public actor ProfilePersistence {
     public init(store: ProfileStore) {
         write = { try store.save($0.profiles, previousSelection: $0.previousSelection, automation: $0.automation) }
     }
-    /// A synchronous adapter preserves serial writes and permits deterministic failure tests.
+    /// Synchronous writes keep actor ordering and allow injected failures.
     init(write: @escaping @Sendable (ProfileArchive) throws -> Void) { self.write = write }
     public func save(_ profiles: [Profile], selection: String?, revision: UInt64, automation: AutomationConfiguration = .init()) throws {
         guard revision >= newest else { return }
@@ -118,7 +118,7 @@ public actor ProfilePersistence {
     }
 }
 
-/// Interchange carries only validated custom profile definitions, never control authority.
+/// Import and export validated custom profile definitions.
 public enum ProfileInterchange {
     private struct Archive: Codable { let version: Int; let profiles: [Profile] }
     public static func encode(_ profiles: [Profile]) throws -> Data {

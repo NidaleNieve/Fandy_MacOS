@@ -21,8 +21,7 @@ public struct SensorEvidence: Codable, Sendable, Equatable {
         self.role = role; self.keys = keys; self.state = state; self.source = source; self.limitation = limitation; self.displayName = displayName
     }
 }
-/// Constructed by the signed build, never loaded from preferences or accepted as an XPC command.
-/// A received helper capability report cannot grant authority to the local client.
+/// Compiled hardware permissions, checked against the helper report.
 public struct HardwareCapabilities: Codable, Sendable, Equatable {
     public let model: String
     public let stage: HardwareStage
@@ -56,8 +55,7 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
     }
     public var allSensorsVerified: Bool { Self.requiredRoles.isSubset(of: verifiedRoles) }
     public var requiredControlRoles: Set<SensorRole> { chipPolicy.required.union(SensorRole.comfort) }
-    // Release authority is independent of temperature health and identity. The user-approved
-    // restoration-first stage cannot enter manual mode, even with fully qualified sensors.
+    // Restoration needs known topology, independently of temperature qualification.
     public var canRestore: Bool { stage != .observation && topology.supported }
     public var canControl: Bool {
         [.maximumControl, .curveQualification, .qualifiedControl].contains(stage) && canRestore && automaticRestoration.supported && manualTransaction.supported
@@ -71,13 +69,11 @@ public struct HardwareCapabilities: Codable, Sendable, Equatable {
         canControl && (required.isEmpty || ([.curveQualification, .qualifiedControl].contains(stage) && chipPolicy.required.isSubset(of: required) && required.isSubset(of: verifiedRoles)))
     }
     public var canQualifyCurves: Bool { stage == .curveQualification && canControl && chipPolicy.required.isSubset(of: verifiedRoles) }
-    /// Separate, signed-build authority for bounded qualification; never admits profile leases.
-    /// The current restoration build cannot obtain it through preferences or XPC data.
+    /// Historical manual-qualification gate; excludes normal profile leases.
     public var canQualifyManual: Bool {
         stage == .manualQualification && canRestore && allSensorsVerified && automaticRestoration == .verified
     }
-    /// User-authorized mechanical recovery trials before sensor identity qualification.
-    /// No ordinary leases, curve control or caller-selected fan commands are admitted.
+    /// Finite mechanical recovery trials, separate from normal profile leases.
     public var canQualifyRecovery: Bool {
         stage == .recoveryQualification && canRestore && automaticRestoration == .verified
     }

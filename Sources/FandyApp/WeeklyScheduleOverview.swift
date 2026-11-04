@@ -1,8 +1,7 @@
 import SwiftUI
 import FandyCore
 
-/// Shared projection also used by tests: overnight entries appear on both days,
-/// including Sunday-to-Monday, with each portion clipped to that day's bounds.
+/// Split overnight periods across calendar days, including Sunday to Monday.
 struct ScheduleOverviewRow: Identifiable, Equatable {
     let periodID: UUID
     let profileID: String

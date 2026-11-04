@@ -1,4 +1,4 @@
-/// Fixed identities shared by both signed processes. Never supplied through IPC/preferences.
+/// Bundle and service identifiers shared by app and helper.
 public enum FandyIdentity {
     public static let appIdentifier = "is.dsr.fandy"
     public static let helperIdentifier = "is.dsr.fandy.fan-helper"

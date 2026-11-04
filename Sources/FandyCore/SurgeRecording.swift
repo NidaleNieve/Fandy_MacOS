@@ -56,7 +56,7 @@ public struct SurgeDetector: Sendable {
     }
     private mutating func reset() { history = []; capture = []; trigger = nil; triggerElapsed = nil; last = nil }
 }
-/// Local user-process storage; no helper paths or hardware effects.
+/// Bounded local storage for surge events.
 public final class SurgeRecorder {
     private let directory: URL
     private let maxEvents: Int, maxBytes: Int

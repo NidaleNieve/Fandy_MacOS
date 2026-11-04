@@ -1,8 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Exact observed Mac17,9 command codec. The root transport and trial deadline live
-/// exclusively in the helper. No user-selected key, mode or RPM is exposed over XPC.
+/// Mac17,9 command encoding; the helper owns transport access and trial deadlines.
 public enum SMCRecoveryWriter {
     public static func prepare(target: FanTarget, fan: Fan, metadata: DiscoveredSensor, transport: any SMCStructTransport) throws {
         try fan.validate()
@@ -121,8 +120,7 @@ public enum RecoveryTargetReadback {
     }
 }
 
-/// Production codec, injected and pure. The root coordinator separately admits each policy.
-/// Uses only the two reviewed fan IDs and their freshly validated limits/metadata.
+/// Encode validated commands for Mac17,9 fan IDs 0 and 1.
 public enum SMCProfileWriter {
     /// Observed Mac17,9 targets acknowledge whole RPM. Round upward so quantization
     /// preserves the requested profile level within whole-RPM hardware resolution.
@@ -137,9 +135,8 @@ public enum SMCProfileWriter {
             return FanTarget(fan.id, min(fan.maximumRPM, ceil(target.rpm)))
         }
     }
-    /// Mac17,9 automatic preloading does not retain its target. Reviewed production
-    /// admission therefore writes manual once, verifies only its mode, then immediately
-    /// writes that fan’s validated target before admitting another fan. No alternate sequence or unlock key fallback.
+    /// Mac17,9 discards targets preloaded in automatic mode. Enter manual mode,
+    /// acknowledge it and write that fan's target before admitting the next fan.
     public static func startAutomatic(fan: Fan, mode: DiscoveredSensor, previous: DiscoveredSensor,
                                       transport: any SMCStructTransport) throws {
         try fan.validate()

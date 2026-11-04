@@ -65,7 +65,7 @@ public struct DemandGovernor: Sendable {
     public mutating func constrain(to ceiling: Double) {
         output = min(output, ceiling); filtered = min(filtered, ceiling)
     }
-    /// Retained for decoding/testing older policies; production has no hidden floor.
+    /// Apply an immediate floor without smoothing.
     public mutating func enforceMinimum(_ value: Double) throws -> Double {
         guard value.isFinite, (0...100).contains(value) else { throw ControlError.invalidNumber }
         if value > output { output = value; filtered = value; lowerSince = nil }

@@ -47,7 +47,7 @@ public struct ResolvedDevice: Sendable {
     }
 }
 
-/// Signed, source-backed registry. Neither configuration imports nor IPC can add recipes.
+/// Compiled model registry; imports and IPC cannot add hardware recipes.
 public enum DeviceRegistry {
     public static let statsRevision = "9ceb6e3b20001c4102f473c5dc3e96b388a77da9"
     // Apple Support 108052, reviewed 2026-10-04. Chip identity is checked separately.
@@ -164,8 +164,8 @@ public enum DeviceRegistry {
             return ResolvedDevice(identity: identity, capabilities: cap, mappings: SensorRegistry.mappings, fanInterface: interface, failure: device.failure)
         }
         let groups = candidates(for: identity)
-        // Probe only published candidates, once. An absent variant member may be excluded
-        // at resolution; a selected member that later fails invalidates the entire group.
+        // Resolve published groups once, allowing keys absent on this variant.
+        // A selected member that later fails invalidates its whole group.
         var samples: [String: DiscoveredSensor] = [:], invalidKeys: Set<String> = []
         let comfort: [(SensorRole, String)] = [(.trackpad,"Ts0P"),(.actuator,"Ts1P"),(.airflowLeft,"TaLP"),
             (.airflowTop,"TaTP"),(.airflowRight,"TaRF"),(.charger,"TCHP"),(.powerSupply,"TPSP"),(.wireless,"TW0P")]

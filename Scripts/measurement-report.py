@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize one finite diagnostic session; never changes hardware or qualification."""
+"""Summarize a recorded Mac17,9 temperature session."""
 import argparse
 import bisect
 import importlib.util
@@ -67,37 +67,20 @@ def summarize(records, rows):
 
 
 def render(records, phases):
-    lines = ['# Bounded Mac17,9 sensor measurement —2026-10-01', '',
-             f'Completed {len(records)} records from {records[0]["timestamp"]} to {records[-1]["timestamp"]}. '
-             'The executable completed its fixed960second cycle without an abort or fan write. '
-             'Both fan modes were0 in every recorded sample. Temperature labels remain candidates.', '',
-             '## Phase evidence', '',
-             '| Phase | Samples / TG Pro pairs | CPU candidate peak range °C | GPU candidate peak range °C | Largest CPU / GPU under-read °C | Maximum pairing gap s |',
+    lines = ['# Mac17,9 sensor measurement', '',
+             f'{len(records)} records: {records[0]["timestamp"]} to {records[-1]["timestamp"]}. '
+             'The 960-second session completed with both fans in automatic mode.', '',
+             '| Phase | Samples / TG Pro pairs | CPU peak range °C | GPU peak range °C | Largest CPU / GPU under-read °C | Pairing gap s |',
              '| --- | ---: | --- | --- | --- | ---: |']
     for name, p in phases.items():
         lines.append(f'| {name} | {p["samples"]} / {p["pairs"]} | {min(p["cpu"]):.2f}–{max(p["cpu"]):.2f} | '
                      f'{min(p["gpu"]):.2f}–{max(p["gpu"]):.2f} | '
                      f'{max(0,max(p["cpuUnder"],default=0)):.2f} / {max(0,max(p["gpuUnder"],default=0)):.2f} | {max(p["gaps"],default=0):.2f} |')
-    lines += ['', 'Under-read means contemporaneous TG Pro hottest exported core/region minus the candidate group maximum; '
-              'it is not an assertion of sensor error. Rounding, sampling lag, membership and differing semantics remain explanations to investigate. '
-              'Native compilation overlapped the beginning of baseline; that initial interval is not a clean workload baseline. '
-              'No heavier workload or second stimulus cycle was started.', '',
-              '## Domain and qualification', '',
-              '- All18 published M5 CPU candidate keys were present and typed flt4 in the fresh catalog; the older15-member aggregate omitted Tp0K/Tp0u/Tp0y without sufficient justification. Those omissions are corrected.',
-              '- The published GPU domain has8 keys. Tg1g was absent from this model’s complete catalogs; the7 present source-listed keys form the informational group. Absence was checked by enumeration, not inferred from GPU core count.',
-              '- The GPU stimulus produced insufficient independent variation to prove peak coverage. Core/region identity is not granted by a matching or nearby number.',
-              '- Historical Trackpad/Actuator/Charger/Wireless and Stats Left/Right labels provide provenance, but firmware-specific corroboration and competing candidates remain in SENSOR_QUALIFICATION.',
-              '- Airflow Top TaTP and Power Supply TPSP still lack independently established model-specific names. Public AppleSMC registry property inspection exposed no sensor-name table; this does not imply the sensors are unavailable.',
-              '- Every sensor capability remains pending. Automatic restoration is qualified independently. Manual methods and real profiles stay disabled.', '',
-              '## Specific next evidence', '',
-              'Obtain an independently attributable Mac17,9 key-to-name mapping for TaTP/TPSP (a vendor diagnostic containing actual keys, firmware-provided description, or independently verified model-specific source). '
-              'TG Pro’s rounded CSV alone cannot provide that provenance. Do not replace either name with the numerically closest sensor.', '',
-              'For CPU/GPU, compare the complete published domains with independently named core/region evidence under a separately labelled stimulus that actually changes the relevant domain. '
-              'The current low-duty GPU interval did not do so. Quantify acquisition lag before interpreting transient peak differences; do not declare coverage merely because averages agree.', '',
-              'The next manual path remains gate-dependent: fixed root-computed+200RPM, five-second first request, immediate release, then nonrenewable recovery trials and the physical failure matrix. '
-              'No qualification preference, simulated success or XPC payload can satisfy the sensor gate.', '',
-              'Artifacts: build/bounded-sensors.jsonl, build/bounded-sensors.stderr; reference: the explicitly supplied local TG Pro CSV. '
-              'Normal monitoring has no dependency on this reference.']
+    lines += ['', 'Peaks use the candidate CPU/GPU groups defined by this tool. Each group must be complete. '
+              'TG Pro samples are paired within two seconds. Under-read is the reference peak minus the candidate peak; '
+              'rounding, sampling lag and group membership can affect the difference.', '',
+              'This offline report does not change qualification. Sensor identity and hotspot coverage '
+              'need independent confirmation.']
     return '\n'.join(lines) + '\n'
 
 

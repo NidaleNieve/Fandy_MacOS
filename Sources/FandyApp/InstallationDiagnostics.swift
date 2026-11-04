@@ -16,8 +16,7 @@ struct InstallationObservation: Codable, Sendable {
     var signingClassesMatch: Bool
     var launchd: LaunchdObservation
 }
-/// Fixed read-only service query and signature assessment, off the main actor.
-/// Raw launchd output and signing identities are never retained in the report.
+/// Query service state and signatures off the main actor; retain categories and numbers only.
 enum InstallationDiagnostics {
     static func parseLaunchd(_ text: String, exitCode: Int32) -> LaunchdObservation {
         var result = LaunchdObservation(state: exitCode == 113 ? "absent" : "unknown", queryExitCode: exitCode)

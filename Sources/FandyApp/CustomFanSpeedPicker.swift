@@ -1,8 +1,7 @@
 import AppKit
 import FandyCore
 
-/// AppKit owns the complete drag, including excursions outside the menu. A
-/// SwiftUI gesture would otherwise yield those events back to menu tracking.
+/// AppKit retains slider tracking when the pointer leaves the menu.
 @MainActor final class MenuFanSpeedSlider: NSSlider {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
@@ -11,8 +10,7 @@ import FandyCore
     }
 }
 
-/// Slider events stay in the menu window. Duration choices live in ordinary
-/// NSMenu submenus, so no popup has to open inside another tracking menu.
+/// Keep the slider in the menu window and duration choices in native submenus.
 @MainActor final class CustomFanSpeedMenuView: NSView {
     let slider = MenuFanSpeedSlider()
     private let model: AppModel

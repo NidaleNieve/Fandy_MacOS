@@ -7,7 +7,7 @@ public struct ControlLease: Codable, Sendable, Equatable {
     public var required: Set<SensorRole>
     public var expiresAt: Double? = nil
 }
-/// No physical I/O. The helper serializes these decisions with hardware effects.
+/// Lease decisions; the helper serializes them with hardware effects.
 public struct HelperSafety: Sendable {
     public private(set) var lease: ControlLease?
     private enum AutomaticState: Sendable { case unverified, restoring, observed }
@@ -20,14 +20,12 @@ public struct HelperSafety: Sendable {
     public let chipPolicy: ChipControlPolicy
     public init(timeout: Double = 10, chipPolicy: ChipControlPolicy = .cpuGPU) { self.timeout = timeout; self.chipPolicy = chipPolicy }
     public mutating func restorationFinished(_ verified: Bool) { automaticState = verified ? .observed : .restoring; if verified { lease = nil } }
-    /// External ownership loss while idle is a conflict, not a failed release transaction.
-    /// Observation must not start an automatic-write loop against another controller.
+    /// Invalidate idle ownership without starting a write loop against another controller.
     public mutating func observeIdleOwnership(_ automatic: Bool) {
         guard lease == nil else { return }
         if !restoring { automaticState = automatic ? .observed : .unverified }
     }
-    /// A failed idle observation invalidates evidence, not an ownership transaction.
-    /// Preserve retries only when a real release was already pending.
+    /// Failed observation preserves retries only for a release already in progress.
     public mutating func observationFailed() {
         if !restoring { automaticState = .unverified }
     }
@@ -79,7 +77,7 @@ public struct MessageRateLimiter: Sendable {
     }
 }
 public enum PeerRequirement {
-    /// Team and identifier are pinned; command-line arguments never select the trust policy.
+    /// Build the peer requirement from the signed team and fixed identifier.
     public static func make(team: String, identifier: String) throws -> String {
         let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-")
         guard team.count == 10, team.unicodeScalars.allSatisfy({ allowed.contains($0) }), !identifier.isEmpty,

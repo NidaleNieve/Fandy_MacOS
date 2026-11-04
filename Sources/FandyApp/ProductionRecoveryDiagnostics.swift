@@ -2,7 +2,7 @@ import Foundation
 import FandyCore
 import FandyHardware
 
-/// Fixed modest production recovery tests, independent of qualification authority.
+/// Bounded recovery checks through the production controller.
 @MainActor enum ProductionRecoveryDiagnostics {
     static func run(_ action: HelperDiagnosticAction) async -> Int32 {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("FandyRecovery-\(UUID().uuidString)")
@@ -60,7 +60,7 @@ import FandyHardware
             emit(["event": "recoveryFailed", "action": action.rawValue, "error": error.localizedDescription]); return 1
         }
     }
-    /// A fixed, short-lived diagnostic definition; never edits a user's profiles.
+    /// Temporary diagnostic profile in a separate store.
     static func quietProfile(fans: [Fan]) throws -> Profile? {
         guard (1...2).contains(fans.count), Set(fans.map(\.id)).count == fans.count else { throw ControlError.invalidFan }
         var requested: [Double] = []

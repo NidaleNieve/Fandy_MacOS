@@ -1,64 +1,50 @@
 # Architecture
 
-Fandy is a native menu-bar app with a separate privileged fan helper. Profiles, schedules and preferences stay on the Mac. Sparkle handles signed updates from GitHub.
+Fandy has a menu-bar app and a privileged fan helper. The app chooses a profile; the helper validates and applies fan commands. Configuration and diagnostics stay on the Mac. Sparkle handles updates.
 
-## Project layout
+## Code layout
 
 | Target | Responsibility |
 | --- | --- |
-| `FandyApp` | AppKit menu and windows, SwiftUI editors, automation, persistence coordination and updater. Runs as the logged-in user. |
-| `FandyCore` | Profiles, curves, schedules, persistence formats, controller state and helper safety rules. Hardware access is injected. |
-| `FandyHardware` | Model registry, sensor acquisition, fan metadata and validated transaction adapters. |
-| `CSMC` | C bridge for AppleSMC reads/enumeration and HID temperature events. |
-| `FandyHelper` | Authenticated XPC service, serialized hardware writes, automatic restoration and watchdog. Runs as root. |
-| `FandyDiscovery` / `FandyMeasurement` | Developer discovery and bounded measurement tools. Excluded from the app bundle. |
+| `FandyApp` | AppKit menus and windows, SwiftUI editors, automation and updates. |
+| `FandyCore` | Profiles, curves, schedules, persistence and controller rules. |
+| `FandyHardware` | Model registry, sensor reads, fan metadata and transaction adapters. |
+| `CSMC` | AppleSMC read/enumeration and HID temperature bridge. |
+| `FandyHelper` | Root service for authenticated commands, writes, restoration and watchdog. |
+| `FandyDiscovery`, `FandyMeasurement` | Development tools, excluded from the app bundle. |
 
-`Package.swift` defines the libraries, executables and tests. `Fandy.xcodeproj` builds the app bundle, embeds Sparkle and the helper, generates its icon, and includes license notices. `Scripts/generate-project.py` regenerates the project while preserving ignored local signing settings.
+`Package.swift` defines the targets and tests. `Fandy.xcodeproj` assembles the app, helper, Sparkle, generated icon and license notices. Regenerate it with `Scripts/generate-project.py`; local signing settings are preserved.
 
-## Installation and trust
+## App and helper
 
-The supported installation is `/Applications/Fandy.app`. ServiceManagement registers the embedded `is.dsr.fandy.fan-control-v2` daemon from that fixed location. The app checks its resource signature, app/helper identifiers, signing teams and signing classes before registration. Background App Activity approval is separate from hardware readiness.
+The app installs at `/Applications/Fandy.app`. ServiceManagement registers its embedded `is.dsr.fandy.fan-control-v2` daemon after Background App Activity approval. App and helper signatures must have matching teams, signing classes and expected identifiers. Each XPC peer authenticates the other.
 
-Both processes authenticate their XPC peer against an Apple signing chain, matching team and exact bundle identifier. The interface carries bounded versioned JSON for status, leases and targets, plus automatic restoration and a qualification endpoint that production capabilities disable. It provides no general shell, file or arbitrary-SMC-key operation.
+The interface accepts bounded, versioned JSON for status, leases and targets, plus automatic restoration. The old qualification endpoint is disabled in production. Hardware work runs on one serial queue. Two older daemon plists remain bundled for upgrade cleanup, which requires verified handback before removing a reachable controller.
 
-The two predecessor daemon plists remain bundled so upgrades can unregister older services safely. Migration first restores a reachable helper; a stale unauthenticated predecessor requires independent proof of automatic ownership before removal. Registration status alone never proves that fan control is ready.
+## Control loop
 
-## Control flow
+Manual selections, temporary overrides, application rules and schedules resolve to a profile. `ControlMachine` checks readings and eligibility; `FanXPCClient` requests a connection-owned lease. The helper rechecks sensors, fan bounds, ownership and thermal pressure before applying targets.
 
-The app resolves manual selections, temporary overrides, application triggers and weekly schedules into a profile. `ControlMachine` validates fresh snapshots and profile eligibility, then `FanXPCClient` requests a connection-owned lease. The helper independently checks capabilities, required sensors, thermal pressure, fan bounds and ownership before admitting targets.
+Temperature profiles need five healthy acquisitions before activation. Max needs a fresh fan snapshot and uses each fan's maximum. Accepted target requests renew the ten-second lease; status reads do not. Generations and cancellation tokens reject stale work after a switch, disconnect or System request.
 
-Temperature profiles require five healthy acquisitions before initial activation; Max requires a fresh valid fan snapshot and always requests each fan's reported maximum. A changed generation invalidates obsolete replies. Status calls do not renew a lease; accepted target requests do. The heartbeat expires after ten seconds.
+Each fan is admitted, acknowledged and targeted before the next fan. Reference adapters handle protected firmware modes through bounded handover. Failure triggers restoration and final mode readback. On the M5 direct path, unchanged targets can renew a lease after fresh verification without another write.
 
-Hardware effects run on one helper queue. Direct activation admits, acknowledges and targets each fan before moving to the next. Reference adapters support reviewed protected-mode handover where available. Partial failure restores every fan and verifies final ownership. Requests cannot choose fallback keys or clear targets.
+Idle polling runs once a second. Active leases and pending restoration use a 100 ms decision timer, with full watchdog reads paced separately. The health channel serves completed observations and marks stale ownership data invalid. See [Safety](SAFETY.md) for cooling behavior and recovery limits.
 
-Unchanged targets on the tested M5 direct path can renew a lease without rewriting the hardware, after fresh readings and independent target/metadata verification. Other adapters retain their own transaction paths. Idle helper polling is one second; active leases and pending restoration use a 100 ms decision timer, with full watchdog acquisitions paced separately. The responsive health channel publishes completed observations and rejects stale ownership evidence.
+## Profiles and state
 
-## Temperatures and profiles
+Sensor groups come from the compiled model registry and stay fixed for a resolved backend. [Compatibility](docs/COMPATIBILITY.md) covers models, input groups and sensor estimates.
 
-The signed registry matches the notebook model and chip generation before resolving sensor groups and fan metadata. Selected sensor membership stays fixed for a resolved backend. Missing, stale, corrupt or incorrectly typed required readings block activation or cause handback.
+Curve drafts remain separate from validated profiles. Built-in definitions and factory migrations live in `BuiltInProfiles`; user edits and stable IDs survive upgrades. The persistence actor serializes saves and rejects obsolete revisions. Imports validate size, structure, identities and values before publication.
 
-Mac17,9 uses a fixed 105-key chip envelope and separate CPU/GPU regional selections. Other supported notebooks use explicit generation-specific CPU/GPU groups. CPU/GPU display averages are estimates; Top proximity is a chassis proxy. [Compatibility](docs/COMPATIBILITY.md) describes the tested models and remaining limits.
+Profiles, automation and preferences are saved. Leases, RPM targets, process instances and countdowns are runtime state. Startup verifies System ownership before resuming an eligible profile. Sleep releases control and pauses background work. Wake checks ownership and fresh readings before resuming valid intent, keeping its original deadline.
 
-Demand is the maximum of enabled curves, minimum airflow and an optional temperature target. Curves interpolate between ordered points. The target adds proportional demand: 50% at its selected temperature, with full response bands of 20°C for chip, 10°C for trackpad/actuator and 16°C for airflow. It cannot guarantee an attainable temperature.
+The app lazily hosts editors and releases their content when windows close. Closing an editor leaves monitoring and automation running. Display sensors and previews stay outside the write path.
 
-Fan response applies time-weighted averaging and rate limits. Apple auto at idle can release control while demand is zero. Serious, critical or unknown thermal pressure returns control directly to macOS; there is no separate temperature-triggered maximum-fan override. See [Safety](SAFETY.md).
+## Updates and diagnostics
 
-## Configuration and lifecycle
+Sparkle reads the HTTPS GitHub appcast and verifies downloads with the embedded Ed25519 public key. System profiling is disabled. Installation waits for verified fan handback, saved configuration and removal of the old helper registration.
 
-A revision-aware persistence actor saves profiles, automation and preferences without allowing older writes to replace newer state. Imports validate size, structure, identities and values before publication. Legacy migrations preserve edited profiles and stable built-in identifiers, including `school` for Silent. Runtime leases, RPM targets, process instances and countdowns are never restored from disk.
+Profiles and bounded logs live in Application Support/Fandy; the helper uses macOS unified logging. Diagnostic exports contain structured status. Configuration exports also include names, schedules and application rules. Logs and readings are not uploaded automatically.
 
-Startup verifies System ownership before resuming an eligible remembered profile or schedule. System sleep releases control and suspends monitoring, automation and periodic update work. Wake verifies automatic ownership and fresh readings before resuming still-valid intent; time limits keep their original deadlines. System, quit, faults and disconnection revoke in-flight work before restoration. A blocked or dead helper cannot execute its watchdog.
-
-The app uses native menus and lazily hosted editors. Closing a window releases its content graph without stopping background monitoring or automation. Display-only sensors and previews do not grant hardware authority.
-
-## Updates and local diagnostics
-
-Sparkle fetches the fixed HTTPS GitHub appcast and verifies archives with the embedded public Ed25519 key. System profiling is disabled. Before installation, Fandy requires verified fan restoration, saved configuration and removal of the old helper registration. The next launch registers the replacement helper.
-
-Configuration and bounded diagnostic logs remain under Application Support/Fandy. The helper uses macOS unified logging. User-requested diagnostic exports contain an allowlisted summary; configuration exports can contain custom names, schedules and application rules. There is no analytics or automatic log-upload service.
-
-## Verification
-
-`Scripts/verify.sh` runs Swift and Python tests. Its sanitizer and native-build modes cover concurrency/memory checks and unsigned Release compilation. Hardware tests use injected transports; software fixtures do not establish physical compatibility. M2 Pro and M5 Pro have been physically tested by the owner. Live hardware work follows the [hardware testing requirements](docs/HARDWARE_GATES.md).
-
-GitHub retains pull requests and four required checks for main. Documentation and `.gitignore` changes use lightweight Linux checks; source, tests, build resources, signing, tooling and workflow changes run the full macOS suites. Unknown change types and failed change classification cannot select the lightweight path.
+Build and verification commands are in [Building locally](docs/LOCAL_CONFIGURATION.md). Live tests follow [Hardware testing](docs/HARDWARE_GATES.md).

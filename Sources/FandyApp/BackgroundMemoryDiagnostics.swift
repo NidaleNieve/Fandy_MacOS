@@ -17,8 +17,7 @@ struct ProcessMemorySample: Codable {
     }
 }
 
-/// Exercises native view lifecycles offscreen. No hardware reader, fan command,
-/// user configuration changes, screenshots, clicks or synthetic heat workloads.
+/// Measure offscreen view creation and teardown without starting hardware monitoring.
 @MainActor enum BackgroundMemoryDiagnostics {
     static func run() async -> Int32 {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("FandyMemory-\(UUID().uuidString)")

@@ -1,8 +1,7 @@
 import AppKit
 import Sparkle
 
-/// Retain Sparkle's native offer and progress UI. An accepted download is already
-/// consent to install; bypass only the redundant ready-to-install confirmation.
+/// Keep Sparkle's offer and progress UI; an accepted update needs no second confirmation.
 @MainActor class AcceptedUpdateDriver: SPUStandardUserDriver {
     var acceptedInstallation = false
     override func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {

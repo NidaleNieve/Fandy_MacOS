@@ -2,7 +2,7 @@ import AppKit
 import Observation
 import FandyCore
 
-/// Keep native geometry, not an offscreen SwiftUI graph, between window visits.
+/// Retain window geometry while releasing closed SwiftUI content.
 @MainActor final class WindowContentLifecycle: NSObject, NSWindowDelegate {
     let window: NSWindow
     private let makeContent: () -> NSViewController

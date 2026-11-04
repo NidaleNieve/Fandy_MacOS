@@ -2,8 +2,7 @@ import Foundation
 import IOKit
 import FandyCore
 
-/// One serialized userspace connection. The GUI constructs it read-only; the
-/// helper enables writes only as root and admits them through its fan recipes.
+/// Serialized SMC connection. Only the root helper enables writes.
 public final class NativeSMCTransport: SMCStructTransport {
     private let connection: io_connect_t
     private let allowWrites: Bool

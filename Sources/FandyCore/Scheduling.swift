@@ -211,7 +211,7 @@ public struct ScheduleError: Error, LocalizedError, Sendable, Equatable {
     public var errorDescription: String? { message }
 }
 
-/// Runtime intent is deliberately absent from Codable archives. Startup/wake never restore it.
+/// Runtime-only activation, excluded from saved configuration.
 public struct ActivationIntent: Sendable, Equatable {
     public enum Limit: Sendable, Equatable {
         case forever

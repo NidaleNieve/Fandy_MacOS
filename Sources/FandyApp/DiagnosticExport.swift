@@ -1,8 +1,7 @@
 import Foundation
 import FandyCore
 
-/// Export schema: adding a field requires an explicit privacy decision here.
-/// Profiles, arbitrary error text, paths and live sensor/RPM readings are excluded.
+/// Diagnostic export fields. Exclude profile names, paths, error text and live readings.
 private struct DiagnosticExport: Encodable {
     let build = FandyBuild.identifier
     let macOS = ProcessInfo.processInfo.operatingSystemVersionString
@@ -77,8 +76,7 @@ private struct DiagnosticExport: Encodable {
         }
     }
 
-    // Nil fields deliberately encode as {} when there is no failure, preserving
-    // the existing export format without an untyped dictionary.
+    // Preserve {} for an absent failure in the existing export format.
     struct ConnectionFailure: Encodable {
         let kind: String?
         let domain: String?

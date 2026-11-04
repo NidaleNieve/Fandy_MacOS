@@ -1,33 +1,31 @@
 # Safety
 
-Fandy replaces macOS fan demand while a custom profile is active. Choose **System** to return control to macOS. Use one fan-control utility at a time.
+Fandy controls fan demand while a custom profile is active. Choose **System** to restore macOS control. Run one fan-control utility at a time.
 
-## Cooling behavior
+## Cooling
 
-Each fan uses its own reported minimum and maximum RPM. A 0% custom setting means the supported minimum, not a stopped fan. Max requests the reported maximum immediately. Minimum airflow is a floor within Fandy's calculation; it does not preserve a higher fan demand that macOS would otherwise choose.
+During manual control, 0% means a fan's reported minimum RPM; Max uses its reported maximum. Each fan has its own bounds. Minimum airflow is a floor inside Fandy's calculation and may be lower than the speed macOS would choose.
 
-Under nominal or fair thermal pressure, demand comes from enabled curves, minimum airflow and an optional temperature target. There is no hidden temperature-triggered maximum-fan override. Serious, critical or unknown thermal pressure releases control directly to macOS. Fandy does not change clocks, power limits or thermal services.
+Demand is the maximum of enabled curves, minimum airflow and an optional temperature target. There is no hidden temperature-triggered maximum-fan override. Serious, critical or unknown thermal pressure releases control directly to macOS. Fandy does not change clocks, power limits or thermal services.
 
-Required chip readings remain mandatory even when a CPU/GPU curve selection is disabled. Missing or stale required readings, invalid metadata, conflicting ownership and failed transactions revoke control and attempt verified automatic restoration. CPU/GPU averages are estimates and Top proximity is a proxy; see [Compatibility](docs/COMPATIBILITY.md).
+Required chip readings remain mandatory when a chip curve is disabled. Missing or stale readings, invalid metadata, conflicting ownership and failed transactions trigger handback. CPU/GPU averages are estimates; Top proximity is a chassis proxy. See [Compatibility](docs/COMPATIBILITY.md).
 
 ## Response and idle
 
-Quiet averages demand over fifteen seconds and limits upward changes to two percentage points per second. Fast uses no averaging and permits ten points per second. A 20% response uses a twelve-second averaging window. Downward changes retain hysteresis and rate limits. Fresh actual speed seeds entry into custom control.
+Quiet averages demand over fifteen seconds and limits rises to two percentage points per second. Fast has no averaging and permits ten points per second. At 20%, the averaging window is twelve seconds. Downward changes use hysteresis and rate limits. Entry into custom control starts from fresh actual fan speed.
 
-With Apple auto at idle enabled, fifteen seconds of zero demand releases the fans to macOS. Demand of at least 5% for three seconds permits reacquisition. A positive minimum airflow prevents that idle release. Fan inertia, firmware and macOS ownership can all produce speeds that differ temporarily from a requested target.
+Apple auto at idle releases control after fifteen seconds of zero demand. Demand of at least 5% for three seconds permits reacquisition. A positive airflow floor prevents idle release. macOS may stop or run the fans after handback; actual RPM can lag a target during transitions.
 
-## Restoration and failures
+## Recovery
 
-The privileged helper authenticates the app and independently validates every admitted request. Connection-owned leases expire after ten seconds without an accepted target request. Active expiry decisions and failed-restoration retries use a 100 ms timer. Disconnect, System, normal quit and system sleep revoke pending work and request restoration.
+The helper authenticates requests and independently validates them. Leases expire after ten seconds without an accepted target request. A 100 ms timer handles active expiry and restoration retries. System, quit, disconnect and system sleep cancel pending work before handback.
 
-Restoration attempts every known fan independently, releases a reviewed handover flag where applicable, and reads back final ownership. It does not depend on temperature readings or clear fan targets. Partial failures remain visible and are retried; RPM alone never proves that macOS owns a fan.
+Restoration attempts every known fan, releases the handover flag where applicable, and reads back final ownership. It works without temperature readings and leaves targets untouched. Partial failures are reported and retried. RPM alone cannot establish ownership.
 
-Startup restores automatic control before sensor initialization. After system sleep, fresh ownership and readings are required before any valid profile intent resumes. Display sleep does not suspend the controller. Installation and update preparation require verified handback before removing a helper registration.
+Startup restores automatic mode before sensor initialization. Wake requires fresh readings and verified ownership before resuming a profile. Updates require handback before removing the old helper. Display sleep does not suspend control.
 
-A dead, suspended or kernel-blocked helper cannot run its watchdog. launchd restart can restore control only when the service and hardware I/O cooperate. The health channel can report stalled work, but cannot interrupt a blocked kernel call. These mechanisms reduce failure exposure without guaranteeing recovery in every hardware or operating-system failure.
+A dead, suspended or kernel-blocked helper cannot run its watchdog. launchd recovery depends on the service restarting and hardware I/O completing. The health channel reports stalled work but cannot interrupt it.
 
-## Tested hardware
+## Hardware coverage
 
-The owner has physically tested the app on M2 Pro and M5 Pro MacBook Pros. Other M1–M5 notebook variants use reviewed reference recipes and runtime validation. Testing on those two machines does not establish every model's sensor accuracy, recovery timing, sleep/wake behavior or performance under sustained workloads.
-
-AppleSMC fan control uses undocumented hardware interfaces. Tests with injected transports verify software decisions and command handling; they do not prove physical compatibility. New hardware transactions require the [hardware testing checks](docs/HARDWARE_GATES.md).
+Physically tested on M2 Pro and M5 Pro MacBook Pros. Other M1–M5 variants use reference adapters and runtime checks. AppleSMC fan control is undocumented; app testing does not certify sensor accuracy or every failure case. Software fixtures cover command handling, not physical compatibility. Changes to hardware transactions follow [Hardware testing](docs/HARDWARE_GATES.md).

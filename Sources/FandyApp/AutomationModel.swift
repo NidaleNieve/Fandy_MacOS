@@ -39,8 +39,7 @@ extension AppModel {
         switch rule.kind {
         case .forever:
             if remember {
-                // A deliberate selection supersedes the current occurrence, but
-                // upcoming periods may still temporarily replace this default.
+                // Manual selection replaces this occurrence; later schedules can still run.
                 blockedScheduleID = ScheduleEngine.active(in: automation, at: wallClock())?.id
                 rememberDefault(profile.id)
             }
@@ -149,8 +148,7 @@ extension AppModel {
             if anyRunning { watchedApplicationsHaveRun = true; awaitingApplicationID = nil }
             applicationsEnded = watchedApplicationsHaveRun && !anyRunning
         }
-        // A profile's group watch supersedes its first process instance. A menu
-        // process watch remains tied to that exact PID/start time instead.
+        // Profile rules watch the group; menu process watches retain exact PID/start-time identity.
         let expired = applicationsEnded || (activationDeadline.map { clockNow() >= $0 } ?? false) || (watchedApplications.isEmpty && intent.expired(at: wallClock(), running: ProcessCatalog.isRunning))
         if expired {
             if automation.preferences.defaultProfileID == intent.profileID {
@@ -165,17 +163,15 @@ extension AppModel {
               ScheduleEngine.active(in: automation, at: wallClock())?.id != scheduledPeriodID else { return }
         self.scheduledPeriodID = nil; select("system", manual: false)
     }
-    /// Only a newly observed process triggers activation. Existing applications
-    /// at startup/wake are a baseline, never permission to restore manual control.
-    /// Manual selections (including System) consume and suppress launch events.
+    /// Trigger on new launches. Startup/wake establishes a baseline;
+    /// manual selections consume pending launch events.
     func evaluateApplicationLaunches() {
         guard powerLifecycle == .awake else { return }
         let launched = pendingApplicationLaunches; pendingApplicationLaunches.removeAll()
         guard !launched.isEmpty, manualIntent == nil, !isQuitting, !savingCollection,
               machine.state != .fault, machine.state != .restoringSystem,
               simulation || (snapshot != nil && hardwareError == nil && helperHealth == .controlReady) else { return }
-        // Profile order breaks ties if multiple programs launch together. A
-        // failed/unsupported profile never displaces an available selection.
+        // Profile order breaks launch ties; skip unavailable profiles.
         guard let profile = profiles.first(where: { profile in
             guard let rule = automation.activationDefaults[profile.id] else { return false }
             return rule.launchWhenOpened && !launched.isDisjoint(with: rule.applicationIdentifiers)
@@ -192,8 +188,7 @@ extension AppModel {
         let admitted = active?.id == blockedScheduleID ? nil : active
         let id = admitted?.profileID ?? (defaultResumeBlocked ? "system" : automation.preferences.defaultProfileID)
         guard let profile = profiles.first(where: { $0.id == id }) else { return }
-        // A persisted profile name is intent, never a lease or permission. A
-        // bounded activation default cannot turn into indefinite background control.
+        // A saved duration or application rule must not resume as an indefinite selection.
         if admitted == nil && profile.kind != .system && automation.activationDefaults[id].map({ $0.kind != .forever }) == true { return }
         if machine.selected.id == id && (machine.state == .system || machine.state == .customActive || machine.state == .initializingCustom) {
             scheduledPeriodID = admitted?.id; return

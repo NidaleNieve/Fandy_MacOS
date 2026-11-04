@@ -2,9 +2,7 @@
 import AppKit
 import Foundation
 
-// Build-time artwork only. No screenshots, external assets or runtime dependency.
-// ICNS uses standard PNG representations; all pixels are drawn from native paths
-// for an original seven-blade fan. No SF Symbol artwork, personal or signing data is embedded.
+// Draw the app icon at build time and package its PNG sizes as ICNS.
 @MainActor func iconPNG(size: Int) throws -> Data {
     guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: size, pixelsHigh: size,
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -20,8 +18,7 @@ import Foundation
     let ring = NSBezierPath(ovalIn: NSRect(x: 162, y: 162, width: 700, height: 700))
     NSColor(calibratedRed: 0.40, green: 0.56, blue: 0.62, alpha: 1).setStroke()
     ring.lineWidth = 24; ring.stroke()
-    // Original swept blade, repeated seven times around the bearing. This is
-    // deliberately a housed cooling fan rather than Apple's propeller glyph.
+    // Rotate a single blade around the bearing.
     for index in 0..<7 {
         let blade = NSBezierPath()
         blade.move(to: NSPoint(x: 58, y: 30))
