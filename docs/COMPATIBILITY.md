@@ -1,87 +1,35 @@
-# Apple Silicon compatibility — 0.3.3 candidate
+# Compatibility
 
-Requires an arm64 Mac and macOS 15 or later. This release targets MacBook Pro, including base, Pro and Max variants. No M1–M4 machine or other M5 variant was available for physical testing. Reference-supported means a reviewed source recipe plus runtime validation, not physical certification.
+Fandy targets M1–M5 MacBook Pros running macOS 15 or later. Intel Macs and fanless MacBook Airs are unsupported for fan control.
 
-| Family | Compiled notebook identifiers | Evidence | Fan interfaces | Temperature-profile requirements |
-| --- | --- | --- | --- | --- |
-| M1 | MacBookPro17,1; MacBookPro18,1–4 | Reference-supported | Direct per-fan mode; validated Ftst if protected | Published M1 CPU regions from both clusters and GPU regions |
-| M2 | Mac14,5; 6; 7; 9; 10 | Reference-supported | Direct or bounded Ftst | Published M2 CPU regions from both clusters and GPU regions |
-| M3 | Mac15,3; 6–11 | Reference-supported | Direct or bounded Ftst | Explicit M3 Te/Tf CPU and Tf GPU members; no prefix guessing |
-| M4 | Mac16,1; 5–8 | Reference-supported; priority generation | Direct if accepted; Ftst handover for protected mode 3 / result 0x82 | Explicit CPU regions; separate base versus Pro/Max GPU anchors |
-| M5 | Mac17,2; 6–9 | Mac17,9 locally tested; others reference-supported | Mac17,9 retains its tested lowercase direct recipe; other variants require reviewed metadata | Mac17,9 retains its full conservative envelope; other variants use published M5 regions |
-| Other / Intel / inconsistent identity | None | Unsupported for writes | No control authority | Independent readable temperature monitoring remains available |
+## Tested hardware
 
-Model roster: [Apple notebook identification](https://support.apple.com/en-us/108052), reviewed 2026-10-04. Apple Silicon capability, model identifier and chip brand/generation are checked separately. A supported model identifier alone does not grant a lease.
+The owner has physically tested the app on M2 Pro and M5 Pro MacBook Pros. The remaining variants use reviewed reference implementations and runtime checks.
 
-## Sensor membership and profile eligibility
-
-The compiled arrays derive from [Stats sensor definitions at 9ceb6e3](https://github.com/exelban/stats/blob/9ceb6e3b20001c4102f473c5dc3e96b388a77da9/Modules/Sensors/values.swift), under MIT; see THIRD_PARTY_NOTICES.md and the bundled license. Only explicit source-defined members are probed during initialization. Source-table members absent with the SMC not-found result are documented variant omissions; corrupt or failed candidates block chip qualification. Selected membership and data types are frozen for that process. Every selected member must remain present, correctly typed, finite and fresh. Average display groups and maximum control groups are distinct. Core counts are never used to truncate the table.
-
-System remains the startup/wake policy. Max requires supported fan metadata and each fan's own bounds, without temperature qualification. System+, Gaming and chip-only custom curves additionally require complete CPU/GPU control groups. Cool Chassis, Silent and enabled chassis curves require Trackpad Ts0P, Actuator Ts1P, Left TaLP, Top proximity TaTP and Right TaRF. Missing comfort inputs receive their own unavailable reason; CPU does not substitute. Historical comfort descriptors provide reference support, not a surface-temperature calibration on every model. Top is explicitly a proximity proxy. Charger and power-supply candidates remain informational. These comfort policies preserve their separate temperature scales and max-demand aggregation.
-
-## Fan metadata and transactions
-
-Runtime discovery accepts one or two independently bounded fans; no equal-RPM assumption. Mode keys may be F?md or F?Md. Agreeing aliases use the reviewed lowercase precedence; contradictory aliases are rejected. Modes are ui8; RPM targets may be little-endian flt4 or legacy big-endian fpe2. ioft is not admitted for control. Writable metadata is compared on the actual writer connection before each command. Unknown modes, types or permissions block activation. Invalid target metadata can still leave reviewed automatic release available.
-
-Direct acquisition admits, acknowledges and promptly targets each fan independently before admitting the next fan. Reference adapters poll accepted mode commands every 50 ms within the original seven-second deadline; they never rewrite accepted admission commands. Only source-described protected mode 3 or command rejection 0x82 can enter the Ftst adapter. That adapter releases partial direct acquisition, asserts Ftst, waits at most seven seconds for automatic admission, then enters manual mode and verifies target acknowledgement. Cancellation, fresh complete required sensors, thermal-pressure validation, ownership checks and deadline checks surround the sequence. System/disconnect revoke the operation at XPC ingress; queued stale work cannot reacquire control afterward. No retries of alternative keys or target clearing occur.
-
-Release attempts every fan even after a partial failure, clears and reads back Ftst independently, and re-reads every mode after global release. Protected firmware System mode 3 is already non-manual: release does not send an unsupported mode write to it, but global release and final mode verification still run. Ftst loss during an owned lease aborts instead of fighting another controller.
-
-Fan references: [Stats SMC at the pinned revision](https://github.com/exelban/stats/blob/9ceb6e3b20001c4102f473c5dc3e96b388a77da9/SMC/smc.swift), [ThermalForge 93ed7d2](https://github.com/ProducerGuy/ThermalForge/tree/93ed7d2df231b079704156b5ae67654a50d31f62), and [SMC interoperability research](https://github.com/agoodkind/macos-smc-fan/blob/main/docs/research.md). These are undocumented userspace interoperability observations, not an Apple fan-control API guarantee.
-
-## Honest limits
-
-Ftst changes normal thermal-controller ownership and can suppress normal reclaim. Custom control replaces normal Apple fan demand; no Apple fan-floor behavior is claimed. Fandy cannot guarantee the independence of Apple's emergency behavior on an inaccessible model. A dead or blocked helper cannot execute its watchdog; launchd restart restores before sensor initialization, but restart and successful hardware I/O are not guaranteed. Unknown ownership, sensor failure, invalid metadata or transaction failure revokes control and attempts verified release; a failed release is reported honestly.
-
-Synthetic fixtures exercise source-backed command construction for M1–M5, one/two-fan topologies, different bounds, types, uppercase/lowercase keys, protected mode, timeouts, cancellation, partial failures, failed global release and startup recovery. They are labeled synthetic and contain no captured foreign-machine measurements. Only Mac17,9 is physically tested. The deployment target and unsigned CI build matrix check compilation; they do not demonstrate older-OS hardware behavior or inaccessible-Mac compatibility.
-
-## M2 startup and acknowledgement — build 21
-
-Already-automatic reference mode 0/3 avoids a redundant protected mode write. Ftst release and final mode verification remain required. Hardware initialization failures retain a live authenticated status listener; fixed transient retries and structured diagnostic codes distinguish missing approval from unavailable hardware. This addresses identified failure paths, but the reported M2 Pro failure has no diagnostic capture and is **not physically verified fixed**. Friend acceptance remains necessary.
-
-PR #1 contributes physical Mac14,9 / M2 Pro observations on macOS 27.0.1: temperature profiles, curve edits and System handback worked after bounded mode-readback polling. The contributor measured quit/disconnect/heartbeat handback at approximately 0.35/0.54/10.04 seconds using separately signed app/helper identities. This is **contributor-tested direct-interface evidence**, not local certification or proof that the official distribution identity starts correctly on that machine. Neither M2 sleep/wake, root-helper termination nor Ftst acquisition was retested. M1/M3/M4 and other M5 variants retain reference-supported status; delayed-acknowledgement fixtures exercise their existing adapters without changing sensor groups or admitting new keys. The `locallyTested` adapter flag remains exclusive to the existing M5 recipe.
-
-Reference release waits at most one second per commanded fan, then retains global release and independent final readback. Already-automatic observations still do not claim release from manual ownership. Silent is the former School built-in; its stable `school` ID preserves automation and saved selection.
-
-
-## 0.3.3 installation and production-path coverage
-
-| Area | Available evidence | Still required |
+| Family | Compiled notebook identifiers | Physical testing |
 | --- | --- | --- |
-| Official installation identity | App/helper signature and team matching before registration; serialized replacement; expected build checked after connection | Official M2 install/upgrade acceptance on the reported failing machine |
-| Status responsiveness | Actual XPC dispatcher replies while its hardware queue is blocked; under 250 ms in software regression | Runtime behavior during a blocked kernel call cannot guarantee watchdog execution |
-| M1–M5 discovery | All 27 compiled identifiers through the production 80-byte SMC decoder and registry; synthetic variants include one/two fans, fixed/float RPM and different bounds | Physical measurements on inaccessible models |
-| Startup ordering | Actual helper bootstrap fixtures for M1–M4 already-automatic reference paths; M5 unit process verifies root write rejection before sensor discovery | Installed Developer ID migration passed on Mac17,9; manual recovery trial skipped because quiet upward margin unavailable |
-| macOS 15+ | Deployment target and required native CI builds | Clean-install/upgrade/reboot VM runtime sessions; no VM app or restore image available locally |
+| M1 | MacBookPro17,1; MacBookPro18,1–4 | Other hardware testing is still needed. |
+| M2 | Mac14,5; Mac14,6; Mac14,7; Mac14,9; Mac14,10 | M2 Pro tested by the owner; other variants remain reference-supported. |
+| M3 | Mac15,3; Mac15,6–11 | Other hardware testing is still needed. |
+| M4 | Mac16,1; Mac16,5–8 | Other hardware testing is still needed. |
+| M5 | Mac17,2; Mac17,6–9 | M5 Pro tested by the owner; other variants remain reference-supported. |
 
-Registration no longer depends on a successful unprivileged SMC probe. The helper publishes approval-independent startup phases, preserved OS/firmware failures and authenticated runtime capabilities. Monitoring remains distinct from control eligibility. Temperature metadata is cached only after usable successful reads; fan write metadata remains validated afresh. Final restoration is judged after the global Ftst release and bounded independent per-fan readback.
+Owner testing is real-machine evidence. It does not establish a complete recovery, installation, sleep/wake or thermal-calibration matrix on either family. The compiled registry's evidence flags and adapter choices remain unchanged; documenting the M2 Pro result does not bypass runtime checks or enable the M5-specific optimizations on another model.
 
-The M2 contributor used different locally signed identities. That result supports its delayed-acknowledgement recipe; it does not establish that the official Developer ID service registration works. 0.3.3 must not be described as a confirmed physical M2 fix before that acceptance.
+## Runtime requirements
 
-Additional reviewed references: [Stats SMC 88d5359](https://github.com/exelban/stats/blob/88d5359ad3466efaa16985646a0bb15c6599109f/SMC/smc.swift), [Apple ServiceManagement](https://developer.apple.com/documentation/servicemanagement/smappservice), [Apple DTS embedded executable update discussion](https://developer.apple.com/forums/thread/804561), and [ThermalForge 42bb534](https://github.com/ProducerGuy/ThermalForge/tree/42bb5345bc0a8d41a9c47719c3ceb0fbc7249687). No ThermalForge installer or thermal policy was copied. The existing sensor-source revision remains unchanged.
+The notebook identifier, Apple Silicon capability and chip generation must agree. The helper discovers one or two fans, validates mode/target metadata and reads each fan's own RPM limits. Unknown or contradictory metadata prevents custom control. Monitoring can remain available when control is unavailable.
 
+System restoration is independent of temperature acquisition. Max requires valid fan metadata. Temperature profiles additionally require complete, fresh readings for their selected policy. Startup resolves explicit sensor groups and then freezes their membership; a later missing member cannot silently disappear from a maximum or average.
 
-## Fixed-path registration recovery — PR #6
+On Mac17,9, chip control uses a fixed 105-key envelope. Other supported notebooks use model-family CPU/GPU groups adapted from [Stats at the pinned revision](https://github.com/exelban/stats/blob/9ceb6e3b20001c4102f473c5dc3e96b388a77da9/Modules/Sensors/values.swift). The full required chip inputs remain checked even if a profile disables a chip curve. Chassis curves and targets also require their own inputs.
 
-The M2 contributor reports a lost BTM parent container and EX_CONFIG (78). A new
-service label with a fixed `/Applications/Fandy.app` helper path avoids that specific
-BundleProgram resolution failure. Both predecessor plists are retained for native
-migration; no other application's registrations are touched. This is a shared macOS
-installation correction, not an M2-specific SMC recipe.
+CPU/GPU averages describe the selected sensor groups, not certified physical core membership. Trackpad and actuator readings have separate scales. Airflow uses Left, Right and **Top proximity**; the latter is a proxy rather than a certified surface or exact Airflow Top sensor. Charger and power-supply candidates are informational.
 
-The contributor tested development signing on Mac14,9; official Developer ID M2
-startup remains pending. Existing per-model fan and sensor checks remain mandatory.
+## Hardware interfaces and limits
 
-Manual replacement may leave a running predecessor whose on-disk executable no
-longer matches its loaded signature. The migration can retire this registration
-only after independently observing complete fresh automatic ownership with a cleared
-handover flag. It cannot accept that peer's unauthenticated reports or enable control.
-Unsupported/read-failed hardware cannot use this recovery exception.
+Reviewed adapters support lowercase/uppercase mode keys and supported float/fixed-point RPM formats. Some reference paths require a bounded `Ftst` handover. That flag changes firmware ownership; successful operation or recovery on one interface does not establish it on every model.
 
+Transactions validate ownership, bounds, required readings and cancellation before and after hardware calls. System handback attempts every fan and independently verifies the final modes and handover flag. A dead or blocked helper cannot execute recovery code. See [Safety](../SAFETY.md) and the [hardware testing requirements](HARDWARE_GATES.md).
 
-Official M5 installation acceptance of this integration passed: notarized Developer
-ID build 31 recovered the stale predecessor registration, started the new service,
-retained approval and preserved configuration. Both fans finished automatic. Native
-read-only status/performance and negative protocol checks passed. This result does
-not certify M2 or replace pending manual recovery/sleep tests. Public build 32 changes
-only version metadata from the locally installed functional candidate.
+The macOS deployment target and CI builds establish compilation coverage. They do not establish live behavior on every macOS release. Reference provenance and licenses are retained in [Third-party notices](../THIRD_PARTY_NOTICES.md).

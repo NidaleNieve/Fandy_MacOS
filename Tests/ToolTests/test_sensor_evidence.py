@@ -45,6 +45,11 @@ class SensorEvidenceTests(unittest.TestCase):
         self.assertIn('| Trackpad | Ts0P | 0.500 |', text)
         self.assertIn('Fake / 0.000', text)
 
+    def test_report_keeps_public_provenance_after_research_diary_removal(self):
+        text = module.render({'sourceSamples': 0, 'matchedSamples': 0, 'sensors': []}, [], [])
+        self.assertNotIn('[RESEARCH.md](RESEARCH.md)', text)
+        self.assertIn('THIRD_PARTY_NOTICES.md', text)
+
 
 if __name__ == '__main__':
     unittest.main()

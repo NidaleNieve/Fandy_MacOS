@@ -1,26 +1,25 @@
-# Reference projects and attribution
+# Third-party notices
 
-Fandy's implementation was authored independently. It vendors no third-party runtime, framework, fan-control source, proprietary application code, Apple binary or kernel driver. ReferenceSensorKeys.swift adapts the published MIT-licensed Stats sensor-key arrays, with copyright and full license retained. Published protocol observations and sensor-key facts were used as interoperability references. Full permissive reference license notices are preserved in `docs/licenses/` and included in the app bundle for attribution.
+Fandy's original code is released under the [MIT license](LICENSE). It bundles Sparkle for application updates and adapts MIT-licensed Stats sensor-key arrays. The following notices are included in the app bundle alongside Fandy's license.
 
-| Project / inspected revision | License checked | Use |
+## Bundled and adapted code
+
+| Project | Use | License |
 | --- | --- | --- |
-| [ProducerGuy/ThermalForge](https://github.com/ProducerGuy/ThermalForge), 93ed7d2df231b079704156b5ae67654a50d31f62 | MIT; Copyright 2026 ProducerGuy | Inspected safety/watchdog/daemon/SMC architecture. Concepts informed the design; no source copied. [Notice](docs/licenses/ThermalForge.txt). |
-| [exelban/stats](https://github.com/exelban/stats), 9ceb6e3b20001c4102f473c5dc3e96b388a77da9 | MIT; Copyright 2019 Serhiy Mytrovtsiy | M1–M5 candidate sensor arrays adapted with attribution; fan interface and handover sequence reviewed. No adapter implementation copied. [Notice](docs/licenses/stats.txt). |
-| [agoodkind/macos-smc-fan](https://github.com/agoodkind/macos-smc-fan), 31a1feae0c4999ebd8cdddfbd90d2c98182091b8 | MIT for original code/research; explicit exclusion of Apple intellectual property | Protocol and mode-behavior research only; no decompiled Apple code/binaries included. [Exact scope/legal notice](docs/licenses/macos-smc-fan.txt). GitHub's license classifier says NOASSERTION because the file contains additional scope text; the file itself identifies MIT for the original work. |
-| [acidanthera/VirtualSMC](https://github.com/acidanthera/VirtualSMC), b5c62c2311540c529c00996d0d9cec33f8e571c9 | BSD-3-Clause; Copyright 2017 vit9696 | Historical sensor-name reference only. No kernel component/code used. [Notice](docs/licenses/VirtualSMC.txt). |
-| [hholtmann/smcFanControl](https://github.com/hholtmann/smcFanControl) | GPL-2.0 | License/history checked; no source incorporated. |
-| [yujitach/MenuMeters](https://github.com/yujitach/MenuMeters), e91b746debd15777012968a4d247a074d10402f6 | GPL-2.0 | Licence/provenance checked. No source incorporated. Stats' HID reader cites this ancestry; Fandy's optional adapter is independently authored from observed interface signatures and temperature-event facts. |
+| [Sparkle 2.10.0](https://github.com/sparkle-project/Sparkle/tree/2.10.0) | Signed application updates, including its bundled components. | [Sparkle and component notices](docs/licenses/Sparkle.txt) |
+| [Stats](https://github.com/exelban/stats/tree/9ceb6e3b20001c4102f473c5dc3e96b388a77da9) | Apple Silicon sensor arrays adapted in `ReferenceSensorKeys.swift`; copyright 2019 Serhiy Mytrovtsiy. | [MIT](docs/licenses/stats.txt) |
 
-TG Pro and Macs Fan Control are proprietary reference applications. TG Pro's public user guide and the user's authorized numeric temperature CSV were used; no proprietary source/resources were reverse engineered or copied. Apple documentation and installed SDK declarations informed SMAppService, NSXPC requirements, IOKit power notifications and ProcessInfo thermal state usage.
+## Interoperability references
 
-Fandy's original work is released under the [MIT license](LICENSE). Third-party notices retain their original licenses. No license here grants rights to Apple's proprietary implementations or guarantees that an undocumented interface is supported. The included permissive license texts are the original projects' notices, not a claim that those authors endorse or qualify Fandy's hardware behavior.
+These projects informed protocol, sensor or architecture research. Their fan-controller implementations are not bundled in Fandy.
 
-Additional source inspection on 2026-10-01: [iSMC](https://github.com/dkorunic/iSMC), revision `db76170a7ede0386fd10143b2e8f6c5c127188aa`, LICENSE confirms GPLv3. Sensor descriptor facts and two reported M5 Pro raw catalogs were reviewed for provenance and conflicts. Only broad naming candidates for independently discovered keys are noted; no GPL implementation or descriptor table was copied or incorporated. MacMonitor's SENSORS documentation appeared in search results and its LICENSE is MIT; its different-model descriptions were not adopted as M5 identity proof and no code/data was incorporated. Reference: https://github.com/ryyansafar/MacMonitor.
+| Reference | Inspected revisions / scope | Retained notice |
+| --- | --- | --- |
+| [ThermalForge](https://github.com/ProducerGuy/ThermalForge) | `93ed7d2df231b079704156b5ae67654a50d31f62`, `42bb5345bc0a8d41a9c47719c3ceb0fbc7249687`; helper, watchdog and SMC architecture. | [MIT](docs/licenses/ThermalForge.txt) |
+| [Stats](https://github.com/exelban/stats) | Sensor revision above and `88d5359ad3466efaa16985646a0bb15c6599109f`; mode precedence and handover research. | [MIT](docs/licenses/stats.txt) |
+| [macos-smc-fan](https://github.com/agoodkind/macos-smc-fan/tree/31a1feae0c4999ebd8cdddfbd90d2c98182091b8) | Protocol and mode-behavior research. No decompiled Apple code or binaries included. | [MIT with original scope notice](docs/licenses/macos-smc-fan.txt) |
+| [VirtualSMC](https://github.com/acidanthera/VirtualSMC/tree/b5c62c2311540c529c00996d0d9cec33f8e571c9) | Historical sensor-name reference; no kernel component incorporated. | [BSD-3-Clause](docs/licenses/VirtualSMC.txt) |
 
-## Sparkle 2.10.0
+License/provenance review also covered [smcFanControl](https://github.com/hholtmann/smcFanControl) (GPL-2.0), [MenuMeters](https://github.com/yujitach/MenuMeters/tree/e91b746debd15777012968a4d247a074d10402f6) (GPL-2.0), and [iSMC](https://github.com/dkorunic/iSMC/tree/db76170a7ede0386fd10143b2e8f6c5c127188aa) (GPLv3). Their source implementations and descriptor tables were not incorporated. Fandy's HID adapter was independently authored from interface signatures and temperature-event facts. MacMonitor documentation was considered during naming research; no code or data was incorporated.
 
-Fandy uses [Sparkle](https://github.com/sparkle-project/Sparkle/tree/2.10.0) for signed application updates. Its license and bundled component notices are reproduced in [docs/licenses/Sparkle.txt](docs/licenses/Sparkle.txt).
-
-## Helper startup compatibility review — 0.3.3
-
-Additional MIT-licensed source inspection: Stats `88d5359ad3466efaa16985646a0bb15c6599109f` (canonical fan mode precedence and global handover release) and ThermalForge `42bb5345bc0a8d41a9c47719c3ceb0fbc7249687` (separation of service startup and hardware failure reporting). The retained license notices apply. No installer, thermal policy or adapter implementation was copied. Sensor arrays continue using the existing pinned Stats revision above.
+TG Pro's public documentation and authorized temperature exports were development references. No proprietary application source, mapping database, Apple binary or kernel driver is distributed. Normal operation has no TG Pro dependency. Reference authors do not certify Fandy's hardware behavior; undocumented interfaces remain subject to change.

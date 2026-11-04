@@ -118,7 +118,8 @@ def render(analysis, pairs, sessions):
               'Repeating flat idle recordings is not an acceptance test.',
               '- Every requested chip/chassis role remains required before manual qualification writes. '
               'Independent hardware readings remain the production source; TG Pro logging is a development reference.', '',
-              'Source revisions, licenses and provenance are recorded in [RESEARCH.md](RESEARCH.md), '
+              'Source revisions, licenses and provenance are recorded in '
+              '[Third-party notices](https://github.com/NidaleNieve/Fandy_MacOS/blob/main/THIRD_PARTY_NOTICES.md), '
               '[SENSOR_DISCOVERY.md](SENSOR_DISCOVERY.md) and the bundled license notices. '
               'The comparison tool is independently authored; no TG Pro source or proprietary mapping database is used.', '']
     return '\n'.join(lines)
