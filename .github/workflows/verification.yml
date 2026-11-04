@@ -26,7 +26,7 @@ jobs:
         run: python3 Scripts/check-change-scope.py --base "$BASE" --head "$HEAD"
   tests:
     needs: scope
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ${{ needs.scope.outputs.app == 'false' && 'ubuntu-latest' || 'macos-latest' }}
     timeout-minutes: 25
     steps:
@@ -48,7 +48,7 @@ jobs:
           python3 Scripts/check-public-content.py --staged
   sanitizers:
     needs: scope
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ${{ needs.scope.outputs.app == 'false' && 'ubuntu-latest' || 'macos-latest' }}
     timeout-minutes: 30
     steps:
@@ -68,7 +68,7 @@ jobs:
   native-release:
     name: native-release (${{ matrix.os }})
     needs: scope
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     strategy:
       matrix:
         os: [macos-15, macos-latest]

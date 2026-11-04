@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+import os
+import subprocess
 import unittest
 
 ROOT = Path(__file__).parents[2]
@@ -24,6 +26,24 @@ class BranchRulesetTests(unittest.TestCase):
         self.assertEqual({entry['context'] for entry in checks['required_status_checks']},
                          {'tests', 'sanitizers', 'native-release (macos-15)', 'native-release (macos-latest)'})
         self.assertTrue(all(entry['integration_id'] == 15368 for entry in checks['required_status_checks']))
+
+    def test_required_jobs_fail_when_scope_fails_but_allow_obsolete_run_cancellation(self):
+        parsed = subprocess.check_output(['ruby', '-ryaml', '-rjson', '-e',
+            'puts JSON.generate(YAML.load_file(ARGV[0]))',
+            str(ROOT / '.github/workflows/verification.yml')], text=True)
+        workflow = json.loads(parsed)
+        for name in ['tests', 'sanitizers', 'native-release']:
+            job = workflow['jobs'][name]
+            with self.subTest(job=name):
+                self.assertEqual(job['needs'], 'scope')
+                self.assertIn('!cancelled()', job['if'])
+                gate = job['steps'][0]['run']
+                for result, app, accepted in [('success', 'true', True), ('success', 'false', True),
+                                              ('failure', 'false', False), ('skipped', '', False),
+                                              ('success', 'unknown', False)]:
+                    status = subprocess.run(['sh', '-c', gate],
+                        env={**os.environ, 'RESULT': result, 'APP': app}, capture_output=True)
+                    self.assertEqual(status.returncode == 0, accepted, (name, result, app))
 
 
 if __name__ == '__main__':
