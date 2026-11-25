@@ -62,7 +62,7 @@ main=add('main-group','PBXGroup',children=list(files.values())+[plist,previouspl
 package=add('package','XCLocalSwiftPackageReference',relativePath='.')
 sparkle=add('sparkle-package','XCRemoteSwiftPackageReference',repositoryURL='https://github.com/sparkle-project/Sparkle',requirement={'kind':'exactVersion','version':'2.10.0'})
 projectID=uid('project');helperID=uid('helper-target')
-common={'MACOSX_DEPLOYMENT_TARGET':'15.0','SDKROOT':'macosx','ARCHS':'arm64','SWIFT_VERSION':'6.0','CLANG_ENABLE_MODULES':'YES','ENABLE_HARDENED_RUNTIME':'YES','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_INJECT_BASE_ENTITLEMENTS':'NO','SWIFT_STRICT_CONCURRENCY':'complete'}
+common={'MACOSX_DEPLOYMENT_TARGET':'15.0','SDKROOT':'macosx','ARCHS':'$(ARCHS_STANDARD)','SWIFT_VERSION':'6.0','CLANG_ENABLE_MODULES':'YES','ENABLE_HARDENED_RUNTIME':'YES','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_INJECT_BASE_ENTITLEMENTS':'NO','SWIFT_STRICT_CONCURRENCY':'complete'}
 def configs(name,extra):
  refs=[]
  for kind in ['Debug','Release']:

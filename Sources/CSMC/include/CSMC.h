@@ -12,6 +12,6 @@ int32_t fandy_smc_key_at(FandySMC *connection, uint32_t index, char key[5]);
 #include <CoreFoundation/CoreFoundation.h>
 CFArrayRef fandy_hid_temperatures(void) CF_RETURNS_RETAINED;
 
-// Detect the known TG Pro helper without returning process details.
-// 1 = TG Pro helper detected; 0 = not observed; -1 = enumeration unavailable.
+// Detect known fan controllers without returning process details.
+// 1 = TG Pro helper; 2 = Macs Fan Control app; 0 = not observed; -1 = enumeration unavailable.
 int32_t fandy_tg_controller_present(void);

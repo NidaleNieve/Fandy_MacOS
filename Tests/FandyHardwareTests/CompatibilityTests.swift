@@ -16,8 +16,8 @@ private final class CompatibilitySMC: SMCStructTransport {
     var pendingModes: [String: (Double, Double)] = [:]
     var blockDirect = false
     var now = 10.0
-    init(model: String = "Mac16,8", chip: String = "Apple M4 Pro", count: Int = 2, fixed: Bool = false, forceTest: Bool = true) {
-        identity = DeviceIdentity(model: model, chip: chip, appleSilicon: true)
+    init(model: String = "Mac16,8", chip: String = "Apple M4 Pro", count: Int = 2, fixed: Bool = false, forceTest: Bool = true, appleSilicon: Bool = true) {
+        identity = DeviceIdentity(model: model, chip: chip, appleSilicon: appleSilicon)
         put("FNum", Double(count), "ui8 ")
         for id in 0..<count {
             put("F\(id)\(identity.family == .m5 ? "md" : "Md")", 0, "ui8 ")
@@ -27,6 +27,10 @@ private final class CompatibilitySMC: SMCStructTransport {
         }
         if forceTest { put("Ftst", 0, "ui8 ") }
         let keys = DeviceRegistry.candidates(for: identity)
+        if identity.family == .intel { // Intel T2 SMC reports temperatures as sp78.
+            for key in keys.performance + keys.gpu + ["Ts0P","Ts1P","TaLC","TaRC","TW0P"] { put(key, 40, "sp78") }
+            return
+        }
         for key in keys.efficiency + keys.performance + keys.gpu + ["Ts0P","Ts1P","TaLP","TaTP","TaRF","TW0P"] { put(key, 40, "flt ") }
     }
     func put(_ key: String, _ value: Double, _ type: String, attributes: UInt8 = 208) {
@@ -118,6 +122,26 @@ func referenceFamiliesSelectTheirOwnCompleteGroups(_ item: (String, String)) thr
     #expect(!DeviceIdentity(model: "MacBookPro16,1", chip: "Intel Core i9", appleSilicon: false).supportedNotebook)
     #expect(!DeviceIdentity(model: "Mac16,10", chip: "Apple M4", appleSilicon: true).supportedNotebook)
     #expect(!DeviceIdentity(model: "Mac17,9", chip: "Apple M50 Pro", appleSilicon: true).supportedNotebook)
+}
+@Test func intelT2NotebookResolvesCoresWithoutEfficiencyGroup() throws {
+    let chip = "Intel(R) Core(TM) i7-1068NG7 CPU @ 2.30GHz"
+    let intel = DeviceIdentity(model: "MacBookPro16,2", chip: chip, appleSilicon: false)
+    #expect(intel.family == .intel && intel.supportedNotebook && DeviceRegistry.canInstallHelper(identity: intel))
+    #expect(!DeviceIdentity(model: "MacBookPro14,3", chip: chip, appleSilicon: false).supportedNotebook) // pre-T2 fan keys differ
+    #expect(!DeviceIdentity(model: "MacBookPro16,2", chip: chip, appleSilicon: true).supportedNotebook)
+    #expect(DeviceIdentity(model: "MacBookPro16,2", chip: "Apple M0", appleSilicon: true).family == nil)
+    #expect(!DeviceRegistry.canInstallHelper(identity: .init(model: "MacBookPro14,3", chip: chip, appleSilicon: false)))
+    let fixture = CompatibilitySMC(model: intel.model, chip: chip, forceTest: false, appleSilicon: false)
+    for key in ["TC5C", "TC6C", "TC7C", "TC8C", "TGDD"] { fixture.values.removeValue(forKey: key) } // 4-core 13-inch, no dGPU
+    let device = DeviceRegistry.resolve(identity: fixture.identity, read: fixture.read)
+    #expect(device.fanInterface?.forceTestAvailable == false && device.fanInterface?.supportsTargets == true)
+    #expect(device.mappings.first { $0.role == .cpuPeak }?.keys == ["TC1C", "TC2C", "TC3C", "TC4C"])
+    #expect(device.mappings.first { $0.role == .gpuPeak }?.keys == ["TCGC"])
+    #expect(device.capabilities.sensors.first { $0.role == .cpuAverage }?.state == .referenceSupported)
+    #expect(!device.mappings.contains { $0.role == .airflowTop })
+    let report = DeviceRegistry.report(device: device)
+    #expect(report.recipe == "reference-direct")
+    #expect(try DeviceRegistry.validate(report: report, capabilities: device.capabilities, identity: intel).model == intel.model)
 }
 @Test func variantAbsentKeysAreResolvedOnceButAcquisitionNeverDropsMembers() throws {
     let fixture = CompatibilitySMC(); let absent = DeviceRegistry.candidates(for: fixture.identity).performance.last!
@@ -578,8 +602,10 @@ func everyNotebookUsesProductionPacketDiscovery(_ model: String) throws {
     let base = ["MacBookPro17,1","Mac14,7","Mac15,3","Mac16,1","Mac17,2"].contains(model)
     let maxModels: Set<String> = ["MacBookPro18,2", "MacBookPro18,4", "Mac14,5", "Mac14,6",
         "Mac15,8", "Mac15,9", "Mac15,10", "Mac15,11", "Mac16,5", "Mac16,6", "Mac17,6", "Mac17,7"]
-    let chip = "Apple M\(family.rawValue)" + (base ? "" : maxModels.contains(model) ? " Max" : " Pro")
-    let fixture = CompatibilitySMC(model: model, chip: chip, count: base ? 1 : 2, fixed: family == .m1, forceTest: family != .m5)
+    let intel = family == .intel
+    let chip = intel ? "Intel(R) Core(TM) i7-1068NG7 CPU @ 2.30GHz" : "Apple M\(family.rawValue)" + (base ? "" : maxModels.contains(model) ? " Max" : " Pro")
+    let fixture = CompatibilitySMC(model: model, chip: chip, count: base ? 1 : 2, fixed: family == .m1,
+                                   forceTest: family != .m5 && !intel, appleSilicon: !intel)
     if model == SensorRegistry.model { for key in SensorRegistry.chipEnvelopeKeys { fixture.put(key, 40, "flt ") } }
     else {
         // Synthetic permission-bit variants, explicitly not captured attributes.

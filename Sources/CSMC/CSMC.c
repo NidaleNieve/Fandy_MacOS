@@ -66,6 +66,7 @@ int32_t fandy_tg_controller_present(void) {
         if (proc_pidpath(pids[i], path, sizeof(path)) <= 0) continue;
         const char *name = strrchr(path, '/'); name = name ? name + 1 : path;
         if (strcmp(name, "com.tunabellysoftware.TGFanHelper") == 0) { result = 1; break; }
+        if (strcmp(name, "Macs Fan Control") == 0) { result = 2; break; }
     }
     free(pids); return result;
 }

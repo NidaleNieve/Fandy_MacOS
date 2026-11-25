@@ -15,4 +15,4 @@ if [[ "$configuration" == Release ]]; then
   # Keep dSYMs outside the app and strip local symbols before signing.
   privacy_flags+=(DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES STRIP_STYLE=non-global)
 fi
-xcodebuild -project Fandy.xcodeproj -scheme Fandy -configuration "$configuration" -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData "${privacy_flags[@]}" "$@" build
+xcodebuild -project Fandy.xcodeproj -scheme Fandy -configuration "$configuration" -destination 'platform=macOS' -derivedDataPath build/DerivedData "${privacy_flags[@]}" "$@" build

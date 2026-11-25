@@ -38,6 +38,8 @@ public enum RecoveryOwnershipProbe {
         switch BackgroundWorkMetrics.shared.measure(.controllerScan, operation: { fandy_tg_controller_present() }) {
         case 0: return
         case 1: throw ControlError.invalidProfile("TG Pro's privileged fan helper is running; exclusive fan testing is blocked.")
+        // Its smcwrite helper can stay resident after quitting, but the app is what drives the fans.
+        case 2: throw ControlError.invalidProfile("Macs Fan Control is running; quit it to let Fandy control the fans.")
         default: throw ControlError.invalidProfile("Fan-controller process enumeration unavailable; exclusive testing is blocked.")
         }
     }

@@ -18,6 +18,10 @@ enum ReferenceSensorKeys {
     static let m5Performance = ["Tp0O", "Tp0R", "Tp0U", "Tp0X", "Tp0a", "Tp0d", "Tp0g", "Tp0j", "Tp0m", "Tp0p", "Tp0u", "Tp0y"]
     static let m5SuperCores = ["Tp00", "Tp04", "Tp08", "Tp0C", "Tp0G", "Tp0K"]
     static let m5Gpu = ["Tg0U", "Tg0X", "Tg0d", "Tg0g", "Tg0j", "Tg1Y", "Tg1c", "Tg1g"]
+    // Intel T2: per-core keys (absent cores are skipped). TCGC is the integrated GPU; TGDD the
+    // discrete AMD die on 15-inch/16-inch models. shortcut: TGDD is unobserved here, verify on a dGPU model.
+    static let intelCores = ["TC1C", "TC2C", "TC3C", "TC4C", "TC5C", "TC6C", "TC7C", "TC8C"]
+    static let intelGpu = ["TCGC", "TGDD"]
     static let m4BaseGPU = ["Tg0G", "Tg0H"]
     static let m4ProMaxGPU = ["Tg1U", "Tg1k"]
 }

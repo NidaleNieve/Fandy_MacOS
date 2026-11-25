@@ -810,7 +810,7 @@
 			"buildSettings" = {
 				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
 				"SDKROOT" = "macosx";
-				"ARCHS" = "arm64";
+				"ARCHS" = "$(ARCHS_STANDARD)";
 				"SWIFT_VERSION" = "6.0";
 				"CLANG_ENABLE_MODULES" = "YES";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
@@ -835,7 +835,7 @@
 			"buildSettings" = {
 				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
 				"SDKROOT" = "macosx";
-				"ARCHS" = "arm64";
+				"ARCHS" = "$(ARCHS_STANDARD)";
 				"SWIFT_VERSION" = "6.0";
 				"CLANG_ENABLE_MODULES" = "YES";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
@@ -1267,7 +1267,7 @@
 			"buildSettings" = {
 				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
 				"SDKROOT" = "macosx";
-				"ARCHS" = "arm64";
+				"ARCHS" = "$(ARCHS_STANDARD)";
 				"SWIFT_VERSION" = "6.0";
 				"CLANG_ENABLE_MODULES" = "YES";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
@@ -1298,7 +1298,7 @@
 			"buildSettings" = {
 				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
 				"SDKROOT" = "macosx";
-				"ARCHS" = "arm64";
+				"ARCHS" = "$(ARCHS_STANDARD)";
 				"SWIFT_VERSION" = "6.0";
 				"CLANG_ENABLE_MODULES" = "YES";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
@@ -1417,7 +1417,7 @@
 			"buildSettings" = {
 				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
 				"SDKROOT" = "macosx";
-				"ARCHS" = "arm64";
+				"ARCHS" = "$(ARCHS_STANDARD)";
 				"SWIFT_VERSION" = "6.0";
 				"CLANG_ENABLE_MODULES" = "YES";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
@@ -1447,7 +1447,7 @@
 			"buildSettings" = {
 				"MACOSX_DEPLOYMENT_TARGET" = "15.0";
 				"SDKROOT" = "macosx";
-				"ARCHS" = "arm64";
+				"ARCHS" = "$(ARCHS_STANDARD)";
 				"SWIFT_VERSION" = "6.0";
 				"CLANG_ENABLE_MODULES" = "YES";
 				"ENABLE_HARDENED_RUNTIME" = "YES";

@@ -1,7 +1,8 @@
 import Foundation
 import FandyCore
 
-public enum AppleChipFamily: Int, CaseIterable, Sendable { case m1 = 1, m2, m3, m4, m5 }
+// `intel` is a T2 Intel MacBook Pro; Apple Silicon generations keep their raw values.
+public enum AppleChipFamily: Int, CaseIterable, Sendable { case intel = 0, m1, m2, m3, m4, m5 }
 public struct DeviceIdentity: Sendable {
     public let model: String
     public let chip: String
@@ -10,12 +11,12 @@ public struct DeviceIdentity: Sendable {
         self.model = model; self.chip = chip; self.appleSilicon = appleSilicon
     }
     public var family: AppleChipFamily? {
-        guard appleSilicon else { return nil }
+        guard appleSilicon else { return chip.hasPrefix("Intel(R) Core(TM) ") ? .intel : nil }
         let tokens = chip.split(separator: " ").map(String.init)
         guard tokens.count >= 2, tokens[0] == "Apple", tokens[1].count == 2,
               tokens.count == 2 || (tokens.count == 3 && ["Pro", "Max"].contains(tokens[2])),
               let generation = Int(tokens[1].dropFirst()), tokens[1].first == "M" else { return nil }
-        return AppleChipFamily(rawValue: generation)
+        return generation == 0 ? nil : AppleChipFamily(rawValue: generation) // raw 0 is .intel, never an Apple chip
     }
     public var supportedNotebook: Bool { family == DeviceRegistry.notebookFamilies[model] && family != nil }
     public static var current: Self {
@@ -53,6 +54,9 @@ public enum DeviceRegistry {
     // Apple Support 108052, reviewed 2026-10-04. Chip identity is checked separately.
     public static let notebookFamilies: [String: AppleChipFamily] = {
         let families: [(AppleChipFamily, [String])] = [
+            // 2018–2020 T2 MacBook Pros that run macOS 15+; older Intel models use other fan keys.
+            (.intel, ["MacBookPro15,1", "MacBookPro15,2", "MacBookPro15,3", "MacBookPro15,4",
+                      "MacBookPro16,1", "MacBookPro16,2", "MacBookPro16,3", "MacBookPro16,4"]),
             (.m1, ["MacBookPro17,1", "MacBookPro18,1", "MacBookPro18,2", "MacBookPro18,3", "MacBookPro18,4"]),
             (.m2, ["Mac14,7", "Mac14,5", "Mac14,6", "Mac14,9", "Mac14,10"]),
             (.m3, ["Mac15,3", "Mac15,6", "Mac15,7", "Mac15,8", "Mac15,9", "Mac15,10", "Mac15,11"]),
@@ -61,7 +65,7 @@ public enum DeviceRegistry {
         ]
         return Dictionary(uniqueKeysWithValues: families.flatMap { family, models in models.map { ($0, family) } })
     }()
-    public static func canInstallHelper(identity: DeviceIdentity) -> Bool { identity.appleSilicon }
+    public static func canInstallHelper(identity: DeviceIdentity) -> Bool { identity.appleSilicon || identity.supportedNotebook }
     public static func declaredCapabilities(identity: DeviceIdentity) -> HardwareCapabilities {
         HardwareCapabilities(model: identity.model, chipControl: identity.model == SensorRegistry.model ? .conservativeEnvelope : .cpuGPU)
     }
@@ -74,6 +78,7 @@ public enum DeviceRegistry {
     }
     public static func candidates(for identity: DeviceIdentity) -> (efficiency: [String], performance: [String], gpu: [String]) {
         switch identity.family {
+        case .intel: ([], ReferenceSensorKeys.intelCores, ReferenceSensorKeys.intelGpu)
         case .m1: (ReferenceSensorKeys.m1Efficiency, ReferenceSensorKeys.m1Performance, ReferenceSensorKeys.m1Gpu)
         case .m2: (ReferenceSensorKeys.m2Efficiency, ReferenceSensorKeys.m2Performance, ReferenceSensorKeys.m2Gpu)
         case .m3: (ReferenceSensorKeys.m3Efficiency, ReferenceSensorKeys.m3Performance, ReferenceSensorKeys.m3Gpu)
@@ -82,6 +87,13 @@ public enum DeviceRegistry {
         case .m5: (ReferenceSensorKeys.m5SuperCores, ReferenceSensorKeys.m5Performance, ReferenceSensorKeys.m5Gpu)
         case nil: ([], [], [])
         }
+    }
+    /// Single-key comfort sensors. Intel T2 has no top-airflow key, so airflow curves stay unavailable there.
+    public static func comfortKeys(for identity: DeviceIdentity) -> [(SensorRole, String)] {
+        identity.family == .intel
+            ? [(.trackpad,"Ts0P"),(.actuator,"Ts1P"),(.airflowLeft,"TaLC"),(.airflowRight,"TaRC"),(.wireless,"TW0P")]
+            : [(.trackpad,"Ts0P"),(.actuator,"Ts1P"),(.airflowLeft,"TaLP"),(.airflowTop,"TaTP"),(.airflowRight,"TaRF"),
+               (.charger,"TCHP"),(.powerSupply,"TPSP"),(.wireless,"TW0P")]
     }
     public static func resolve(identity: DeviceIdentity, read: (String) throws -> DiscoveredSensor) -> ResolvedDevice {
         resolveSensors(device: resolveFans(identity: identity, read: read), read: read)
@@ -117,7 +129,8 @@ public enum DeviceRegistry {
         }
         let groups = candidates(for: identity)
         let chip = Set(groups.efficiency + groups.performance + groups.gpu)
-        let allowed = chip.union(["Ts0P","Ts1P","TaLP","TaTP","TaRF","TCHP","TPSP","TW0P"])
+        let comfort = comfortKeys(for: identity)
+        let allowed = chip.union(comfort.map(\.1))
             .union(identity.model == SensorRegistry.model ? SensorRegistry.chipEnvelopeKeys : [])
         for sensor in capabilities.sensors {
             guard !sensor.keys.isEmpty, Set(sensor.keys).isSubset(of: allowed),
@@ -127,14 +140,8 @@ public enum DeviceRegistry {
             switch sensor.role {
             case .cpuAverage,.cpuPeak: expected = Set(groups.efficiency + groups.performance)
             case .gpuAverage,.gpuPeak: expected = Set(groups.gpu)
-            case .trackpad: expected = ["Ts0P"]
-            case .actuator: expected = ["Ts1P"]
-            case .airflowLeft: expected = ["TaLP"]
-            case .airflowTop: expected = ["TaTP"]
-            case .airflowRight: expected = ["TaRF"]
-            case .charger: expected = ["TCHP"]
-            case .powerSupply: expected = ["TPSP"]
-            case .wireless: expected = ["TW0P"]
+            case .trackpad,.actuator,.airflowLeft,.airflowTop,.airflowRight,.charger,.powerSupply,.wireless:
+                expected = Set(comfort.filter { $0.0 == sensor.role }.map(\.1))
             default: expected = allowed
             }
             if identity.model == SensorRegistry.model {
@@ -143,7 +150,8 @@ public enum DeviceRegistry {
             } else {
                 guard Set(sensor.keys).isSubset(of: expected), Set(sensor.keys).count == sensor.keys.count else { throw ControlError.hardwareUnqualified }
                 if sensor.state.supported && [.cpuAverage,.cpuPeak].contains(sensor.role) {
-                    guard !Set(sensor.keys).isDisjoint(with: groups.efficiency), !Set(sensor.keys).isDisjoint(with: groups.performance) else { throw ControlError.hardwareUnqualified }
+                    // Intel has no efficiency cores, so only a non-empty group is mandatory.
+                    guard groups.efficiency.isEmpty || !Set(sensor.keys).isDisjoint(with: groups.efficiency), !Set(sensor.keys).isDisjoint(with: groups.performance) else { throw ControlError.hardwareUnqualified }
                 }
             }
         }
@@ -167,8 +175,7 @@ public enum DeviceRegistry {
         // Resolve published groups once, allowing keys absent on this variant.
         // A selected member that later fails invalidates its whole group.
         var samples: [String: DiscoveredSensor] = [:], invalidKeys: Set<String> = []
-        let comfort: [(SensorRole, String)] = [(.trackpad,"Ts0P"),(.actuator,"Ts1P"),(.airflowLeft,"TaLP"),
-            (.airflowTop,"TaTP"),(.airflowRight,"TaRF"),(.charger,"TCHP"),(.powerSupply,"TPSP"),(.wireless,"TW0P")]
+        let comfort = comfortKeys(for: identity)
         for key in Set(groups.efficiency + groups.performance + groups.gpu + comfort.map(\.1)) {
             do {
                 let sample = try read(key); samples[key] = sample
@@ -189,7 +196,7 @@ public enum DeviceRegistry {
         mapping(.cpuAverage, cpu); mapping(.cpuPeak, cpu, .maximum)
         mapping(.gpuAverage, gpu); mapping(.gpuPeak, gpu, .maximum)
         for (role, key) in comfort where samples[key].map(SensorMapping.usableTemperature) == true { mapping(role, [key]) }
-        let chipSupported = !efficiency.isEmpty && !performance.isEmpty && !gpu.isEmpty &&
+        let chipSupported = (groups.efficiency.isEmpty || !efficiency.isEmpty) && !performance.isEmpty && !gpu.isEmpty &&
             invalidKeys.isDisjoint(with: Set(groups.efficiency + groups.performance + groups.gpu))
         let supportedComfort: Set<SensorRole> = [.trackpad,.actuator,.airflowLeft,.airflowTop,.airflowRight,.wireless]
         let evidence = mappings.map { mapping in

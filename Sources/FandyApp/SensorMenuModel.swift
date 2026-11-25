@@ -72,7 +72,7 @@ actor DisplaySensorReader {
                 let groups = DeviceRegistry.candidates(for: identity)
                 let available = Set(sensors.map(\.key))
                 for (id, name, candidates) in [("efficiency", identity.family == .m5 ? "Super-core region average · estimate" : "Efficiency-core region average · estimate", groups.efficiency),
-                    ("performance", "Performance-core region average · estimate", groups.performance)] {
+                    ("performance", identity.family == .intel ? "CPU core average · estimate" : "Performance-core region average · estimate", groups.performance)] {
                     let members = candidates.filter { available.contains($0) }
                     if !members.isEmpty { choices.append(MenuSensor(id: "group:" + id, name: name, keys: members, role: nil, estimate: true)) }
                 }
